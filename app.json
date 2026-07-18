@@ -22,13 +22,15 @@
       "package": "com.vgrand.taskhub",
       "adaptiveIcon": {
         "backgroundColor": "#4f46e5"
-      },
-      "usesCleartextTraffic": true
+      }
     },
     "extra": {
       "eas": {
         "projectId": "6ff08814-1fa6-4d0a-8a30-57eef8ed87d8"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
