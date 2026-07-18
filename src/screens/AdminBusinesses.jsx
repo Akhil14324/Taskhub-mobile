@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import { DropdownPicker } from '../components/DropdownPicker';
 import { useLang } from '../context/LanguageContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
@@ -214,16 +214,14 @@ export default function AdminBusinesses() {
         <View style={styles.pickerField}>
           <Text style={styles.pickerLabel}>{t('type')}</Text>
           <View style={styles.pickerWrap}>
-            <Picker
+            <DropdownPicker
               selectedValue={form.type}
               onValueChange={(v) => setForm({ ...form, type: v })}
-              style={styles.picker}
-            >
-              {typeOptions.map((topt) => (
-                <Picker.Item key={topt} label={getTypeLabel(topt)} value={topt} />
-              ))}
-              <Picker.Item label={`+ ${t('addNewType')}`} value="__custom__" />
-            </Picker>
+              items={[
+                ...typeOptions.map((topt) => ({ label: getTypeLabel(topt), value: topt })),
+                { label: `+ ${t('addNewType')}`, value: '__custom__' },
+              ]}
+            />
           </View>
         </View>
         {form.type === '__custom__' && (

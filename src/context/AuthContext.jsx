@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import EncryptedStorage from 'react-native-encrypted-storage';
+import * as SecureStore from 'expo-secure-store';
 import api from '../api/client';
 
 const AuthContext = createContext(null);
@@ -10,7 +10,7 @@ export function AuthProvider({ children }) {
 
   const fetchMe = useCallback(async () => {
     try {
-      const token = await EncryptedStorage.getItem('token');
+      const token = await SecureStore.getItemAsync('token');
       if (!token) {
         setLoading(false);
         return;
@@ -18,8 +18,8 @@ export function AuthProvider({ children }) {
       const res = await api.get('/auth/me');
       setUser(res.data.user);
     } catch {
-      await EncryptedStorage.removeItem('token');
-      await EncryptedStorage.removeItem('user');
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('user');
     } finally {
       setLoading(false);
     }
@@ -30,14 +30,14 @@ export function AuthProvider({ children }) {
   }, [fetchMe]);
 
   const login = async (token, userData) => {
-    await EncryptedStorage.setItem('token', token);
-    await EncryptedStorage.setItem('user', JSON.stringify(userData));
+    await SecureStore.setItemAsync('token', token);
+    await SecureStore.setItemAsync('user', JSON.stringify(userData));
     setUser(userData);
   };
 
   const logout = async () => {
-    await EncryptedStorage.removeItem('token');
-    await EncryptedStorage.removeItem('user');
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('user');
     setUser(null);
   };
 

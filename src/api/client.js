@@ -1,5 +1,5 @@
 import axios from 'axios';
-import EncryptedStorage from 'react-native-encrypted-storage';
+import * as SecureStore from 'expo-secure-store';
 
 const API_URL = __DEV__
   ? 'http://10.0.2.2:5000/api'
@@ -12,7 +12,7 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   try {
-    const token = await EncryptedStorage.getItem('token');
+    const token = await SecureStore.getItemAsync('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -27,8 +27,8 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       try {
-        await EncryptedStorage.removeItem('token');
-        await EncryptedStorage.removeItem('user');
+        await SecureStore.deleteItemAsync('token');
+        await SecureStore.deleteItemAsync('user');
       } catch (e) {
         // ignore
       }

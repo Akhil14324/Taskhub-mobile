@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import { DropdownPicker } from '../components/DropdownPicker';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import api from '../api/client';
@@ -330,31 +330,29 @@ export default function Tasks() {
           <View style={styles.filterItem}>
             <Text style={styles.filterLabel}>{t('business')}</Text>
             <View style={styles.pickerWrap}>
-              <Picker
+              <DropdownPicker
                 selectedValue={filterBusiness}
                 onValueChange={setFilterBusiness}
-                style={styles.picker}
-              >
-                <Picker.Item label={t('allBusinesses')} value="all" />
-                {businesses.map((b) => (
-                  <Picker.Item key={b.id} label={b.name} value={b.id.toString()} />
-                ))}
-              </Picker>
+                items={[
+                  { label: t('allBusinesses'), value: 'all' },
+                  ...businesses.map((b) => ({ label: b.name, value: b.id.toString() })),
+                ]}
+              />
             </View>
           </View>
           <View style={styles.filterItem}>
             <Text style={styles.filterLabel}>{t('status')}</Text>
             <View style={styles.pickerWrap}>
-              <Picker
+              <DropdownPicker
                 selectedValue={filterStatus}
                 onValueChange={setFilterStatus}
-                style={styles.picker}
-              >
-                <Picker.Item label={t('allStatus')} value="all" />
-                <Picker.Item label={t('pending')} value="pending" />
-                <Picker.Item label={t('completed')} value="completed" />
-                <Picker.Item label={t('onHold')} value="on_hold" />
-              </Picker>
+                items={[
+                  { label: t('allStatus'), value: 'all' },
+                  { label: t('pending'), value: 'pending' },
+                  { label: t('completed'), value: 'completed' },
+                  { label: t('onHold'), value: 'on_hold' },
+                ]}
+              />
             </View>
           </View>
         </View>
@@ -384,19 +382,17 @@ export default function Tasks() {
           <View style={styles.pickerField}>
             <Text style={styles.pickerLabel}>{t('business')}</Text>
             <View style={styles.pickerWrap}>
-              <Picker
+              <DropdownPicker
                 selectedValue={form.business_id}
                 onValueChange={(v) => {
                   setForm({ ...form, business_id: v, assigned_user_id: '' });
                   fetchBusinessUsers(v);
                 }}
-                style={styles.picker}
-              >
-                <Picker.Item label={t('selectBusinessPlaceholder')} value="" />
-                {businesses.map((b) => (
-                  <Picker.Item key={b.id} label={b.name} value={b.id.toString()} />
-                ))}
-              </Picker>
+                items={[
+                  { label: t('selectBusinessPlaceholder'), value: '' },
+                  ...businesses.map((b) => ({ label: b.name, value: b.id.toString() })),
+                ]}
+              />
             </View>
           </View>
         )}
@@ -404,16 +400,14 @@ export default function Tasks() {
           <View style={styles.pickerField}>
             <Text style={styles.pickerLabel}>{t('assignToUser')} ({t('optional')})</Text>
             <View style={styles.pickerWrap}>
-              <Picker
+              <DropdownPicker
                 selectedValue={form.assigned_user_id}
                 onValueChange={(v) => setForm({ ...form, assigned_user_id: v })}
-                style={styles.picker}
-              >
-                <Picker.Item label={t('allUsersInBusiness')} value="" />
-                {businessUsers.map((u) => (
-                  <Picker.Item key={u.id} label={u.name} value={u.id.toString()} />
-                ))}
-              </Picker>
+                items={[
+                  { label: t('allUsersInBusiness'), value: '' },
+                  ...businessUsers.map((u) => ({ label: u.name, value: u.id.toString() })),
+                ]}
+              />
             </View>
           </View>
         )}

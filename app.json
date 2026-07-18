@@ -1,12 +1,10 @@
 {
-  "name": "TaskHub",
-  "displayName": "TaskHub",
   "expo": {
     "name": "TaskHub",
-    "slug": "taskhub",
+    "slug": "vgrandtaskhub",
+    "owner": "vgrandtaskhub",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "backgroundColor": "#4f46e5"
@@ -29,7 +27,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "6ff08814-1fa6-4d0a-8a30-57eef8ed87d8"
       }
     }
   }
