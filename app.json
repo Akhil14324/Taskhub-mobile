@@ -1,0 +1,36 @@
+{
+  "name": "TaskHub",
+  "displayName": "TaskHub",
+  "expo": {
+    "name": "TaskHub",
+    "slug": "taskhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#4f46e5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vgrand.taskhub",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.vgrand.taskhub",
+      "adaptiveIcon": {
+        "backgroundColor": "#4f46e5"
+      },
+      "usesCleartextTraffic": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
