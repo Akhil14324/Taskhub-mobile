@@ -1,19 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
 import { PrimaryButton } from '../components/Button';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
-const NOTIF_ICONS = {
-  warning: { icon: 'warning', color: colors.red[600], bg: colors.red[50] },
-  assignment: { icon: 'person-add', color: colors.brand[600], bg: colors.brand[50] },
-  task_added: { icon: 'add-circle', color: colors.blue[600], bg: colors.blue[50] },
-  user_joined: { icon: 'person', color: colors.purple[600], bg: colors.purple[50] },
-  task_completed: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
-};
+function getNotifIcons(colors) {
+  return {
+    warning: { icon: 'warning', color: colors.red[600], bg: colors.red[50] },
+    assignment: { icon: 'person-add', color: colors.brand[600], bg: colors.brand[50] },
+    task_added: { icon: 'add-circle', color: colors.blue[600], bg: colors.blue[50] },
+    user_joined: { icon: 'person', color: colors.purple[600], bg: colors.purple[50] },
+    task_completed: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
+  };
+}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -29,6 +32,8 @@ function timeAgo(dateStr) {
 
 export default function Notifications() {
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -79,8 +84,10 @@ export default function Notifications() {
     }
   };
 
+  const notifIcons = useMemo(() => getNotifIcons(colors), [colors]);
+
   const renderItem = ({ item }) => {
-    const config = NOTIF_ICONS[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
+    const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
     return (
       <TouchableOpacity
         onPress={() => !item.is_read && handleMarkRead(item.id)}
@@ -139,7 +146,7 @@ export default function Notifications() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

@@ -1,10 +1,13 @@
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStack } from '@react-navigation/native-stack';
+import { useState, useMemo } from 'react';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { colors } from '../theme/theme';
+import { useColors } from '../context/ThemeContext';
+import { MoreMenu } from '../components/UI';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
@@ -17,111 +20,143 @@ import AdminUsersScreen from '../screens/AdminUsers';
 import SuperAdminUsersScreen from '../screens/SuperAdminUsers';
 import ProfileScreen from '../screens/Profile';
 
-const Stack = createNativeStack();
+const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function getTabRoutes(role, t) {
-  const isAdmin = ['admin', 'super_admin'].includes(role);
-  const routes = [
-    {
-      name: 'Dashboard',
-      component: isAdmin ? AdminDashboardScreen : DashboardScreen,
-      label: isAdmin ? t('adminDashboard') : t('dashboard'),
-      icon: isAdmin ? 'grid-outline' : 'home-outline',
-      activeIcon: isAdmin ? 'grid' : 'home',
-    },
-    {
-      name: 'Tasks',
-      component: TasksScreen,
-      label: t('tasks'),
-      icon: 'clipboard-outline',
-      activeIcon: 'clipboard',
-    },
-    {
-      name: 'Notifications',
-      component: NotificationsScreen,
-      label: t('notifications'),
-      icon: 'notifications-outline',
-      activeIcon: 'notifications',
-    },
-    {
-      name: 'Profile',
-      component: ProfileScreen,
-      label: t('profile'),
-      icon: 'person-outline',
-      activeIcon: 'person',
-    },
-  ];
-
-  if (isAdmin) {
-    routes.splice(2, 0, {
-      name: 'Businesses',
-      component: AdminBusinessesScreen,
-      label: t('businesses'),
-      icon: 'business-outline',
-      activeIcon: 'business',
-    });
-    routes.splice(3, 0, {
-      name: 'Users',
-      component: AdminUsersScreen,
-      label: t('users'),
-      icon: 'people-outline',
-      activeIcon: 'people',
-    });
-    if (role === 'super_admin') {
-      routes.splice(4, 0, {
-        name: 'UserPasswords',
-        component: SuperAdminUsersScreen,
-        label: t('userPasswords'),
-        icon: 'key-outline',
-        activeIcon: 'key',
-      });
-    }
-  }
-
-  return routes;
+function MoreTabButton({ onPress, accessibilityState }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const focused = accessibilityState?.selected;
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.tabBtn} activeOpacity={0.7}>
+      <Ionicons name="ellipsis-horizontal-outline" size={22} color={focused ? colors.brand[600] : colors.gray[400]} />
+      <Text style={[styles.tabLabel, { color: focused ? colors.brand[600] : colors.gray[400] }]}>More</Text>
+    </TouchableOpacity>
+  );
 }
 
 function MainTabs() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useLang();
-  const routes = getTabRoutes(user?.role, t);
+  const colors = useColors();
+  const navigation = useNavigation();
+  const [moreVisible, setMoreVisible] = useState(false);
+
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+
+  const moreItems = [
+    { label: t('notifications'), icon: 'notifications-outline', route: 'Notifications' },
+    { label: t('profile'), icon: 'person-outline', route: 'Profile' },
+    ...(isSuperAdmin
+      ? [{ label: t('userPasswords'), icon: 'key-outline', route: 'UserPasswords' }]
+      : []),
+    { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
+  ];
+
+  const handleMoreItem = (item) => {
+    if (item.action === 'logout') {
+      logout();
+    } else {
+      navigation.navigate(item.route);
+    }
+  };
 
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.brand[600],
-        tabBarInactiveTintColor: colors.gray[400],
-        tabBarStyle: {
-          paddingBottom: 4,
-          paddingTop: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-        },
-      }}
-    >
-      {routes.map((route) => (
+    <>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: colors.brand[600],
+          tabBarInactiveTintColor: colors.gray[400],
+          tabBarStyle: {
+            paddingBottom: 4,
+            paddingTop: 4,
+            backgroundColor: colors.white,
+            borderTopColor: colors.gray[200],
+            borderTopWidth: 1,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+          },
+        }}
+      >
         <Tab.Screen
-          key={route.name}
-          name={route.name}
-          component={route.component}
+          name="Dashboard"
+          component={isAdmin ? AdminDashboardScreen : DashboardScreen}
           options={{
-            tabBarLabel: route.label,
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons
-                name={focused ? route.activeIcon : route.icon}
-                size={size || 22}
-                color={color}
-              />
+            tabBarLabel: isAdmin ? t('home') : t('dashboard'),
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
             ),
           }}
         />
-      ))}
-    </Tab.Navigator>
+        <Tab.Screen
+          name="Tasks"
+          component={TasksScreen}
+          options={{
+            tabBarLabel: t('tasks'),
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'clipboard' : 'clipboard-outline'} size={22} color={color} />
+            ),
+          }}
+        />
+        {isAdmin && (
+          <>
+            <Tab.Screen
+              name="Businesses"
+              component={AdminBusinessesScreen}
+              options={{
+                tabBarLabel: t('businesses'),
+                tabBarIcon: ({ focused, color }) => (
+                  <Ionicons name={focused ? 'business' : 'business-outline'} size={22} color={color} />
+                ),
+              }}
+            />
+            <Tab.Screen
+              name="Users"
+              component={AdminUsersScreen}
+              options={{
+                tabBarLabel: t('users'),
+                tabBarIcon: ({ focused, color }) => (
+                  <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />
+                ),
+              }}
+            />
+          </>
+        )}
+        <Tab.Screen
+          name="More"
+          component={MorePlaceholder}
+          options={{
+            tabBarButton: (props) => (
+              <MoreTabButton {...props} onPress={() => setMoreVisible(true)} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+      <MoreMenu visible={moreVisible} onClose={() => setMoreVisible(false)} title={t('more')} items={moreItems} onItemPress={handleMoreItem} />
+    </>
   );
 }
+
+function MorePlaceholder() {
+  return null;
+}
+
+const createStyles = (colors) => StyleSheet.create({
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  tabLabel: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+});
 
 export default function AppNavigator() {
   const { user, loading } = useAuth();

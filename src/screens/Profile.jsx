@@ -1,26 +1,31 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
 import { Card, Badge, LoadingSpinner, ErrorBanner, SuccessBanner, EmptyState, ProgressBar } from '../components/UI';
 import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
 import { Input } from '../components/Input';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
-const ROLE_AVATAR = {
-  super_admin: { bg: colors.purple[100], text: colors.purple[700] },
-  admin: { bg: colors.indigo[100], text: colors.indigo[700] },
-  user: { bg: colors.brand[100], text: colors.brand[600] },
-};
+function getRoleAvatar(colors) {
+  return {
+    super_admin: { bg: colors.purple[100], text: colors.purple[700] },
+    admin: { bg: colors.indigo[100], text: colors.indigo[700] },
+    user: { bg: colors.brand[100], text: colors.brand[600] },
+  };
+}
 
-const ROLE_BADGE = {
-  super_admin: { bg: colors.purple[100], text: colors.purple[700] },
-  admin: { bg: colors.indigo[100], text: colors.indigo[700] },
-  user: { bg: colors.blue[100], text: colors.blue[700] },
-};
+function getRoleBadge(colors) {
+  return {
+    super_admin: { bg: colors.purple[100], text: colors.purple[700] },
+    admin: { bg: colors.indigo[100], text: colors.indigo[700] },
+    user: { bg: colors.blue[100], text: colors.blue[700] },
+  };
+}
 
 const ROLE_LABEL = {
   super_admin: 'superAdmin',
@@ -28,11 +33,13 @@ const ROLE_LABEL = {
   user: 'user',
 };
 
-const STATUS_BADGE = {
-  active: { bg: colors.green[100], text: colors.green[700] },
-  warned: { bg: colors.amber[100], text: colors.amber[700] },
-  inactive: { bg: colors.gray[100], text: colors.gray[600] },
-};
+function getStatusBadge(colors) {
+  return {
+    active: { bg: colors.green[100], text: colors.green[700] },
+    warned: { bg: colors.amber[100], text: colors.amber[700] },
+    inactive: { bg: colors.gray[100], text: colors.gray[600] },
+  };
+}
 
 function getInitials(name) {
   if (!name) return '?';
@@ -49,6 +56,8 @@ function formatDate(dateStr) {
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const [stats, setStats] = useState(null);
@@ -166,10 +175,10 @@ export default function Profile() {
 
   if (loading) return <LoadingSpinner />;
 
-  const avatarStyle = ROLE_AVATAR[user?.role] || ROLE_AVATAR.user;
-  const roleBadgeStyle = ROLE_BADGE[user?.role] || ROLE_BADGE.user;
+  const avatarStyle = (getRoleAvatar(colors)[user?.role] || getRoleAvatar(colors).user);
+  const roleBadgeStyle = (getRoleBadge(colors)[user?.role] || getRoleBadge(colors).user);
   const roleLabel = t(ROLE_LABEL[user?.role] || 'user');
-  const statusBadgeStyle = STATUS_BADGE[user?.status] || STATUS_BADGE.active;
+  const statusBadgeStyle = (getStatusBadge(colors)[user?.status] || getStatusBadge(colors).active);
 
   const userStats = [
     { label: t('tasksCompleted'), value: stats?.tasks_completed ?? 0, icon: 'checkmark-circle-outline', color: colors.green[600], bg: colors.green[50] },
@@ -381,7 +390,7 @@ export default function Profile() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

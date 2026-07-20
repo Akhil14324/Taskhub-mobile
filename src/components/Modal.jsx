@@ -1,8 +1,12 @@
+import { useMemo } from 'react';
 import { View, Text, Modal as RNModal, TouchableOpacity, StyleSheet, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { useColors } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function Modal({ open, onClose, title, children }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   if (!open) return null;
 
   return (
@@ -33,7 +37,7 @@ export default function Modal({ open, onClose, title, children }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',

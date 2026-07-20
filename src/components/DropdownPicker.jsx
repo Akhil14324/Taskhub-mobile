@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { useColors } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const selectedItem = items.find((item) => item.value === selectedValue);
 
@@ -61,7 +64,7 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',

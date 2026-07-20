@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
 import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { Input } from '../components/Input';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 const DEFAULT_TYPES = [
   { value: 'restaurant', labelKey: 'restaurant' },
@@ -20,6 +21,8 @@ const DEFAULT_TYPES = [
 
 export default function AdminBusinesses() {
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [businesses, setBusinesses] = useState([]);
   const [businessTypes, setBusinessTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -240,7 +243,7 @@ export default function AdminBusinesses() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

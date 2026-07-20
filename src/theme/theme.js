@@ -1,4 +1,4 @@
-export const colors = {
+export const lightColors = {
   brand: {
     50: '#eef2ff',
     100: '#e0e7ff',
@@ -76,6 +76,91 @@ export const colors = {
   black: '#000000',
   overlay: 'rgba(0, 0, 0, 0.4)',
 };
+
+export const darkColors = {
+  brand: {
+    50: '#1e1b4b',
+    100: '#312e81',
+    200: '#3730a3',
+    300: '#4338ca',
+    400: '#6366f1',
+    500: '#818cf8',
+    600: '#a5b4fc',
+    700: '#c7d2fe',
+    800: '#e0e7ff',
+    900: '#eef2ff',
+  },
+  gray: {
+    50: '#0f172a',
+    100: '#1e293b',
+    200: '#334155',
+    300: '#475569',
+    400: '#64748b',
+    500: '#94a3b8',
+    600: '#cbd5e1',
+    700: '#e2e8f0',
+    800: '#f1f5f9',
+    900: '#f8fafc',
+  },
+  green: {
+    50: '#052e16',
+    100: '#064e3b',
+    500: '#22c55e',
+    600: '#4ade80',
+    700: '#86efac',
+  },
+  yellow: {
+    50: '#422006',
+    100: '#713f12',
+    500: '#eab308',
+    600: '#facc15',
+    700: '#fde047',
+  },
+  red: {
+    50: '#450a0a',
+    100: '#7f1d1d',
+    500: '#ef4444',
+    600: '#f87171',
+    700: '#fca5a5',
+  },
+  purple: {
+    50: '#3b0764',
+    100: '#581c87',
+    500: '#a855f7',
+    600: '#c084fc',
+    700: '#d8b4fe',
+  },
+  blue: {
+    50: '#172554',
+    100: '#1e3a8a',
+    500: '#3b82f6',
+    600: '#60a5fa',
+    700: '#93c5fd',
+  },
+  indigo: {
+    50: '#1e1b4b',
+    100: '#312e81',
+    500: '#6366f1',
+    600: '#818cf8',
+    700: '#a5b4fc',
+  },
+  amber: {
+    50: '#451a03',
+    100: '#78350f',
+    500: '#f59e0b',
+    600: '#fbbf24',
+    700: '#fcd34d',
+  },
+  white: '#1e293b',
+  black: '#f8fafc',
+  overlay: 'rgba(0, 0, 0, 0.6)',
+};
+
+export const colors = lightColors;
+
+export function getColors(theme) {
+  return theme === 'dark' ? darkColors : lightColors;
+}
 
 export const spacing = {
   xs: 4,

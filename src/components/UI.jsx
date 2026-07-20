@@ -1,7 +1,17 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useColors } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme/theme';
+
+function useThemedStyles() {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return { colors, styles };
+}
 
 export function Card({ children, style, onPress }) {
+  const { styles } = useThemedStyles();
   return (
     <View style={[styles.card, style]}>
       {children}
@@ -10,6 +20,7 @@ export function Card({ children, style, onPress }) {
 }
 
 export function Badge({ children, bg, color, style }) {
+  const { colors, styles } = useThemedStyles();
   return (
     <View style={[styles.badge, { backgroundColor: bg || colors.brand[100] }, style]}>
       <Text style={[styles.badgeText, { color: color || colors.brand[700] }]}>
@@ -20,6 +31,7 @@ export function Badge({ children, bg, color, style }) {
 }
 
 export function ErrorBanner({ message }) {
+  const { styles } = useThemedStyles();
   if (!message) return null;
   return (
     <View style={styles.errorBanner}>
@@ -29,6 +41,7 @@ export function ErrorBanner({ message }) {
 }
 
 export function SuccessBanner({ message }) {
+  const { styles } = useThemedStyles();
   if (!message) return null;
   return (
     <View style={styles.successBanner}>
@@ -38,6 +51,7 @@ export function SuccessBanner({ message }) {
 }
 
 export function LoadingSpinner() {
+  const { styles } = useThemedStyles();
   return (
     <View style={styles.loading}>
       <Text style={styles.loadingText}>Loading...</Text>
@@ -45,7 +59,64 @@ export function LoadingSpinner() {
   );
 }
 
+export function Header({ title, lang, toggleLang, theme, toggleTheme, userName }) {
+  const { colors, styles } = useThemedStyles();
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity onPress={toggleLang} style={styles.langBtn} activeOpacity={0.7}>
+          <Text style={styles.langText}>{lang === 'en' ? 'EN' : 'TE'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={toggleTheme} style={styles.iconBtn} activeOpacity={0.7}>
+          <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.gray[600]} />
+        </TouchableOpacity>
+        {userName ? (
+          <Text style={styles.userName} numberOfLines={1}>
+            {userName}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
+  const { colors, styles } = useThemedStyles();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>{title || 'More'}</Text>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+              <Ionicons name="close-outline" size={22} color={colors.gray[400]} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.sheetItems}>
+            {items.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.sheetItem}
+                onPress={() => {
+                  onClose();
+                  onItemPress(item);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={item.icon} size={22} color={item.color || colors.gray[600]} />
+                <Text style={[styles.sheetItemText, { color: item.color || colors.gray[700] }]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function EmptyState({ icon, message }) {
+  const { styles } = useThemedStyles();
   return (
     <View style={styles.emptyState}>
       {icon}
@@ -55,6 +126,7 @@ export function EmptyState({ icon, message }) {
 }
 
 export function ProgressBar({ percent, color }) {
+  const { colors, styles } = useThemedStyles();
   return (
     <View style={styles.progressTrack}>
       <View
@@ -67,7 +139,7 @@ export function ProgressBar({ percent, color }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   card: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
@@ -145,5 +217,84 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: radius.full,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  headerTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+    color: colors.brand[600],
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  langBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.gray[100],
+  },
+  langText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.gray[600],
+  },
+  iconBtn: {
+    padding: spacing.xs,
+  },
+  userName: {
+    fontSize: fontSize.sm,
+    color: colors.gray[500],
+    maxWidth: 100,
+    marginLeft: spacing.xs,
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.overlay,
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingBottom: spacing.xxl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  sheetTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.gray[900],
+  },
+  sheetItems: {
+    paddingVertical: spacing.sm,
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  sheetItemText: {
+    fontSize: fontSize.base,
+    fontWeight: '500',
   },
 });

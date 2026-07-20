@@ -1,19 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
 import { Card, Badge, LoadingSpinner, ErrorBanner, SuccessBanner, EmptyState } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { Input } from '../components/Input';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
-const ROLE_BADGE = {
-  super_admin: { bg: colors.red[100], text: colors.red[700] },
-  admin: { bg: colors.purple[100], text: colors.purple[700] },
-  user: { bg: colors.blue[100], text: colors.blue[700] },
-};
+function getRoleBadge(colors) {
+  return {
+    super_admin: { bg: colors.red[100], text: colors.red[700] },
+    admin: { bg: colors.purple[100], text: colors.purple[700] },
+    user: { bg: colors.blue[100], text: colors.blue[700] },
+  };
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -22,6 +25,8 @@ function formatDate(dateStr) {
 
 export default function SuperAdminUsers() {
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -82,7 +87,7 @@ export default function SuperAdminUsers() {
   };
 
   const roleBadge = (role) => {
-    const c = ROLE_BADGE[role] || ROLE_BADGE.user;
+    const c = (getRoleBadge(colors)[role] || getRoleBadge(colors).user);
     return <Badge bg={c.bg} color={c.text}>{role}</Badge>;
   };
 
@@ -166,7 +171,7 @@ export default function SuperAdminUsers() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

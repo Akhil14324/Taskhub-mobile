@@ -1,16 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, ProgressBar } from '../components/UI';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
 
   const [tasks, setTasks] = useState([]);
@@ -132,7 +135,7 @@ export default function Dashboard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

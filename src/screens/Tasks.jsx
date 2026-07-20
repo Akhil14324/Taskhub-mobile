@@ -1,26 +1,31 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
 import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
 import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
-import { Input, MultilineInput } from '../components/Input';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { Input, MultilineInput, DateInput } from '../components/Input';
+import { spacing, radius, fontSize } from '../theme/theme';
 
-const STATUS_COLORS = {
-  completed: { bg: colors.green[100], text: colors.green[700] },
-  pending: { bg: colors.yellow[100], text: colors.yellow[700] },
-  on_hold: { bg: colors.blue[100], text: colors.blue[700] },
-  warned: { bg: colors.red[100], text: colors.red[700] },
-};
+function getStatusColors(colors) {
+  return {
+    completed: { bg: colors.green[100], text: colors.green[700] },
+    pending: { bg: colors.yellow[100], text: colors.yellow[700] },
+    on_hold: { bg: colors.blue[100], text: colors.blue[700] },
+    warned: { bg: colors.red[100], text: colors.red[700] },
+  };
+}
 
 export default function Tasks() {
   const { user } = useAuth();
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const [tasks, setTasks] = useState([]);
@@ -110,7 +115,8 @@ export default function Tasks() {
 
   const openEdit = (task) => {
     setEditingTask(task);
-    setForm({ title: task.title, description: task.description || '', due_date: task.due_date || '', business_id: '', assigned_user_id: '' });
+    const dueDate = task.due_date ? String(task.due_date).slice(0, 10) : '';
+    setForm({ title: task.title, description: task.description || '', due_date: dueDate, business_id: '', assigned_user_id: '' });
     setFormError('');
     setEditModalOpen(true);
   };
@@ -231,8 +237,11 @@ export default function Tasks() {
   };
 
   const renderTask = ({ item: task }) => {
-    const statusColors = STATUS_COLORS[task.status] || STATUS_COLORS.pending;
-    const isOverdue = task.due_date && task.status !== 'completed' && task.status !== 'on_hold' && new Date(task.due_date) < new Date();
+    const statusColors = getStatusColors(colors)[task.status] || getStatusColors(colors).pending;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
+    const isOverdue = dueDate && task.status !== 'completed' && task.status !== 'on_hold' && dueDate < today;
 
     return (
       <Card style={styles.taskCard}>
@@ -244,9 +253,9 @@ export default function Tasks() {
             {task.assigned_user_name && (
               <Text style={styles.taskAssigned}>{t('assignedTo')}: {task.assigned_user_name}</Text>
             )}
-            {task.due_date && (
+            {dueDate && (
               <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
-                {t('due')}: {new Date(task.due_date).toLocaleDateString()}
+                {t('due')}: {dueDate.toLocaleDateString()}
               </Text>
             )}
             {task.completed_by_name && (
@@ -377,7 +386,7 @@ export default function Tasks() {
         {formError && <ErrorBanner message={formError} />}
         <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder="Task title" />
         <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <Input label={t('dueDate') + ' (YYYY-MM-DD)'} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="2024-12-31" />
+        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="Select due date" />
         {isAdmin && (
           <View style={styles.pickerField}>
             <Text style={styles.pickerLabel}>{t('business')}</Text>
@@ -426,7 +435,7 @@ export default function Tasks() {
         {formError && <ErrorBanner message={formError} />}
         <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder="Task title" />
         <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <Input label={t('dueDate') + ' (YYYY-MM-DD)'} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="2024-12-31" />
+        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="Select due date" />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
             {t('cancel')}
@@ -465,7 +474,7 @@ export default function Tasks() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

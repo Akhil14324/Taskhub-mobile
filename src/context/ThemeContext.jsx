@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getColors } from '../theme/theme';
 
 const ThemeContext = createContext(null);
 
@@ -21,7 +22,9 @@ export function ThemeProvider({ children }) {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   }, []);
 
-  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
+  const colors = useMemo(() => getColors(theme), [theme]);
+
+  const value = useMemo(() => ({ theme, toggleTheme, colors }), [theme, toggleTheme, colors]);
 
   return (
     <ThemeContext.Provider value={value}>
@@ -34,4 +37,10 @@ export function useTheme() {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
+}
+
+export function useColors() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useColors must be used within ThemeProvider');
+  return ctx.colors;
 }

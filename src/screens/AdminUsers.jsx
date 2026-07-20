@@ -1,29 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
 import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
-const ROLE_BADGE = {
-  super_admin: { bg: colors.red[100], text: colors.red[700] },
-  admin: { bg: colors.purple[100], text: colors.purple[700] },
-  user: { bg: colors.blue[100], text: colors.blue[700] },
-};
+function getRoleBadge(colors) {
+  return {
+    super_admin: { bg: colors.red[100], text: colors.red[700] },
+    admin: { bg: colors.purple[100], text: colors.purple[700] },
+    user: { bg: colors.blue[100], text: colors.blue[700] },
+  };
+}
 
-const STATUS_BADGE = {
-  active: { bg: colors.green[100], text: colors.green[700] },
-  warned: { bg: colors.yellow[100], text: colors.yellow[700] },
-  inactive: { bg: colors.gray[100], text: colors.gray[600] },
-};
+function getStatusBadge(colors) {
+  return {
+    active: { bg: colors.green[100], text: colors.green[700] },
+    warned: { bg: colors.yellow[100], text: colors.yellow[700] },
+    inactive: { bg: colors.gray[100], text: colors.gray[600] },
+  };
+}
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
   const { t } = useLang();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
   const [unassigned, setUnassigned] = useState([]);
@@ -144,12 +151,12 @@ export default function AdminUsers() {
   };
 
   const roleBadge = (role) => {
-    const c = ROLE_BADGE[role] || ROLE_BADGE.user;
+    const c = (getRoleBadge(colors)[role] || getRoleBadge(colors).user);
     return <Badge bg={c.bg} color={c.text}>{role}</Badge>;
   };
 
   const statusBadge = (status) => {
-    const c = STATUS_BADGE[status] || STATUS_BADGE.active;
+    const c = (getStatusBadge(colors)[status] || getStatusBadge(colors).active);
     return <Badge bg={c.bg} color={c.text}>{status}</Badge>;
   };
 
@@ -340,7 +347,7 @@ export default function AdminUsers() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],

@@ -1,7 +1,11 @@
+import { useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { useColors } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 export function PrimaryButton({ children, onPress, disabled, style, loading }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -19,6 +23,8 @@ export function PrimaryButton({ children, onPress, disabled, style, loading }) {
 }
 
 export function SecondaryButton({ children, onPress, disabled, style, loading }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -36,6 +42,8 @@ export function SecondaryButton({ children, onPress, disabled, style, loading })
 }
 
 export function DangerButton({ children, onPress, disabled, style, loading }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -53,6 +61,8 @@ export function DangerButton({ children, onPress, disabled, style, loading }) {
 }
 
 export function GhostButton({ children, onPress, disabled, style }) {
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -65,7 +75,7 @@ export function GhostButton({ children, onPress, disabled, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   primary: {
     backgroundColor: colors.brand[600],
     borderRadius: radius.md,

@@ -1,20 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import { Input } from '../components/Input';
 import { PrimaryButton } from '../components/Button';
 import { ErrorBanner } from '../components/UI';
-import { colors, spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function Login() {
   const { login } = useAuth();
   const { t, toggleLang, lang } = useLang();
   const { theme, toggleTheme } = useTheme();
+  const colors = useColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
 
   const [email, setEmail] = useState('');
@@ -33,7 +35,8 @@ export default function Login() {
       const res = await api.post('/auth/login', { email, password });
       await login(res.data.token, res.data.user);
     } catch (err) {
-      setError(err.response?.data?.error || t('loginFailed'));
+      console.error('Login error:', err.message, err.response?.data, err.code);
+      setError(err.response?.data?.error || err.message || t('loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -99,7 +102,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray[50],
