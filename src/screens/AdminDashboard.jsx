@@ -80,7 +80,6 @@ export default function AdminDashboard() {
         toggleLang={toggleLang}
         theme={theme}
         toggleTheme={toggleTheme}
-        userName={user?.name?.split(' ')[0]}
       />
       <ScrollView
         style={styles.scroll}

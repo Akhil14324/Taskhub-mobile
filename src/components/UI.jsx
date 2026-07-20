@@ -59,7 +59,7 @@ export function LoadingSpinner() {
   );
 }
 
-export function Header({ title, lang, toggleLang, theme, toggleTheme, userName }) {
+export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
   const { colors, styles } = useThemedStyles();
   return (
     <View style={styles.header}>
@@ -71,11 +71,6 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme, userName }
         <TouchableOpacity onPress={toggleTheme} style={styles.iconBtn} activeOpacity={0.7}>
           <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.gray[600]} />
         </TouchableOpacity>
-        {userName ? (
-          <Text style={styles.userName} numberOfLines={1}>
-            {userName}
-          </Text>
-        ) : null}
       </View>
     </View>
   );
@@ -251,12 +246,6 @@ const createStyles = (colors) => StyleSheet.create({
   },
   iconBtn: {
     padding: spacing.xs,
-  },
-  userName: {
-    fontSize: fontSize.sm,
-    color: colors.gray[500],
-    maxWidth: 100,
-    marginLeft: spacing.xs,
   },
   overlay: {
     flex: 1,
