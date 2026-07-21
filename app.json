@@ -40,7 +40,8 @@
             "enableProguardInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
