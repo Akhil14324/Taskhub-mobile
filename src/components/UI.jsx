@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 
@@ -61,8 +62,9 @@ export function LoadingSpinner() {
 
 export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
   const { colors, styles } = useThemedStyles();
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.headerActions}>
         <TouchableOpacity onPress={toggleLang} style={styles.langBtn} activeOpacity={0.7}>
@@ -218,7 +220,7 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.md,
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[200],

@@ -4,6 +4,7 @@ import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
@@ -39,6 +40,7 @@ function MainTabs() {
   const { user, logout } = useAuth();
   const { t } = useLang();
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [moreVisible, setMoreVisible] = useState(false);
 
@@ -70,8 +72,9 @@ function MainTabs() {
           tabBarActiveTintColor: colors.brand[600],
           tabBarInactiveTintColor: colors.gray[400],
           tabBarStyle: {
-            paddingBottom: 4,
+            paddingBottom: insets.bottom + 4,
             paddingTop: 4,
+            height: 56 + insets.bottom,
             backgroundColor: colors.white,
             borderTopColor: colors.gray[200],
             borderTopWidth: 1,

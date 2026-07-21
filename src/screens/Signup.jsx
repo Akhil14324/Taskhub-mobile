@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
@@ -16,6 +17,7 @@ export default function Signup() {
   const { t, toggleLang, lang } = useLang();
   const { theme, toggleTheme } = useTheme();
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
 
@@ -58,7 +60,7 @@ export default function Signup() {
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.toggles}>
+        <View style={[styles.toggles, { paddingTop: insets.top + spacing.md }]}>
           <TouchableOpacity onPress={toggleTheme} style={styles.toggleBtn}>
             <Ionicons
               name={theme === 'dark' ? 'sunny' : 'moon'}
