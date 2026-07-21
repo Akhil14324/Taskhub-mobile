@@ -75,7 +75,7 @@ export default function Login() {
             label={t('email')}
             value={email}
             onChangeText={setEmail}
-            placeholder="admin@taskhub.com"
+            placeholder="name@company.com"
             keyboardType="email-address"
             autoCapitalize="none"
           />
@@ -95,7 +95,6 @@ export default function Login() {
               <Text style={styles.signupLink}>{t('signUp')}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.demo}>{t('demoAdmin')}</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -175,11 +174,5 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.brand[600],
     fontWeight: '600',
-  },
-  demo: {
-    fontSize: fontSize.xs,
-    color: colors.gray[400],
-    textAlign: 'center',
-    marginTop: spacing.md,
   },
 });
