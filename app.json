@@ -20,8 +20,6 @@
     },
     "android": {
       "package": "com.vgrand.taskhub",
-      "compileSdkVersion": 35,
-      "targetSdkVersion": 35,
       "adaptiveIcon": {
         "backgroundColor": "#4f46e5"
       }
@@ -37,6 +35,8 @@
         "expo-build-properties",
         {
           "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
             "enableProguardInReleaseBuilds": true
           }
         }
