@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { ChatProvider, useChat } from '../context/ChatContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import { MoreMenu } from '../components/UI';
@@ -20,6 +21,8 @@ import AdminBusinessesScreen from '../screens/AdminBusinesses';
 import AdminUsersScreen from '../screens/AdminUsers';
 import SuperAdminUsersScreen from '../screens/SuperAdminUsers';
 import ProfileScreen from '../screens/Profile';
+import ChatListScreen from '../screens/ChatListScreen';
+import ChatThreadScreen from '../screens/ChatThreadScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -40,6 +43,7 @@ function MainTabs() {
   const { user, logout } = useAuth();
   const { t } = useLang();
   const colors = useColors();
+  const { totalUnread: chatUnread } = useChat();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [moreVisible, setMoreVisible] = useState(false);
@@ -49,6 +53,7 @@ function MainTabs() {
 
   const moreItems = [
     { label: t('notifications'), icon: 'notifications-outline', route: 'Notifications' },
+    { label: t('chat'), icon: 'chatbubble-outline', route: 'ChatList' },
     { label: t('profile'), icon: 'person-outline', route: 'Profile' },
     ...(isSuperAdmin
       ? [{ label: t('userPasswords'), icon: 'key-outline', route: 'UserPasswords' }]
@@ -102,6 +107,17 @@ function MainTabs() {
             tabBarIcon: ({ focused, color }) => (
               <Ionicons name={focused ? 'clipboard' : 'clipboard-outline'} size={22} color={color} />
             ),
+          }}
+        />
+        <Tab.Screen
+          name="ChatList"
+          component={ChatListScreen}
+          options={{
+            tabBarLabel: t('chat'),
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={22} color={color} />
+            ),
+            tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined,
           }}
         />
         {isAdmin && (
@@ -177,6 +193,7 @@ export default function AppNavigator() {
         ) : (
           <Stack.Screen name="Main" component={MainTabs} />
         )}
+        <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

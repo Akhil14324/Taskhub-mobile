@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ChatProvider } from './context/ChatContext';
 import AppNavigator from './navigation/AppNavigator';
 
 function ThemedStatusBar() {
@@ -29,9 +30,11 @@ function AppRoot() {
     <SafeAreaProvider>
       <ThemedStatusBar />
       <AuthProvider>
-        <LanguageProvider>
-          <AppNavigator />
-        </LanguageProvider>
+        <ChatProvider>
+          <LanguageProvider>
+            <AppNavigator />
+          </LanguageProvider>
+        </ChatProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

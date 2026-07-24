@@ -9,8 +9,11 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#4f46e5"
+      "image": "./assets/splash.png",
+      "backgroundColor": "#4f46e5",
+      "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,13 +22,16 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
-      }
+      },
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.vgrand.taskhub",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
-      }
+      },
+      "versionCode": 1
     },
     "extra": {
       "eas": {

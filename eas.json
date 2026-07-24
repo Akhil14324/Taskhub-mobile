@@ -12,7 +12,11 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "API_URL": "https://vgrand-taskhub-backend.onrender.com/api"
+      }
     }
   },
   "submit": {
