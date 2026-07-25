@@ -30,8 +30,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
-      },
-      "versionCode": 1
+      }
     },
     "extra": {
       "eas": {
