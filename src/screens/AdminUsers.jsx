@@ -28,7 +28,7 @@ function getStatusBadge(colors) {
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -73,6 +73,20 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Translate user names and business names when in Telugu
+  useEffect(() => {
+    if (lang !== 'te') return;
+    const texts = [];
+    unassigned.forEach((u) => { if (u.name) texts.push(u.name); });
+    allUsers.forEach((u) => {
+      if (u.name) texts.push(u.name);
+      u.businesses?.forEach((b) => { if (b.name) texts.push(b.name); });
+    });
+    businesses.forEach((b) => { if (b.name) texts.push(b.name); });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [unassigned, allUsers, businesses, lang, translateDynamic]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -164,7 +178,7 @@ export default function AdminUsers() {
     <Card key={user.id} style={styles.userCard}>
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={styles.userName}>{getDynamic(user.name)}</Text>
           <Text style={styles.userEmail}>{user.email}</Text>
         </View>
         <View style={styles.userBadges}>
@@ -177,7 +191,7 @@ export default function AdminUsers() {
         <View style={styles.userBusinesses}>
           <Ionicons name="business-outline" size={14} color={colors.gray[400]} />
           <Text style={styles.userBizText} numberOfLines={1}>
-            {user.businesses.map((b) => b.name).join(', ')}
+            {user.businesses.map((b) => getDynamic(b.name)).join(', ')}
           </Text>
         </View>
       )}
@@ -204,7 +218,7 @@ export default function AdminUsers() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.userActionBtn} onPress={() => handleDeleteUser(user.id, user.name)}>
+        <TouchableOpacity style={styles.userActionBtn} onPress={() => handleDeleteUser(user.id, getDynamic(user.name))}>
           <Ionicons name="trash-outline" size={16} color={colors.red[500]} />
           <Text style={[styles.userActionText, { color: colors.red[500] }]}>{t('delete')}</Text>
         </TouchableOpacity>
@@ -280,7 +294,7 @@ export default function AdminUsers() {
         {assignError && <ErrorBanner message={assignError} />}
         {selectedUser && (
           <View style={styles.selectedUserInfo}>
-            <Text style={styles.selectedUserName}>{selectedUser.name}</Text>
+            <Text style={styles.selectedUserName}>{getDynamic(selectedUser.name)}</Text>
             <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
           </View>
         )}
@@ -297,7 +311,7 @@ export default function AdminUsers() {
                 size={22}
                 color={selectedBusinessIds.includes(biz.id) ? colors.brand[600] : colors.gray[400]}
               />
-              <Text style={styles.bizCheckText}>{biz.name}</Text>
+              <Text style={styles.bizCheckText}>{getDynamic(biz.name)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -325,7 +339,7 @@ export default function AdminUsers() {
         {roleError && <ErrorBanner message={roleError} />}
         {roleModalUser && (
           <View style={styles.selectedUserInfo}>
-            <Text style={styles.selectedUserName}>{roleModalUser.name}</Text>
+            <Text style={styles.selectedUserName}>{getDynamic(roleModalUser.name)}</Text>
             <Text style={styles.selectedUserEmail}>{roleModalUser.email}</Text>
             <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleModalUser.role}</Text>
           </View>

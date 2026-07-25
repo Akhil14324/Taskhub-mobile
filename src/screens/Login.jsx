@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,9 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
+  const scrollRef = useRef(null);
+  const scrollToBottom = () =>
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -46,10 +49,10 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
           <View style={styles.toggles}>
             <TouchableOpacity onPress={toggleTheme} style={styles.toggleBtn}>
@@ -87,6 +90,7 @@ export default function Login() {
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
+            onFocus={scrollToBottom}
           />
           <PrimaryButton onPress={handleSubmit} loading={loading}>
             {loading ? t('signingIn') : t('signIn')}

@@ -31,7 +31,7 @@ function timeAgo(dateStr) {
 }
 
 export default function Notifications() {
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = useState([]);
@@ -56,6 +56,14 @@ export default function Notifications() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // Translate notification messages when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || notifications.length === 0) return;
+    const texts = notifications.map((n) => n.message).filter(Boolean);
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [notifications, lang, translateDynamic]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -98,7 +106,7 @@ export default function Notifications() {
             <Ionicons name={config.icon} size={20} color={config.color} />
           </View>
           <View style={styles.notifContent}>
-            <Text style={styles.notifMessage}>{item.message}</Text>
+            <Text style={styles.notifMessage}>{getDynamic(item.message)}</Text>
             <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
           </View>
           {!item.is_read && <View style={styles.unreadDot} />}

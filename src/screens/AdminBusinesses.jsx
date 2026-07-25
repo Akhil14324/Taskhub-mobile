@@ -20,7 +20,7 @@ const DEFAULT_TYPES = [
 ];
 
 export default function AdminBusinesses() {
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [businesses, setBusinesses] = useState([]);
@@ -61,6 +61,19 @@ export default function AdminBusinesses() {
     fetchTypes();
   }, [fetchBusinesses, fetchTypes]);
 
+  // Translate business names and custom types when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || businesses.length === 0) return;
+    const texts = [];
+    businesses.forEach((biz) => {
+      if (biz.name) texts.push(biz.name);
+      const custom = DEFAULT_TYPES.find((dt) => dt.value === biz.type) ? null : biz.type.replace(/_/g, ' ');
+      if (custom) texts.push(custom);
+    });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [businesses, lang, translateDynamic]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchBusinesses();
@@ -70,7 +83,7 @@ export default function AdminBusinesses() {
 
   const getTypeLabel = (type) => {
     const found = DEFAULT_TYPES.find((dt) => dt.value === type);
-    return found ? t(found.labelKey) : type.replace(/_/g, ' ');
+    return found ? t(found.labelKey) : getDynamic(type.replace(/_/g, ' '));
   };
 
   const getFinalType = () => {
@@ -125,7 +138,7 @@ export default function AdminBusinesses() {
 
   const handleDelete = (biz) => {
     Alert.alert(
-      biz.name,
+      getDynamic(biz.name),
       t('deleteBusinessConfirm'),
       [
         { text: t('cancel'), style: 'cancel' },
@@ -149,7 +162,7 @@ export default function AdminBusinesses() {
     <Card style={styles.bizCard}>
       <View style={styles.bizHeader}>
         <View style={styles.bizInfo}>
-          <Text style={styles.bizName}>{biz.name}</Text>
+          <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
           <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: 4 }}>
             {getTypeLabel(biz.type)}
           </Badge>

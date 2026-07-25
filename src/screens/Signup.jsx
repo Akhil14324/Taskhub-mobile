@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,9 @@ export default function Signup() {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
+  const scrollRef = useRef(null);
+  const scrollToBottom = () =>
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -56,10 +59,10 @@ export default function Signup() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={[styles.toggles, { paddingTop: insets.top + spacing.md }]}>
           <TouchableOpacity onPress={toggleTheme} style={styles.toggleBtn}>
             <Ionicons
@@ -106,6 +109,7 @@ export default function Signup() {
             onChangeText={setConfirmPassword}
             placeholder="••••••••"
             secureTextEntry
+            onFocus={scrollToBottom}
           />
           <PrimaryButton onPress={handleSubmit} loading={loading}>
             {loading ? t('creatingAccount') : t('createAccount')}

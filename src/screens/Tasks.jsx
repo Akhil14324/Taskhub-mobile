@@ -23,7 +23,7 @@ function getStatusColors(colors) {
 
 export default function Tasks() {
   const { user } = useAuth();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
@@ -81,6 +81,22 @@ export default function Tasks() {
     fetchTasks();
     fetchBusinesses();
   }, [fetchTasks, fetchBusinesses]);
+
+  // Translate dynamic content when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || tasks.length === 0) return;
+    const texts = [];
+    tasks.forEach((task) => {
+      if (task.title) texts.push(task.title);
+      if (task.description) texts.push(task.description);
+      if (task.business_name) texts.push(task.business_name);
+      if (task.assigned_user_name) texts.push(task.assigned_user_name);
+      if (task.completed_by_name) texts.push(task.completed_by_name);
+    });
+    businesses.forEach((b) => { if (b.name) texts.push(b.name); });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [tasks, businesses, lang, translateDynamic]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -247,11 +263,11 @@ export default function Tasks() {
       <Card style={styles.taskCard}>
         <View style={styles.taskHeader}>
           <View style={styles.taskInfo}>
-            <Text style={styles.taskTitle}>{task.title}</Text>
-            {task.business_name && <Text style={styles.taskBusiness}>{task.business_name}</Text>}
-            {task.description ? <Text style={styles.taskDesc} numberOfLines={2}>{task.description}</Text> : null}
+            <Text style={styles.taskTitle}>{getDynamic(task.title)}</Text>
+            {task.business_name && <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>}
+            {task.description ? <Text style={styles.taskDesc} numberOfLines={2}>{getDynamic(task.description)}</Text> : null}
             {task.assigned_user_name && (
-              <Text style={styles.taskAssigned}>{t('assignedTo')}: {task.assigned_user_name}</Text>
+              <Text style={styles.taskAssigned}>{t('assignedTo')}: {getDynamic(task.assigned_user_name)}</Text>
             )}
             {dueDate && (
               <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
@@ -259,7 +275,7 @@ export default function Tasks() {
               </Text>
             )}
             {task.completed_by_name && (
-              <Text style={styles.taskCompletedBy}>{t('doneBy')}: {task.completed_by_name}</Text>
+              <Text style={styles.taskCompletedBy}>{t('doneBy')}: {getDynamic(task.completed_by_name)}</Text>
             )}
           </View>
           <View style={styles.taskBadges}>
@@ -344,7 +360,7 @@ export default function Tasks() {
                 onValueChange={setFilterBusiness}
                 items={[
                   { label: t('allBusinesses'), value: 'all' },
-                  ...businesses.map((b) => ({ label: b.name, value: b.id.toString() })),
+                  ...businesses.map((b) => ({ label: getDynamic(b.name), value: b.id.toString() })),
                 ]}
               />
             </View>
@@ -399,7 +415,7 @@ export default function Tasks() {
                 }}
                 items={[
                   { label: t('selectBusinessPlaceholder'), value: '' },
-                  ...businesses.map((b) => ({ label: b.name, value: b.id.toString() })),
+                  ...businesses.map((b) => ({ label: getDynamic(b.name), value: b.id.toString() })),
                 ]}
               />
             </View>
@@ -414,7 +430,7 @@ export default function Tasks() {
                 onValueChange={(v) => setForm({ ...form, assigned_user_id: v })}
                 items={[
                   { label: t('allUsersInBusiness'), value: '' },
-                  ...businessUsers.map((u) => ({ label: u.name, value: u.id.toString() })),
+                  ...businessUsers.map((u) => ({ label: getDynamic(u.name), value: u.id.toString() })),
                 ]}
               />
             </View>
@@ -451,7 +467,7 @@ export default function Tasks() {
         {warnError && <ErrorBanner message={warnError} />}
         {warningTask && (
           <View style={styles.warnTaskInfo}>
-            <Text style={styles.warnTaskTitle}>{warningTask.title}</Text>
+            <Text style={styles.warnTaskTitle}>{getDynamic(warningTask.title)}</Text>
           </View>
         )}
         <MultilineInput

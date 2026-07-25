@@ -55,7 +55,7 @@ function formatDate(dateStr) {
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
@@ -97,6 +97,21 @@ export default function Profile() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Translate dynamic content when in Telugu
+  useEffect(() => {
+    if (lang !== 'te') return;
+    const texts = [];
+    if (user?.name) texts.push(user.name);
+    businesses.forEach((biz) => { if (biz.name) texts.push(biz.name); });
+    warnings.forEach((w) => {
+      if (w.task_title) texts.push(w.task_title);
+      if (w.message) texts.push(w.message);
+      if (w.sent_by_name) texts.push(w.sent_by_name);
+    });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [user, businesses, warnings, lang, translateDynamic]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -209,7 +224,7 @@ export default function Profile() {
             <Text style={[styles.avatarText, { color: avatarStyle.text }]}>{getInitials(user?.name)}</Text>
           </View>
           <View style={styles.headerInfo}>
-            <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.userName}>{getDynamic(user?.name)}</Text>
             <View style={styles.headerBadges}>
               <Badge bg={roleBadgeStyle.bg} color={roleBadgeStyle.text}>
                 {roleLabel}
@@ -252,7 +267,7 @@ export default function Profile() {
           <View style={styles.badgeRow}>
             {businesses.map((biz) => (
               <Badge key={biz.id} bg={colors.brand[100]} color={colors.brand[700]}>
-                {biz.name}
+                {getDynamic(biz.name)}
               </Badge>
             ))}
           </View>
@@ -334,12 +349,12 @@ export default function Profile() {
               {warnings.map((w) => (
                 <View key={w.id} style={styles.warningItem}>
                   <View style={styles.warningHeader}>
-                    <Text style={styles.warningTitle}>{w.task_title}</Text>
+                    <Text style={styles.warningTitle}>{getDynamic(w.task_title)}</Text>
                     <Text style={styles.warningDate}>{formatDate(w.created_at)}</Text>
                   </View>
-                  <Text style={styles.warningMessage}>{w.message}</Text>
+                  <Text style={styles.warningMessage}>{getDynamic(w.message)}</Text>
                   {w.sent_by_name && (
-                    <Text style={styles.warningSender}>{t('sentBy')} {w.sent_by_name}</Text>
+                    <Text style={styles.warningSender}>{t('sentBy')} {getDynamic(w.sent_by_name)}</Text>
                   )}
                 </View>
               ))}

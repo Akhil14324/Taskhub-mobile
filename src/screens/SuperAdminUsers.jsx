@@ -24,7 +24,7 @@ function formatDate(dateStr) {
 }
 
 export default function SuperAdminUsers() {
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [allUsers, setAllUsers] = useState([]);
@@ -55,6 +55,14 @@ export default function SuperAdminUsers() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // Translate user names when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || allUsers.length === 0) return;
+    const texts = allUsers.map((u) => u.name).filter(Boolean);
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [allUsers, lang, translateDynamic]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchUsers();
@@ -76,7 +84,7 @@ export default function SuperAdminUsers() {
     setSavingPw(true);
     try {
       await api.put(`/users/${selectedUser.id}/password`, { new_password: newPassword });
-      setPwSuccess(t('passwordUpdatedFor').replace('{name}', selectedUser.name));
+      setPwSuccess(t('passwordUpdatedFor').replace('{name}', getDynamic(selectedUser.name)));
       setPwModalOpen(false);
       setTimeout(() => setPwSuccess(''), 3000);
     } catch (err) {
@@ -107,7 +115,7 @@ export default function SuperAdminUsers() {
           <Card key={u.id} style={styles.userCard}>
             <View style={styles.userHeader}>
               <View style={styles.userInfo}>
-                <Text style={styles.userName}>{u.name}</Text>
+                <Text style={styles.userName}>{getDynamic(u.name)}</Text>
                 <Text style={styles.userEmail}>{u.email}</Text>
                 <Text style={styles.userJoined}>{t('joined')}: {formatDate(u.created_at)}</Text>
               </View>
@@ -146,7 +154,7 @@ export default function SuperAdminUsers() {
         {pwError && <ErrorBanner message={pwError} />}
         {selectedUser && (
           <View style={styles.selectedUserInfo}>
-            <Text style={styles.selectedUserName}>{selectedUser.name}</Text>
+            <Text style={styles.selectedUserName}>{getDynamic(selectedUser.name)}</Text>
             <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
             <Text style={styles.selectedUserRole}>{t('role')}: {selectedUser.role}</Text>
           </View>

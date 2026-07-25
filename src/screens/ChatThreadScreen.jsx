@@ -23,7 +23,7 @@ export default function ChatThreadScreen() {
     uploadFile, setActiveConversation, fetchConversations, deleteMessage,
   } = useChat();
   const colors = useColors();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const navigation = useNavigation();
   const route = useRoute();
   const { conversationId } = route.params;
@@ -48,6 +48,20 @@ export default function ChatThreadScreen() {
     return () => setActiveConversation(null);
   }, [conversationId, setActiveConversation, loadMessages]);
 
+  // Translate messages and conversation titles when in Telugu
+  useEffect(() => {
+    if (lang !== 'te') return;
+    const texts = [];
+    if (conversation?.type === 'group' && conversation.name) texts.push(conversation.name);
+    conversation?.participants?.forEach((p) => { if (p.name) texts.push(p.name); });
+    messages.forEach((m) => {
+      if (m.body) texts.push(m.body);
+      if (m.senderName) texts.push(m.senderName);
+    });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [conversation, messages, lang, translateDynamic]);
+
   useEffect(() => {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
@@ -59,10 +73,10 @@ export default function ChatThreadScreen() {
 
   const conversationTitle = useMemo(() => {
     if (!conversation) return 'Chat';
-    if (conversation.type === 'group') return conversation.name;
+    if (conversation.type === 'group') return getDynamic(conversation.name);
     const other = conversation.participants?.find((p) => p.id !== user.id);
-    return other?.name || 'Direct Chat';
-  }, [conversation, user.id]);
+    return getDynamic(other?.name) || 'Direct Chat';
+  }, [conversation, user.id, getDynamic]);
 
   const otherParticipants = conversation?.participants?.filter((p) => p.id !== user.id) || [];
   const isOtherOnline = otherParticipants.length > 0 && otherParticipants.some((p) => onlineUsers.has(p.id));
@@ -167,13 +181,13 @@ export default function ChatThreadScreen() {
       >
         <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther]}>
           {showAvatar && !isOwn && (
-            <Text style={styles.senderName}>{item.senderName}</Text>
+            <Text style={styles.senderName}>{getDynamic(item.senderName)}</Text>
           )}
           {isDeleted ? (
             <Text style={styles.deletedMsg}>This message was deleted</Text>
           ) : (
             <>
-              {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]}>{item.body}</Text>}
+              {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]}>{getDynamic(item.body)}</Text>}
               {item.attachmentUrl && item.attachmentType?.startsWith('image/') && (
                 <Image
                   source={{ uri: item.attachmentUrl }}
@@ -200,8 +214,8 @@ export default function ChatThreadScreen() {
 
   const typingText = activeTyping.length > 0
     ? activeTyping.length === 1
-      ? `${activeTyping[0].userName} is typing...`
-      : `${activeTyping.map((u) => u.userName).join(', ')} are typing...`
+      ? `${getDynamic(activeTyping[0].userName)} is typing...`
+      : `${activeTyping.map((u) => getDynamic(u.userName)).join(', ')} are typing...`
     : '';
 
   return (

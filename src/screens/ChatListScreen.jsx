@@ -14,7 +14,7 @@ export default function ChatListScreen() {
   const { user } = useAuth();
   const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation } = useChat();
   const colors = useColors();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -29,6 +29,20 @@ export default function ChatListScreen() {
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Translate conversation titles and last messages when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || conversations.length === 0) return;
+    const texts = [];
+    conversations.forEach((conv) => {
+      if (conv.type === 'group' && conv.name) texts.push(conv.name);
+      conv.participants?.forEach((p) => { if (p.name) texts.push(p.name); });
+      if (conv.last_message?.body) texts.push(conv.last_message.body);
+    });
+    users.forEach((u) => { if (u.name) texts.push(u.name); });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [conversations, users, lang, translateDynamic]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -76,9 +90,9 @@ export default function ChatListScreen() {
   };
 
   const getConversationTitle = (conv) => {
-    if (conv.type === 'group') return conv.name;
+    if (conv.type === 'group') return getDynamic(conv.name);
     const other = conv.participants?.find((p) => p.id !== user.id);
-    return other?.name || 'Unknown';
+    return getDynamic(other?.name) || 'Unknown';
   };
 
   const filteredUsers = users.filter((u) =>
@@ -92,7 +106,7 @@ export default function ChatListScreen() {
     const preview = lastMsg
       ? lastMsg.deleted_at
         ? 'This message was deleted'
-        : lastMsg.body || '[Attachment]'
+        : getDynamic(lastMsg.body) || '[Attachment]'
       : 'No messages yet';
     const isGroup = item.type === 'group';
     const otherParticipant = !isGroup ? item.participants?.find((p) => p.id !== user.id) : null;
@@ -202,7 +216,7 @@ export default function ChatListScreen() {
                   <Text style={styles.userAvatarText}>{item.name?.charAt(0)?.toUpperCase() || '?'}</Text>
                 </View>
                 <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userName}>{getDynamic(item.name)}</Text>
                   <Text style={styles.userEmail}>{item.email}</Text>
                 </View>
                 {selected.includes(item.id) && (

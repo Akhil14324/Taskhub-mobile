@@ -11,7 +11,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { t } = useLang();
+  const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
@@ -37,6 +37,18 @@ export default function Dashboard() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Translate dynamic content when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || tasks.length === 0) return;
+    const texts = [];
+    tasks.forEach((task) => {
+      if (task.title) texts.push(task.title);
+      if (task.business_name) texts.push(task.business_name);
+    });
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [tasks, lang, translateDynamic]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -115,9 +127,9 @@ export default function Dashboard() {
             <Card key={task.id} style={styles.taskCard}>
               <View style={styles.taskRow}>
                 <View style={styles.taskInfo}>
-                  <Text style={styles.taskTitle} numberOfLines={2}>{task.title}</Text>
+                  <Text style={styles.taskTitle} numberOfLines={2}>{getDynamic(task.title)}</Text>
                   {task.business_name && (
-                    <Text style={styles.taskBusiness}>{task.business_name}</Text>
+                    <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>
                   )}
                 </View>
                 <Badge

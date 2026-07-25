@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ChatProvider } from './context/ChatContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import AppNavigator from './navigation/AppNavigator';
 
 function ThemedStatusBar() {
@@ -32,7 +33,9 @@ function AppRoot() {
       <AuthProvider>
         <ChatProvider>
           <LanguageProvider>
-            <AppNavigator />
+            <ErrorBoundary>
+              <AppNavigator />
+            </ErrorBoundary>
           </LanguageProvider>
         </ChatProvider>
       </AuthProvider>

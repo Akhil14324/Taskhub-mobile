@@ -11,7 +11,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const { t, lang, toggleLang } = useLang();
+  const { t, lang, toggleLang, translateDynamic, getDynamic } = useLang();
   const { theme, toggleTheme } = useTheme();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -46,6 +46,14 @@ export default function AdminDashboard() {
     fetchData();
   }, [fetchData]);
 
+  // Translate business names when in Telugu
+  useEffect(() => {
+    if (lang !== 'te' || businesses.length === 0) return;
+    const texts = businesses.map((b) => b.name).filter(Boolean);
+    const unique = [...new Set(texts)];
+    if (unique.length > 0) translateDynamic(unique);
+  }, [businesses, lang, translateDynamic]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
@@ -70,7 +78,11 @@ export default function AdminDashboard() {
     { label: t('unassignedUsers'), value: unassignedCount, icon: 'people-outline', color: colors.purple[600], bg: colors.purple[50] },
   ];
 
-  const getTypeLabel = (type) => t(type) || type?.replace(/_/g, ' ');
+  const getTypeLabel = (type) => {
+    const label = t(type);
+    if (label && label !== type) return label;
+    return getDynamic(type?.replace(/_/g, ' '));
+  };
 
   return (
     <View style={styles.container}>
@@ -134,7 +146,7 @@ export default function AdminDashboard() {
                   <Card style={styles.bizCard}>
                     <View style={styles.bizHeader}>
                       <View>
-                        <Text style={styles.bizName}>{biz.name}</Text>
+                        <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
                         <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: spacing.xs }}>
                           {getTypeLabel(biz.type)}
                         </Badge>

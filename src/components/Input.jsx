@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 
-export function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, style }) {
+export function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, style, onFocus }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -17,6 +17,7 @@ export function Input({ label, value, onChangeText, placeholder, secureTextEntry
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType || 'default'}
         autoCapitalize={autoCapitalize || 'none'}
+        onFocus={onFocus}
         style={[styles.input, style]}
         placeholderTextColor={colors.gray[400]}
       />

@@ -194,6 +194,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Main" component={MainTabs} />
         )}
         <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
+        <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

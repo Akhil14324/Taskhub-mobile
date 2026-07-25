@@ -7,7 +7,9 @@ import { useAuth } from './AuthContext';
 
 const ChatContext = createContext(null);
 
-const SOCKET_URL = 'https://vgrand-taskhub-backend.onrender.com';
+const SOCKET_URL = __DEV__
+  ? 'http://localhost:5000'
+  : 'https://vgrand-taskhub-backend.onrender.com';
 
 export function ChatProvider({ children }) {
   const { user } = useAuth();
@@ -294,6 +296,26 @@ export function ChatProvider({ children }) {
     await api.delete(`/chat/messages/${messageId}`, { params: { scope } });
   }, []);
 
+  const deleteConversation = useCallback(async (conversationId) => {
+    await api.delete(`/chat/conversations/${conversationId}`);
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    if (activeConversationId === conversationId) {
+      setActiveConversationId(null);
+      setMessages([]);
+    }
+  }, [activeConversationId]);
+
+  const syncMessages = useCallback(async (conversationId, afterId) => {
+    const res = await api.get(`/chat/conversations/${conversationId}/messages`, {
+      params: { after: afterId, limit: 100 },
+    });
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      const newMsgs = res.data.messages.filter((m) => !existingIds.has(m.id));
+      return [...prev, ...newMsgs];
+    });
+  }, []);
+
   const uploadFile = useCallback(async (fileUri, mimeType) => {
     const formData = new FormData();
     formData.append('file', {
@@ -329,6 +351,8 @@ export function ChatProvider({ children }) {
     sendTypingStop,
     createConversation,
     deleteMessage,
+    deleteConversation,
+    syncMessages,
     uploadFile,
     setActiveConversation,
   };
