@@ -1,3 +1,4 @@
 import { GOOGLE_TRANSLATE_API_KEY } from '@env';
 
-export { GOOGLE_TRANSLATE_API_KEY };
+const apiKey = GOOGLE_TRANSLATE_API_KEY;
+export { apiKey as GOOGLE_TRANSLATE_API_KEY };
