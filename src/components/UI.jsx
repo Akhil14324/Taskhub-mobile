@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
+import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 function useThemedStyles() {
@@ -53,9 +54,10 @@ export function SuccessBanner({ message }) {
 
 export function LoadingSpinner() {
   const { styles } = useThemedStyles();
+  const { t } = useLang();
   return (
     <View style={styles.loading}>
-      <Text style={styles.loadingText}>Loading...</Text>
+      <Text style={styles.loadingText}>{t('loading')}</Text>
     </View>
   );
 }
@@ -80,12 +82,13 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
 
 export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
   const { colors, styles } = useThemedStyles();
+  const { t } = useLang();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>{title || 'More'}</Text>
+            <Text style={styles.sheetTitle}>{title || t('more')}</Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
               <Ionicons name="close-outline" size={22} color={colors.gray[400]} />
             </TouchableOpacity>

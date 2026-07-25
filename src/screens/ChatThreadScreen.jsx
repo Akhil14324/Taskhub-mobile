@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Image, ActivityIndicator,
-  Modal, Pressable,
+  Modal, Pressable, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -72,10 +72,10 @@ export default function ChatThreadScreen() {
   }, [messages, user.id, conversationId, markRead]);
 
   const conversationTitle = useMemo(() => {
-    if (!conversation) return 'Chat';
+    if (!conversation) return t('chat');
     if (conversation.type === 'group') return getDynamic(conversation.name);
     const other = conversation.participants?.find((p) => p.id !== user.id);
-    return getDynamic(other?.name) || 'Direct Chat';
+    return getDynamic(other?.name) || t('direct');
   }, [conversation, user.id, getDynamic]);
 
   const otherParticipants = conversation?.participants?.filter((p) => p.id !== user.id) || [];
@@ -140,14 +140,22 @@ export default function ChatThreadScreen() {
 
   const formatTime = (dateStr) => {
     const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(lang === 'te' ? 'te-IN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   };
+
+  const [confirmScope, setConfirmScope] = useState(null);
 
   const handleDeleteMessage = async (scope) => {
     if (!deleteTarget) return;
     setShowDeleteSheet(false);
-    await deleteMessage(deleteTarget.id, scope);
+    setConfirmScope(scope);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !confirmScope) return;
+    await deleteMessage(deleteTarget.id, confirmScope);
     setDeleteTarget(null);
+    setConfirmScope(null);
   };
 
   const onLongPressMessage = (item) => {
@@ -184,7 +192,7 @@ export default function ChatThreadScreen() {
             <Text style={styles.senderName}>{getDynamic(item.senderName)}</Text>
           )}
           {isDeleted ? (
-            <Text style={styles.deletedMsg}>This message was deleted</Text>
+            <Text style={styles.deletedMsg}>{t('messageDeleted')}</Text>
           ) : (
             <>
               {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]}>{getDynamic(item.body)}</Text>}
@@ -194,6 +202,11 @@ export default function ChatThreadScreen() {
                   style={styles.msgImage}
                   resizeMode="cover"
                 />
+              )}
+              {item.attachmentUrl && !item.attachmentType?.startsWith('image/') && (
+                <TouchableOpacity onPress={() => Linking.openURL(item.attachmentUrl)}>
+                  <Text style={[styles.attachmentLink, isOwn && styles.attachmentLinkOwn]}>{t('viewAttachment')}</Text>
+                </TouchableOpacity>
               )}
             </>
           )}
@@ -214,8 +227,8 @@ export default function ChatThreadScreen() {
 
   const typingText = activeTyping.length > 0
     ? activeTyping.length === 1
-      ? `${getDynamic(activeTyping[0].userName)} is typing...`
-      : `${activeTyping.map((u) => getDynamic(u.userName)).join(', ')} are typing...`
+      ? `${getDynamic(activeTyping[0].userName)} ${t('isTyping')}`
+      : `${activeTyping.map((u) => getDynamic(u.userName)).join(', ')} ${t('areTyping')}`
     : '';
 
   return (
@@ -300,7 +313,7 @@ export default function ChatThreadScreen() {
               onPress={() => handleDeleteMessage('me')}
             >
               <Ionicons name="trash-outline" size={20} color={colors.gray[700]} />
-              <Text style={styles.sheetItemText}>Delete for me</Text>
+              <Text style={styles.sheetItemText}>{t('deleteForMe')}</Text>
             </TouchableOpacity>
             {canDeleteForEveryone && (
               <TouchableOpacity
@@ -308,15 +321,38 @@ export default function ChatThreadScreen() {
                 onPress={() => handleDeleteMessage('everyone')}
               >
                 <Ionicons name="trash" size={20} color={colors.red[500]} />
-                <Text style={[styles.sheetItemText, { color: colors.red[500] }]}>Delete for everyone</Text>
+                <Text style={[styles.sheetItemText, { color: colors.red[500] }]}>{t('deleteForEveryone')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={[styles.sheetItem, styles.sheetCancel]}
               onPress={() => setShowDeleteSheet(false)}
             >
-              <Text style={styles.sheetCancelText}>Cancel</Text>
+              <Text style={styles.sheetCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={confirmScope !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmScope(null)}
+      >
+        <Pressable style={styles.confirmOverlay} onPress={() => setConfirmScope(null)}>
+          <Pressable style={styles.confirmDialog} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.confirmText}>
+              {confirmScope === 'everyone' ? t('deleteForEveryoneConfirm') : t('deleteForMeConfirm')}
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity onPress={() => setConfirmScope(null)} style={styles.confirmCancelBtn}>
+                <Text style={styles.confirmCancelText}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmDelete} style={styles.confirmDeleteBtn}>
+                <Text style={styles.confirmDeleteText}>{t('delete')}</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -435,6 +471,59 @@ const createStyles = (colors) => StyleSheet.create({
   sheetCancelText: {
     fontSize: fontSize.base,
     color: colors.gray[500],
+    fontWeight: '500',
+  },
+  attachmentLink: {
+    fontSize: fontSize.sm,
+    color: colors.brand[600],
+    marginTop: spacing.xs,
+    textDecorationLine: 'underline',
+  },
+  attachmentLinkOwn: {
+    color: colors.white,
+  },
+  confirmOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  confirmDialog: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    width: '80%',
+  },
+  confirmText: {
+    fontSize: fontSize.base,
+    color: colors.gray[900],
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  confirmCancelBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.gray[100],
+  },
+  confirmCancelText: {
+    fontSize: fontSize.sm,
+    color: colors.gray[600],
+  },
+  confirmDeleteBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.red[600],
+  },
+  confirmDeleteText: {
+    fontSize: fontSize.sm,
+    color: colors.white,
     fontWeight: '500',
   },
 });

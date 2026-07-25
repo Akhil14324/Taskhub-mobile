@@ -11,19 +11,11 @@ import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Butt
 import { Input } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
 
-function getRoleAvatar(colors) {
+function getRoleStyles(colors) {
   return {
     super_admin: { bg: colors.purple[100], text: colors.purple[700] },
     admin: { bg: colors.indigo[100], text: colors.indigo[700] },
     user: { bg: colors.brand[100], text: colors.brand[600] },
-  };
-}
-
-function getRoleBadge(colors) {
-  return {
-    super_admin: { bg: colors.purple[100], text: colors.purple[700] },
-    admin: { bg: colors.indigo[100], text: colors.indigo[700] },
-    user: { bg: colors.blue[100], text: colors.blue[700] },
   };
 }
 
@@ -48,9 +40,9 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, lang) {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  return new Date(dateStr).toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 export default function Profile() {
@@ -103,6 +95,7 @@ export default function Profile() {
     if (lang !== 'te') return;
     const texts = [];
     if (user?.name) texts.push(user.name);
+    if (user?.business_name) texts.push(user.business_name);
     businesses.forEach((biz) => { if (biz.name) texts.push(biz.name); });
     warnings.forEach((w) => {
       if (w.task_title) texts.push(w.task_title);
@@ -128,6 +121,7 @@ export default function Profile() {
   const openEditModal = () => {
     setEditName(user?.name || '');
     setEditError('');
+    setEditSuccess('');
     setEditModalOpen(true);
   };
 
@@ -163,8 +157,20 @@ export default function Profile() {
       setPwError(t('allFieldsRequired'));
       return;
     }
-    if (pwForm.new_password.length < 6) {
+    if (pwForm.new_password.length < 8) {
       setPwError(t('passwordMinLength'));
+      return;
+    }
+    if (!/[A-Z]/.test(pwForm.new_password)) {
+      setPwError(t('passwordUppercaseError'));
+      return;
+    }
+    if (!/[a-z]/.test(pwForm.new_password)) {
+      setPwError(t('passwordLowercaseError'));
+      return;
+    }
+    if (!/[0-9]/.test(pwForm.new_password)) {
+      setPwError(t('passwordNumberError'));
       return;
     }
     if (pwForm.new_password !== pwForm.confirm_password) {
@@ -190,8 +196,9 @@ export default function Profile() {
 
   if (loading) return <LoadingSpinner />;
 
-  const avatarStyle = (getRoleAvatar(colors)[user?.role] || getRoleAvatar(colors).user);
-  const roleBadgeStyle = (getRoleBadge(colors)[user?.role] || getRoleBadge(colors).user);
+  const roleStyles = useMemo(() => getRoleStyles(colors), [colors]);
+  const avatarStyle = (roleStyles[user?.role] || roleStyles.user);
+  const roleBadgeStyle = (roleStyles[user?.role] || roleStyles.user);
   const roleLabel = t(ROLE_LABEL[user?.role] || 'user');
   const statusBadgeStyle = (getStatusBadge(colors)[user?.status] || getStatusBadge(colors).active);
 
@@ -230,7 +237,7 @@ export default function Profile() {
                 {roleLabel}
               </Badge>
               <Badge bg={statusBadgeStyle.bg} color={statusBadgeStyle.text}>
-                {user?.status || 'active'}
+                {t(user?.status || 'active')}
               </Badge>
             </View>
           </View>
@@ -293,7 +300,7 @@ export default function Profile() {
             </View>
             <View>
               <Text style={styles.detailLabel}>{t('memberSince')}</Text>
-              <Text style={styles.detailValue}>{formatDate(user?.created_at)}</Text>
+              <Text style={styles.detailValue}>{formatDate(user?.created_at, lang)}</Text>
             </View>
           </View>
           <View style={styles.detailItem}>
@@ -311,7 +318,7 @@ export default function Profile() {
             </View>
             <View>
               <Text style={styles.detailLabel}>{t('statusLabel')}</Text>
-              <Text style={styles.detailValue}>{user?.status || 'active'}</Text>
+              <Text style={styles.detailValue}>{t(user?.status || 'active')}</Text>
             </View>
           </View>
         </View>
@@ -350,7 +357,7 @@ export default function Profile() {
                 <View key={w.id} style={styles.warningItem}>
                   <View style={styles.warningHeader}>
                     <Text style={styles.warningTitle}>{getDynamic(w.task_title)}</Text>
-                    <Text style={styles.warningDate}>{formatDate(w.created_at)}</Text>
+                    <Text style={styles.warningDate}>{formatDate(w.created_at, lang)}</Text>
                   </View>
                   <Text style={styles.warningMessage}>{getDynamic(w.message)}</Text>
                   {w.sent_by_name && (
@@ -390,7 +397,7 @@ export default function Profile() {
       <Modal open={pwModalOpen} onClose={() => setPwModalOpen(false)} title={t('changePassword')}>
         {pwError && <ErrorBanner message={pwError} />}
         <Input label={t('currentPassword')} value={pwForm.current_password} onChangeText={(v) => setPwForm({ ...pwForm, current_password: v })} placeholder={t('enterCurrentPassword')} secureTextEntry />
-        <Input label={t('newPassword')} value={pwForm.new_password} onChangeText={(v) => setPwForm({ ...pwForm, new_password: v })} placeholder="At least 6 characters" secureTextEntry />
+        <Input label={t('newPassword')} value={pwForm.new_password} onChangeText={(v) => setPwForm({ ...pwForm, new_password: v })} placeholder="At least 8 characters" secureTextEntry />
         <Input label={t('confirmNewPassword')} value={pwForm.confirm_password} onChangeText={(v) => setPwForm({ ...pwForm, confirm_password: v })} placeholder={t('reenterNewPassword')} secureTextEntry />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setPwModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>

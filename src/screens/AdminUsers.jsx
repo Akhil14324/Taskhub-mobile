@@ -60,7 +60,7 @@ export default function AdminUsers() {
         api.get('/businesses'),
       ]);
       setUnassigned(unassignedRes.data.users || []);
-      setAllUsers(usersRes.data?.users || usersRes.data?.users || []);
+      setAllUsers(usersRes.data?.users || []);
       setBusinesses(bizRes.data.businesses || []);
     } catch (err) {
       setError(err.response?.data?.error || t('failedLoadUsers'));
@@ -164,14 +164,21 @@ export default function AdminUsers() {
     );
   };
 
+  const roleLabel = (role) => {
+    if (role === 'super_admin') return t('superAdmin');
+    if (role === 'admin') return t('admin');
+    return t('user');
+  };
+
   const roleBadge = (role) => {
     const c = (getRoleBadge(colors)[role] || getRoleBadge(colors).user);
-    return <Badge bg={c.bg} color={c.text}>{role}</Badge>;
+    return <Badge bg={c.bg} color={c.text}>{roleLabel(role)}</Badge>;
   };
 
   const statusBadge = (status) => {
     const c = (getStatusBadge(colors)[status] || getStatusBadge(colors).active);
-    return <Badge bg={c.bg} color={c.text}>{status}</Badge>;
+    const label = status === 'warned' ? t('warned') : status === 'inactive' ? t('inactive') : t('active');
+    return <Badge bg={c.bg} color={c.text}>{label}</Badge>;
   };
 
   const renderUserCard = (user, isUnassigned = false) => (
@@ -341,7 +348,7 @@ export default function AdminUsers() {
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(roleModalUser.name)}</Text>
             <Text style={styles.selectedUserEmail}>{roleModalUser.email}</Text>
-            <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleModalUser.role}</Text>
+            <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleLabel(roleModalUser.role)}</Text>
           </View>
         )}
         <Text style={styles.roleDesc}>

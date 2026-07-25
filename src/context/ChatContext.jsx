@@ -22,8 +22,10 @@ export function ChatProvider({ children }) {
   const [connected, setConnected] = useState(false);
   const socketRef = useRef(null);
   const messagesRef = useRef([]);
+  const conversationsRef = useRef([]);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -216,10 +218,24 @@ export function ChatProvider({ children }) {
       const params = { limit: 30 };
       if (before) params.before = before;
       const res = await api.get(`/chat/conversations/${conversationId}/messages`, { params });
+      const normalized = (res.data.messages || []).map((m) => ({
+        ...m,
+        id: Number(m.id),
+        conversationId: Number(m.conversation_id ?? m.conversationId),
+        senderId: Number(m.sender_id ?? m.senderId),
+        senderName: m.sender_name ?? m.senderName ?? 'Unknown',
+        body: m.body,
+        attachmentUrl: m.attachment_url ?? m.attachmentUrl,
+        attachmentType: m.attachment_type ?? m.attachmentType,
+        createdAt: m.created_at ?? m.createdAt,
+        editedAt: m.edited_at ?? m.editedAt,
+        deletedAt: m.deleted_at ?? m.deletedAt,
+        readBy: m.readBy || [],
+      }));
       if (before) {
-        setMessages((prev) => [...res.data.messages.reverse(), ...prev]);
+        setMessages((prev) => [...normalized.reverse(), ...prev]);
       } else {
-        setMessages(res.data.messages);
+        setMessages(normalized);
       }
       return res.data.has_more;
     } catch {
@@ -262,10 +278,10 @@ export function ChatProvider({ children }) {
       )
     );
     setTotalUnread((prev) => {
-      const conv = conversations.find((c) => c.id === conversationId);
+      const conv = conversationsRef.current.find((c) => c.id === conversationId);
       return Math.max(0, prev - (conv?.unread_count || 0));
     });
-  }, [conversations]);
+  }, []);
 
   const sendTypingStart = useCallback((conversationId) => {
     socketRef.current?.emit('typing_start', { conversationId });
@@ -294,16 +310,22 @@ export function ChatProvider({ children }) {
       );
     }
     await api.delete(`/chat/messages/${messageId}`, { params: { scope } });
-  }, []);
+    fetchConversations();
+  }, [fetchConversations]);
 
   const deleteConversation = useCallback(async (conversationId) => {
     await api.delete(`/chat/conversations/${conversationId}`);
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    setTotalUnread((prev) => {
+      const conv = conversationsRef.current.find((c) => c.id === conversationId);
+      return Math.max(0, prev - (conv?.unread_count || 0));
+    });
     if (activeConversationId === conversationId) {
       setActiveConversationId(null);
       setMessages([]);
     }
-  }, [activeConversationId]);
+    await fetchConversations();
+  }, [activeConversationId, fetchConversations]);
 
   const syncMessages = useCallback(async (conversationId, afterId) => {
     const res = await api.get(`/chat/conversations/${conversationId}/messages`, {

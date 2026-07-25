@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,7 @@ import api from '../api/client';
 
 export default function ChatListScreen() {
   const { user } = useAuth();
-  const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation } = useChat();
+  const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation, deleteConversation } = useChat();
   const colors = useColors();
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const navigation = useNavigation();
@@ -92,7 +92,7 @@ export default function ChatListScreen() {
   const getConversationTitle = (conv) => {
     if (conv.type === 'group') return getDynamic(conv.name);
     const other = conv.participants?.find((p) => p.id !== user.id);
-    return getDynamic(other?.name) || 'Unknown';
+    return getDynamic(other?.name) || t('unknown');
   };
 
   const filteredUsers = users.filter((u) =>
@@ -105,9 +105,9 @@ export default function ChatListScreen() {
     const lastMsg = item.last_message;
     const preview = lastMsg
       ? lastMsg.deleted_at
-        ? 'This message was deleted'
-        : getDynamic(lastMsg.body) || '[Attachment]'
-      : 'No messages yet';
+        ? t('messageDeleted')
+        : getDynamic(lastMsg.body) || t('attachment')
+      : t('noMessagesYet');
     const isGroup = item.type === 'group';
     const otherParticipant = !isGroup ? item.participants?.find((p) => p.id !== user.id) : null;
     const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
@@ -116,6 +116,26 @@ export default function ChatListScreen() {
       <TouchableOpacity
         style={styles.convItem}
         onPress={() => navigation.navigate('ChatThread', { conversationId: item.id })}
+        onLongPress={() => {
+          Alert.alert(
+            t('deleteChat'),
+            '',
+            [
+              { text: t('cancel'), style: 'cancel' },
+              {
+                text: t('delete'),
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await deleteConversation(item.id);
+                  } catch {
+                    // ignore
+                  }
+                },
+              },
+            ]
+          );
+        }}
       >
         <View style={styles.avatar}>
           {isGroup ? (
@@ -248,8 +268,6 @@ export default function ChatListScreen() {
     </View>
   );
 }
-
-import { TextInput } from 'react-native';
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },

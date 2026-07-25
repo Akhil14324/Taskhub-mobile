@@ -6,7 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { ChatProvider, useChat } from '../context/ChatContext';
+import { useChat } from '../context/ChatContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import { MoreMenu } from '../components/UI';
@@ -29,12 +29,13 @@ const Tab = createBottomTabNavigator();
 
 function MoreTabButton({ onPress, accessibilityState }) {
   const colors = useColors();
+  const { t } = useLang();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const focused = accessibilityState?.selected;
   return (
     <TouchableOpacity onPress={onPress} style={styles.tabBtn} activeOpacity={0.7}>
       <Ionicons name="ellipsis-horizontal-outline" size={22} color={focused ? colors.brand[600] : colors.gray[400]} />
-      <Text style={[styles.tabLabel, { color: focused ? colors.brand[600] : colors.gray[400] }]}>More</Text>
+      <Text style={[styles.tabLabel, { color: focused ? colors.brand[600] : colors.gray[400] }]}>{t('more')}</Text>
     </TouchableOpacity>
   );
 }

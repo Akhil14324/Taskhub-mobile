@@ -18,16 +18,16 @@ function getNotifIcons(colors) {
   };
 }
 
-function timeAgo(dateStr) {
+function timeAgo(dateStr, t) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t('justNow');
+  if (mins < 60) return `${mins}${t('minAgo')}`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}${t('hrAgo')}`;
   const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return `${days}${t('dayAgo')}`;
 }
 
 export default function Notifications() {
@@ -107,7 +107,7 @@ export default function Notifications() {
           </View>
           <View style={styles.notifContent}>
             <Text style={styles.notifMessage}>{getDynamic(item.message)}</Text>
-            <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
+            <Text style={styles.notifTime}>{timeAgo(item.created_at, t)}</Text>
           </View>
           {!item.is_read && <View style={styles.unreadDot} />}
         </Card>

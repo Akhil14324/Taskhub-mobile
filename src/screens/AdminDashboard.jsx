@@ -46,10 +46,14 @@ export default function AdminDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // Translate business names when in Telugu
+  // Translate business names and custom types when in Telugu
   useEffect(() => {
     if (lang !== 'te' || businesses.length === 0) return;
-    const texts = businesses.map((b) => b.name).filter(Boolean);
+    const texts = [];
+    businesses.forEach((b) => {
+      if (b.name) texts.push(b.name);
+      if (b.type) texts.push(b.type.replace(/_/g, ' '));
+    });
     const unique = [...new Set(texts)];
     if (unique.length > 0) translateDynamic(unique);
   }, [businesses, lang, translateDynamic]);

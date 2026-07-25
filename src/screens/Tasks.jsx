@@ -22,7 +22,7 @@ function getStatusColors(colors) {
 }
 
 export default function Tasks() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -58,7 +58,11 @@ export default function Tasks() {
       if (filterBusiness !== 'all') params.business_id = filterBusiness;
       if (filterStatus !== 'all') params.status = filterStatus;
       const res = await api.get('/tasks', { params });
-      setTasks(res.data.tasks || []);
+      let fetchedTasks = res.data.tasks || [];
+      if (filterStatus === 'warned') {
+        fetchedTasks = fetchedTasks.filter((task) => task.is_warned);
+      }
+      setTasks(fetchedTasks);
     } catch (err) {
       setError(err.response?.data?.error || t('failedLoadTasks'));
     } finally {
@@ -92,6 +96,8 @@ export default function Tasks() {
       if (task.business_name) texts.push(task.business_name);
       if (task.assigned_user_name) texts.push(task.assigned_user_name);
       if (task.completed_by_name) texts.push(task.completed_by_name);
+      if (task.created_by_name) texts.push(task.created_by_name);
+      if (task.warning_message) texts.push(task.warning_message);
     });
     businesses.forEach((b) => { if (b.name) texts.push(b.name); });
     const unique = [...new Set(texts)];
@@ -110,7 +116,7 @@ export default function Tasks() {
     }
     try {
       const res = await api.get('/users');
-      const allUsers = res.data?.users || res.data?.users || [];
+      const allUsers = res.data?.users || [];
       setBusinessUsers(allUsers.filter((u) => u.businesses?.some((b) => b.id === parseInt(bizId)) && u.role === 'user'));
     } catch {
       setBusinessUsers([]);
@@ -198,6 +204,7 @@ export default function Tasks() {
     try {
       await api.put(`/tasks/${task.id}/complete`);
       fetchTasks();
+      refreshUser();
     } catch (err) {
       Alert.alert('Error', err.response?.data?.error || t('failedUpdateTaskStatus'));
     }
@@ -243,6 +250,7 @@ export default function Tasks() {
             try {
               await api.delete(`/tasks/${task.id}`);
               fetchTasks();
+              refreshUser();
             } catch (err) {
               Alert.alert('Error', err.response?.data?.error || t('failedDeleteTask'));
             }
@@ -271,11 +279,20 @@ export default function Tasks() {
             )}
             {dueDate && (
               <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
-                {t('due')}: {dueDate.toLocaleDateString()}
+                {t('due')}: {dueDate.toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US')}
               </Text>
+            )}
+            {task.created_by_name && (
+              <Text style={styles.taskCreatedBy}>{t('createdBy')}: {getDynamic(task.created_by_name)}</Text>
             )}
             {task.completed_by_name && (
               <Text style={styles.taskCompletedBy}>{t('doneBy')}: {getDynamic(task.completed_by_name)}</Text>
+            )}
+            {task.is_warned && task.warning_message && (
+              <View style={styles.warningBox}>
+                <Text style={styles.warningLabel}>{t('warning')}</Text>
+                <Text style={styles.warningText}>{getDynamic(task.warning_message)}</Text>
+              </View>
             )}
           </View>
           <View style={styles.taskBadges}>
@@ -376,6 +393,7 @@ export default function Tasks() {
                   { label: t('pending'), value: 'pending' },
                   { label: t('completed'), value: 'completed' },
                   { label: t('onHold'), value: 'on_hold' },
+                  { label: t('warned'), value: 'warned' },
                 ]}
               />
             </View>
@@ -636,5 +654,28 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: '600',
     color: colors.gray[900],
+  },
+  taskCreatedBy: {
+    fontSize: fontSize.sm,
+    color: colors.gray[400],
+    marginTop: spacing.xs,
+  },
+  warningBox: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.red[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.red[500],
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+  },
+  warningLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.red[700],
+  },
+  warningText: {
+    fontSize: fontSize.sm,
+    color: colors.red[700],
+    marginTop: 2,
   },
 });

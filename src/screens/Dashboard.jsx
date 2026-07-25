@@ -45,10 +45,12 @@ export default function Dashboard() {
     tasks.forEach((task) => {
       if (task.title) texts.push(task.title);
       if (task.business_name) texts.push(task.business_name);
+      if (task.created_by_name) texts.push(task.created_by_name);
     });
+    if (user?.business_name) texts.push(user.business_name);
     const unique = [...new Set(texts)];
     if (unique.length > 0) translateDynamic(unique);
-  }, [tasks, lang, translateDynamic]);
+  }, [tasks, lang, translateDynamic, user?.business_name]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -58,10 +60,10 @@ export default function Dashboard() {
   if (loading) return <LoadingSpinner />;
 
   const total = tasks.length;
-  const completed = tasks.filter((t) => t.status === 'completed').length;
-  const pending = tasks.filter((t) => t.status === 'pending').length;
-  const onHold = tasks.filter((t) => t.status === 'on_hold').length;
-  const warned = tasks.filter((t) => t.is_warned).length;
+  const completed = tasks.filter((task) => task.status === 'completed').length;
+  const pending = tasks.filter((task) => task.status === 'pending').length;
+  const onHold = tasks.filter((task) => task.status === 'on_hold').length;
+  const warned = tasks.filter((task) => task.is_warned).length;
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
   const recent = tasks.slice(0, 5);
 
@@ -131,13 +133,27 @@ export default function Dashboard() {
                   {task.business_name && (
                     <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>
                   )}
+                  {task.created_by_name && (
+                    <Text style={styles.taskCreatedBy}>{t('createdBy')} {getDynamic(task.created_by_name)}</Text>
+                  )}
+                  {task.due_date && (
+                    <View style={styles.taskDueRow}>
+                      <Ionicons name="calendar-outline" size={12} color={colors.gray[400]} />
+                      <Text style={styles.taskDue}>{new Date(task.due_date).toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US')}</Text>
+                    </View>
+                  )}
                 </View>
-                <Badge
-                  bg={task.status === 'completed' ? colors.green[100] : task.status === 'on_hold' ? colors.blue[100] : task.is_warned ? colors.red[100] : colors.yellow[100]}
-                  color={task.status === 'completed' ? colors.green[700] : task.status === 'on_hold' ? colors.blue[700] : task.is_warned ? colors.red[700] : colors.yellow[700]}
-                >
-                  {task.status === 'completed' ? t('completed') : task.status === 'on_hold' ? t('onHold') : task.is_warned ? t('warned') : t('pending')}
-                </Badge>
+                <View style={styles.taskBadgeCol}>
+                  {task.is_warned && (
+                    <Ionicons name="warning-outline" size={14} color={colors.red[600]} style={styles.warnIcon} />
+                  )}
+                  <Badge
+                    bg={task.status === 'completed' ? colors.green[100] : task.status === 'on_hold' ? colors.blue[100] : task.is_warned ? colors.red[100] : colors.yellow[100]}
+                    color={task.status === 'completed' ? colors.green[700] : task.status === 'on_hold' ? colors.blue[700] : task.is_warned ? colors.red[700] : colors.yellow[700]}
+                  >
+                    {task.status === 'completed' ? t('completed') : task.status === 'on_hold' ? t('onHold') : task.is_warned ? t('warned') : t('pending')}
+                  </Badge>
+                </View>
               </View>
             </Card>
           ))
@@ -264,6 +280,28 @@ const createStyles = (colors) => StyleSheet.create({
   taskBusiness: {
     fontSize: fontSize.sm,
     color: colors.gray[400],
+    marginTop: 2,
+  },
+  taskCreatedBy: {
+    fontSize: fontSize.xs,
+    color: colors.gray[400],
+    marginTop: 2,
+  },
+  taskDueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  taskDue: {
+    fontSize: fontSize.xs,
+    color: colors.gray[400],
+  },
+  taskBadgeCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  warnIcon: {
     marginTop: 2,
   },
 });

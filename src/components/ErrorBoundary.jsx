@@ -1,7 +1,15 @@
 import { Component } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useLang } from '../context/LanguageContext';
 
-export default class ErrorBoundary extends Component {
+function withTranslations(WrappedComponent) {
+  return function TranslatedErrorBoundary(props) {
+    const { t } = useLang();
+    return <WrappedComponent {...props} t={t} />;
+  };
+}
+
+class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -26,12 +34,12 @@ export default class ErrorBoundary extends Component {
       }
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
+          <Text style={styles.title}>{this.props.t('somethingWentWrong')}</Text>
           <Text style={styles.message}>
-            {this.state.error?.message || 'An unexpected error occurred.'}
+            {this.state.error?.message || this.props.t('unexpectedError')}
           </Text>
           <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-            <Text style={styles.buttonText}>Try Again</Text>
+            <Text style={styles.buttonText}>{this.props.t('tryAgain')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -39,6 +47,8 @@ export default class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
+
+export default withTranslations(ErrorBoundary);
 
 const styles = StyleSheet.create({
   container: {

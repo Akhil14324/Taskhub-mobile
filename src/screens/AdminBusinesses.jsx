@@ -190,7 +190,15 @@ export default function AdminBusinesses() {
           <Text style={styles.bizStatLabel}>{t('pending')}</Text>
         </View>
         <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.user_count}</Text>
+          <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.on_hold_count || 0}</Text>
+          <Text style={styles.bizStatLabel}>{t('onHold')}</Text>
+        </View>
+        <View style={styles.bizStat}>
+          <Text style={[styles.bizStatValue, { color: colors.red[600] }]}>{biz.warned_count || 0}</Text>
+          <Text style={styles.bizStatLabel}>{t('warned')}</Text>
+        </View>
+        <View style={styles.bizStat}>
+          <Text style={[styles.bizStatValue, { color: colors.purple[600] }]}>{biz.user_count}</Text>
           <Text style={styles.bizStatLabel}>{t('usersCount')}</Text>
         </View>
       </View>

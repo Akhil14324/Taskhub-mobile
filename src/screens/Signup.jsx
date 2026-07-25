@@ -36,8 +36,20 @@ export default function Signup() {
       setError(t('allFieldsRequired'));
       return;
     }
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t('passwordMinLength'));
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError(t('passwordUppercaseError'));
+      return;
+    }
+    if (!/[a-z]/.test(password)) {
+      setError(t('passwordLowercaseError'));
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError(t('passwordNumberError'));
       return;
     }
     if (password !== confirmPassword) {
@@ -100,7 +112,7 @@ export default function Signup() {
             label={t('password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
             secureTextEntry
           />
           <Input
