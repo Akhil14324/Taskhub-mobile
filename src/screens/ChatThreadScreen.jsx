@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useColors } from '../context/ThemeContext';
@@ -14,6 +14,25 @@ import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 const DELETE_WINDOW_MS = 15 * 60 * 1000;
+
+function getDayKey(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA');
+}
+
+function formatDateLabel(dateStr, lang, t) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return t('today');
+  if (diffDays === 1) return t('yesterday');
+  const locale = lang === 'te' ? 'te-IN' : 'en-GB';
+  return msgDay.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 export default function ChatThreadScreen() {
   const { user } = useAuth();
@@ -64,9 +83,9 @@ export default function ChatThreadScreen() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg.senderId !== user.id) {
-        markRead(conversationId, lastMsg.id);
+      const lastOtherMsg = [...messages].reverse().find((m) => m.senderId !== user.id);
+      if (lastOtherMsg) {
+        markRead(conversationId, lastOtherMsg.id);
       }
     }
   }, [messages, user.id, conversationId, markRead]);
@@ -74,11 +93,11 @@ export default function ChatThreadScreen() {
   const conversationTitle = useMemo(() => {
     if (!conversation) return t('chat');
     if (conversation.type === 'group') return getDynamic(conversation.name);
-    const other = conversation.participants?.find((p) => p.id !== user.id);
+    const other = conversation.participants?.find((p) => String(p.id) !== String(user.id));
     return getDynamic(other?.name) || t('direct');
   }, [conversation, user.id, getDynamic]);
 
-  const otherParticipants = conversation?.participants?.filter((p) => p.id !== user.id) || [];
+  const otherParticipants = conversation?.participants?.filter((p) => String(p.id) !== String(user.id)) || [];
   const isOtherOnline = otherParticipants.length > 0 && otherParticipants.some((p) => onlineUsers.has(p.id));
 
   const handleSend = async () => {
@@ -111,21 +130,25 @@ export default function ChatThreadScreen() {
     }, 2000);
   };
 
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
-    setUploading(true);
+  const handlePickAttachment = async () => {
     try {
-      const uploadResult = await uploadFile(asset.uri, asset.type);
-      await sendMessage(conversationId, null, uploadResult.url, uploadResult.type);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf', 'text/plain'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      setUploading(true);
+      try {
+        const uploadResult = await uploadFile(asset.uri, asset.mimeType, asset.name);
+        await sendMessage(conversationId, null, uploadResult.url, uploadResult.type);
+      } catch {
+        // ignore
+      } finally {
+        setUploading(false);
+      }
     } catch {
       // ignore
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -180,7 +203,17 @@ export default function ChatThreadScreen() {
     const allRead = isOwn && item.readBy && conversation?.participants &&
       item.readBy.length >= conversation.participants.filter((p) => p.id !== item.senderId).length;
 
+    const currentDay = getDayKey(item.createdAt);
+    const prevDay = prevMsg ? getDayKey(prevMsg.createdAt) : null;
+    const showDateHeader = index === 0 || currentDay !== prevDay;
+
     return (
+      <View>
+        {showDateHeader && currentDay && (
+          <View style={styles.dateSeparator}>
+            <Text style={styles.dateSeparatorText}>{formatDateLabel(item.createdAt, lang, t)}</Text>
+          </View>
+        )}
       <TouchableOpacity
         onLongPress={() => onLongPressMessage(item)}
         delayLongPress={400}
@@ -222,6 +255,7 @@ export default function ChatThreadScreen() {
           </View>
         </View>
       </TouchableOpacity>
+      </View>
     );
   };
 
@@ -256,6 +290,7 @@ export default function ChatThreadScreen() {
         data={messages}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderMessage}
+        extraData={lang}
         inverted={false}
         contentContainerStyle={styles.messagesList}
         onEndReached={onLoadMore}
@@ -278,7 +313,7 @@ export default function ChatThreadScreen() {
       />
 
       <View style={styles.inputBar}>
-        <TouchableOpacity onPress={handlePickImage} disabled={uploading} style={styles.attachBtn}>
+        <TouchableOpacity onPress={handlePickAttachment} disabled={uploading} style={styles.attachBtn}>
           {uploading ? (
             <ActivityIndicator size="small" color={colors.gray[400]} />
           ) : (
@@ -378,6 +413,20 @@ const createStyles = (colors) => StyleSheet.create({
   messagesList: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   listHeader: { paddingVertical: spacing.sm, alignItems: 'center' },
   noMessages: { fontSize: fontSize.sm, color: colors.gray[400], textAlign: 'center', paddingVertical: spacing.xl },
+  dateSeparator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: spacing.md,
+  },
+  dateSeparatorText: {
+    fontSize: fontSize.xs,
+    color: colors.gray[500],
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
   msgRow: { flexDirection: 'row', marginBottom: spacing.xs },
   msgRowOwn: { justifyContent: 'flex-end' },
   msgRowOther: { justifyContent: 'flex-start' },

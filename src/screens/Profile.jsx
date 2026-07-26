@@ -287,11 +287,11 @@ export default function Profile() {
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
             <View style={styles.detailIcon}>
-              <Ionicons name="mail-outline" size={16} color={colors.gray[400]} />
+              <Ionicons name="person-outline" size={16} color={colors.gray[400]} />
             </View>
             <View>
-              <Text style={styles.detailLabel}>{t('email')}</Text>
-              <Text style={styles.detailValue}>{user?.email}</Text>
+              <Text style={styles.detailLabel}>{t('username')}</Text>
+              <Text style={styles.detailValue}>{user?.username}</Text>
             </View>
           </View>
           <View style={styles.detailItem}>
@@ -382,7 +382,7 @@ export default function Profile() {
       {/* Edit Modal */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t('editProfile')}>
         {editError && <ErrorBanner message={editError} />}
-        <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder="Your name" />
+        <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder={t('namePlaceholder')} />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
             {t('cancel')}
@@ -397,7 +397,7 @@ export default function Profile() {
       <Modal open={pwModalOpen} onClose={() => setPwModalOpen(false)} title={t('changePassword')}>
         {pwError && <ErrorBanner message={pwError} />}
         <Input label={t('currentPassword')} value={pwForm.current_password} onChangeText={(v) => setPwForm({ ...pwForm, current_password: v })} placeholder={t('enterCurrentPassword')} secureTextEntry />
-        <Input label={t('newPassword')} value={pwForm.new_password} onChangeText={(v) => setPwForm({ ...pwForm, new_password: v })} placeholder="At least 8 characters" secureTextEntry />
+        <Input label={t('newPassword')} value={pwForm.new_password} onChangeText={(v) => setPwForm({ ...pwForm, new_password: v })} placeholder={t('passwordMinLengthPlaceholder')} secureTextEntry />
         <Input label={t('confirmNewPassword')} value={pwForm.confirm_password} onChangeText={(v) => setPwForm({ ...pwForm, confirm_password: v })} placeholder={t('reenterNewPassword')} secureTextEntry />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setPwModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>

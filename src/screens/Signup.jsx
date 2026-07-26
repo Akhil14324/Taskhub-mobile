@@ -25,14 +25,14 @@ export default function Signup() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
 
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !username || !password || !confirmPassword) {
       setError(t('allFieldsRequired'));
       return;
     }
@@ -59,8 +59,8 @@ export default function Signup() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/auth/signup', { name, email, password });
-      const loginRes = await api.post('/auth/login', { email, password });
+      await api.post('/auth/signup', { name, username, password });
+      const loginRes = await api.post('/auth/login', { username, password });
       await login(loginRes.data.token, loginRes.data.user);
     } catch (err) {
       setError(err.response?.data?.error || t('signupFailed'));
@@ -98,28 +98,27 @@ export default function Signup() {
             label={t('fullName')}
             value={name}
             onChangeText={setName}
-            placeholder="John Doe"
+            placeholder={t('namePlaceholder')}
           />
           <Input
-            label={t('email')}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
+            label={t('username')}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t('usernamePlaceholder')}
             autoCapitalize="none"
           />
           <Input
             label={t('password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="At least 8 characters"
+            placeholder={t('passwordMinLengthPlaceholder')}
             secureTextEntry
           />
           <Input
             label={t('confirmPassword')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            placeholder="••••••••"
+            placeholder={t('passwordPlaceholder')}
             secureTextEntry
             onFocus={scrollToBottom}
           />

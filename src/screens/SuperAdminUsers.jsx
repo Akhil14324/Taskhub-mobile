@@ -117,7 +117,7 @@ export default function SuperAdminUsers() {
               await api.delete(`/users/${userId}`);
               fetchUsers();
             } catch (err) {
-              Alert.alert('Error', err.response?.data?.error || t('failedDeleteUser'));
+              Alert.alert(t('error'), err.response?.data?.error || t('failedDeleteUser'));
             }
           },
         },
@@ -184,7 +184,10 @@ export default function SuperAdminUsers() {
             <View style={styles.userHeader}>
               <View style={styles.userInfo}>
                 <Text style={styles.userName}>{getDynamic(u.name)}</Text>
-                <Text style={styles.userEmail}>{u.email}</Text>
+                <Text style={styles.userEmail}>@{u.username}</Text>
+                {isSuperAdminSection && u.email && (
+                  <Text style={styles.userEmail}>{u.email}</Text>
+                )}
                 <Text style={styles.userJoined}>{t('joined')}: {formatDate(u.created_at, lang)}</Text>
               </View>
               {roleBadge(u.role)}
@@ -245,7 +248,10 @@ export default function SuperAdminUsers() {
         {selectedUser && (
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(selectedUser.name)}</Text>
-            <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
+            <Text style={styles.selectedUserEmail}>@{selectedUser.username}</Text>
+            {selectedUser.email && (
+              <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
+            )}
             <Text style={styles.selectedUserRole}>{t('role')}: {roleLabel(selectedUser.role)}</Text>
           </View>
         )}
@@ -275,7 +281,10 @@ export default function SuperAdminUsers() {
         {roleModalUser && (
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(roleModalUser.name)}</Text>
-            <Text style={styles.selectedUserEmail}>{roleModalUser.email}</Text>
+            <Text style={styles.selectedUserEmail}>@{roleModalUser.username}</Text>
+            {roleModalUser.email && (
+              <Text style={styles.selectedUserEmail}>{roleModalUser.email}</Text>
+            )}
             <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleLabel(roleModalUser.role)}</Text>
           </View>
         )}

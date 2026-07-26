@@ -156,7 +156,7 @@ export default function AdminUsers() {
               await api.delete(`/users/${userId}`);
               fetchData();
             } catch (err) {
-              Alert.alert('Error', err.response?.data?.error || t('failedDeleteUser'));
+              Alert.alert(t('error'), err.response?.data?.error || t('failedDeleteUser'));
             }
           },
         },
@@ -186,7 +186,7 @@ export default function AdminUsers() {
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{getDynamic(user.name)}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={styles.userEmail}>{user.username}</Text>
         </View>
         <View style={styles.userBadges}>
           {roleBadge(user.role)}
@@ -302,7 +302,7 @@ export default function AdminUsers() {
         {selectedUser && (
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(selectedUser.name)}</Text>
-            <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
+            <Text style={styles.selectedUserEmail}>{selectedUser.username}</Text>
           </View>
         )}
         <Text style={styles.pickerLabel}>{t('selectBusinessesMultiple')}</Text>
@@ -347,7 +347,7 @@ export default function AdminUsers() {
         {roleModalUser && (
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(roleModalUser.name)}</Text>
-            <Text style={styles.selectedUserEmail}>{roleModalUser.email}</Text>
+            <Text style={styles.selectedUserEmail}>{roleModalUser.username}</Text>
             <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleLabel(roleModalUser.role)}</Text>
           </View>
         )}

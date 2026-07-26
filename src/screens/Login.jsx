@@ -24,20 +24,20 @@ export default function Login() {
   const scrollToBottom = () =>
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email || !password) {
-      setError(t('enterEmailPassword'));
+    if (!username || !password) {
+      setError(t('enterUsernamePassword'));
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { username, password });
       await login(res.data.token, res.data.user);
     } catch (err) {
       console.error('Login error:', err.message, err.response?.data, err.code);
@@ -77,18 +77,17 @@ export default function Login() {
           <Text style={styles.title}>{t('signIn')}</Text>
           {error && <ErrorBanner message={error} />}
           <Input
-            label={t('email')}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="name@company.com"
-            keyboardType="email-address"
+            label={t('username')}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t('usernamePlaceholder')}
             autoCapitalize="none"
           />
           <Input
             label={t('password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="••••••••"
+            placeholder={t('passwordPlaceholder')}
             secureTextEntry
             onFocus={scrollToBottom}
           />

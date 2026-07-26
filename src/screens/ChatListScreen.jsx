@@ -12,7 +12,7 @@ import api from '../api/client';
 
 export default function ChatListScreen() {
   const { user } = useAuth();
-  const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation, deleteConversation } = useChat();
+  const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation, deleteConversation, markRead } = useChat();
   const colors = useColors();
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const navigation = useNavigation();
@@ -52,9 +52,8 @@ export default function ChatListScreen() {
 
   const fetchUsers = async () => {
     try {
-      const res = await api.get('/users');
-      const allUsers = (res.data.users || res.data || []).filter((u) => u.id !== user.id);
-      setUsers(allUsers);
+      const res = await api.get('/chat/users');
+      setUsers(res.data.users || []);
     } catch {
       // ignore
     }
@@ -78,26 +77,79 @@ export default function ChatListScreen() {
   };
 
   const handleCreate = async () => {
-    if (selected.length === 0) return;
+    const recipients = selected.filter((id) => String(id) !== String(user?.id));
+    if (recipients.length === 0) return;
+    if (chatType === 'direct' && recipients.length !== 1) return;
     if (chatType === 'group' && !groupName.trim()) return;
+    if (chatType === 'group' && recipients.length < 2) return;
     try {
-      const conv = await createConversation(chatType, selected, groupName.trim() || undefined);
+      const conv = await createConversation(chatType, recipients, groupName.trim() || undefined);
       setShowNewModal(false);
       navigation.navigate('ChatThread', { conversationId: conv.id });
-    } catch {
-      // ignore
+    } catch (err) {
+      Alert.alert(t('somethingWentWrong'), err.response?.data?.error || t('failedCreateConversation'));
     }
+  };
+
+  const handleMarkConversationRead = async (conversationId) => {
+    const conv = conversations.find((c) => c.id === conversationId);
+    const lastMsg = conv?.last_message;
+    if (lastMsg && conv?.unread_count > 0) {
+      try {
+        await markRead(conversationId, lastMsg.id);
+        await fetchConversations();
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const showChatOptions = (item) => {
+    const options = [
+      { text: t('cancel'), style: 'cancel' },
+    ];
+    if (item.unread_count > 0) {
+      options.unshift({
+        text: t('markAsRead'),
+        onPress: () => handleMarkConversationRead(item.id),
+      });
+    }
+    options.unshift({
+      text: t('delete'),
+      style: 'destructive',
+      onPress: () => {
+        Alert.alert(
+          t('deleteChat'),
+          '',
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('delete'),
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await deleteConversation(item.id);
+                } catch {
+                  // ignore
+                }
+              },
+            },
+          ]
+        );
+      },
+    });
+    Alert.alert(t('chatOptions'), '', options);
   };
 
   const getConversationTitle = (conv) => {
     if (conv.type === 'group') return getDynamic(conv.name);
-    const other = conv.participants?.find((p) => p.id !== user.id);
+    const other = conv.participants?.find((p) => String(p.id) !== String(user.id));
     return getDynamic(other?.name) || t('unknown');
   };
 
   const filteredUsers = users.filter((u) =>
     u.name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.email?.toLowerCase().includes(search.toLowerCase())
+    u.username?.toLowerCase().includes(search.toLowerCase())
   );
 
   const renderItem = ({ item }) => {
@@ -109,33 +161,13 @@ export default function ChatListScreen() {
         : getDynamic(lastMsg.body) || t('attachment')
       : t('noMessagesYet');
     const isGroup = item.type === 'group';
-    const otherParticipant = !isGroup ? item.participants?.find((p) => p.id !== user.id) : null;
+    const otherParticipant = !isGroup ? item.participants?.find((p) => String(p.id) !== String(user.id)) : null;
     const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
 
     return (
       <TouchableOpacity
         style={styles.convItem}
         onPress={() => navigation.navigate('ChatThread', { conversationId: item.id })}
-        onLongPress={() => {
-          Alert.alert(
-            t('deleteChat'),
-            '',
-            [
-              { text: t('cancel'), style: 'cancel' },
-              {
-                text: t('delete'),
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await deleteConversation(item.id);
-                  } catch {
-                    // ignore
-                  }
-                },
-              },
-            ]
-          );
-        }}
       >
         <View style={styles.avatar}>
           {isGroup ? (
@@ -147,14 +179,23 @@ export default function ChatListScreen() {
         </View>
         <View style={styles.convContent}>
           <View style={styles.convHeader}>
-            <Text style={styles.convTitle} numberOfLines={1}>{title}</Text>
-            {item.unread_count > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>
-                  {item.unread_count > 99 ? '99+' : item.unread_count}
-                </Text>
-              </View>
-            )}
+            <View style={styles.titleRow}>
+              <Text style={styles.convTitle} numberOfLines={1}>{title}</Text>
+              {item.unread_count > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>
+                    {item.unread_count > 99 ? '99+' : item.unread_count}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); showChatOptions(item); }}
+              style={styles.optionsBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color={colors.gray[500]} />
+            </TouchableOpacity>
           </View>
           <Text style={styles.convPreview} numberOfLines={1}>{preview}</Text>
         </View>
@@ -174,6 +215,7 @@ export default function ChatListScreen() {
         data={conversations}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
+        extraData={lang}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={conversations.length === 0 ? styles.emptyContainer : null}
         ListEmptyComponent={
@@ -227,6 +269,7 @@ export default function ChatListScreen() {
             data={filteredUsers}
             keyExtractor={(item) => item.id.toString()}
             style={styles.userList}
+            extraData={lang}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[styles.userItem, selected.includes(item.id) && styles.userItemSelected]}
@@ -237,7 +280,7 @@ export default function ChatListScreen() {
                 </View>
                 <View style={styles.userInfo}>
                   <Text style={styles.userName}>{getDynamic(item.name)}</Text>
-                  <Text style={styles.userEmail}>{item.email}</Text>
+                  <Text style={styles.userEmail}>{item.username}</Text>
                 </View>
                 {selected.includes(item.id) && (
                   <Ionicons name="checkmark" size={20} color={colors.brand[600]} />
@@ -313,7 +356,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   convContent: { flex: 1 },
   convHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  convTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900], flex: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.sm },
+  convTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
   unreadBadge: {
     backgroundColor: colors.brand[600],
     borderRadius: 10,
@@ -322,8 +366,10 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
+    marginLeft: 6,
   },
   unreadText: { color: colors.white, fontSize: fontSize.xs, fontWeight: '700' },
+  optionsBtn: { padding: spacing.xs },
   convPreview: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
   emptyContainer: { flex: 1 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },

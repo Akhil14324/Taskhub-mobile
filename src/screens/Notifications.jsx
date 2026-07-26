@@ -78,7 +78,7 @@ export default function Notifications() {
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || t('failedMarkRead'));
+      Alert.alert(t('error'), err.response?.data?.error || t('failedMarkRead'));
     }
   };
 
@@ -88,7 +88,7 @@ export default function Notifications() {
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || t('failedMarkAllRead'));
+      Alert.alert(t('error'), err.response?.data?.error || t('failedMarkAllRead'));
     }
   };
 
@@ -141,6 +141,7 @@ export default function Notifications() {
         data={notifications}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
+        extraData={lang}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={

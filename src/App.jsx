@@ -17,9 +17,13 @@ function ThemedStatusBar() {
 
 function AppRoot() {
   const { colors } = useTheme();
-  const [fontsLoaded] = useFonts(Ionicons.font);
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
 
-  if (!fontsLoaded) {
+  if (fontError) {
+    console.warn('[app] font load error:', fontError);
+  }
+
+  if (!fontsLoaded && !fontError) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.gray[50] }}>
         <ActivityIndicator size="large" color={colors.brand[600]} />

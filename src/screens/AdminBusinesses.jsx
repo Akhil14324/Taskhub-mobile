@@ -150,7 +150,7 @@ export default function AdminBusinesses() {
               await api.delete(`/businesses/${biz.id}`);
               fetchBusinesses();
             } catch (err) {
-              Alert.alert('Error', err.response?.data?.error || t('failedDeleteBusiness'));
+              Alert.alert(t('error'), err.response?.data?.error || t('failedDeleteBusiness'));
             }
           },
         },
@@ -222,6 +222,7 @@ export default function AdminBusinesses() {
         data={businesses}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
+        extraData={lang}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -234,7 +235,7 @@ export default function AdminBusinesses() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t('editBusiness') : t('addBusiness')}>
         {formError && <ErrorBanner message={formError} />}
-        <Input label={t('name')} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="e.g. Downtown Restaurant" />
+        <Input label={t('name')} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder={t('businessNamePlaceholder')} />
         <View style={styles.pickerField}>
           <Text style={styles.pickerLabel}>{t('type')}</Text>
           <View style={styles.pickerWrap}>
@@ -249,7 +250,7 @@ export default function AdminBusinesses() {
           </View>
         </View>
         {form.type === '__custom__' && (
-          <Input label={t('newTypeName')} value={form.customType} onChangeText={(v) => setForm({ ...form, customType: v })} placeholder="e.g. Retail, Warehouse" />
+          <Input label={t('newTypeName')} value={form.customType} onChangeText={(v) => setForm({ ...form, customType: v })} placeholder={t('customTypePlaceholder')} />
         )}
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>

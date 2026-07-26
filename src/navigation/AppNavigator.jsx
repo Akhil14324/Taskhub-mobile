@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { NavigationContainer, useNavigation, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useChat } from '../context/ChatContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import { MoreMenu } from '../components/UI';
+import { addNotificationResponseListener } from '../services/notifications';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
@@ -180,11 +181,42 @@ const createStyles = (colors) => StyleSheet.create({
 
 export default function AppNavigator() {
   const { user, loading } = useAuth();
+  const colors = useColors();
+  const navigationRef = useNavigationContainerRef();
+  const notificationListenerRef = useRef(null);
 
-  if (loading) return null;
+  useEffect(() => {
+    if (!user) return;
+
+    notificationListenerRef.current = addNotificationResponseListener((response) => {
+      const data = response.notification.request.content.data;
+      if (!data) return;
+
+      if (data.type === 'chat' && data.conversationId) {
+        navigationRef.current?.navigate('ChatThread', { conversationId: data.conversationId });
+      } else if (data.type === 'overdue' || data.type === 'task_added' || data.type === 'task_completed' || data.type === 'warning' || data.type === 'assignment') {
+        navigationRef.current?.navigate('Main', { screen: 'Notifications' });
+      }
+    });
+
+    return () => {
+      if (notificationListenerRef.current) {
+        notificationListenerRef.current.remove();
+        notificationListenerRef.current = null;
+      }
+    };
+  }, [user]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.gray[50] }}>
+        <ActivityIndicator size="large" color={colors.brand[600]} />
+      </View>
+    );
+  }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!user ? (
           <>

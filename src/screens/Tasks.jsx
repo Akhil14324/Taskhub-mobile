@@ -206,7 +206,7 @@ export default function Tasks() {
       fetchTasks();
       refreshUser();
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || t('failedUpdateTaskStatus'));
+      Alert.alert(t('error'), err.response?.data?.error || t('failedUpdateTaskStatus'));
     }
   };
 
@@ -215,7 +215,7 @@ export default function Tasks() {
       await api.put(`/tasks/${task.id}/hold`);
       fetchTasks();
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || t('failedToggleHold'));
+      Alert.alert(t('error'), err.response?.data?.error || t('failedToggleHold'));
     }
   };
 
@@ -252,7 +252,7 @@ export default function Tasks() {
               fetchTasks();
               refreshUser();
             } catch (err) {
-              Alert.alert('Error', err.response?.data?.error || t('failedDeleteTask'));
+              Alert.alert(t('error'), err.response?.data?.error || t('failedDeleteTask'));
             }
           },
         },
@@ -405,6 +405,7 @@ export default function Tasks() {
         data={tasks}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderTask}
+        extraData={lang}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -418,9 +419,9 @@ export default function Tasks() {
       {/* Create Modal */}
       <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title={t('addTask')}>
         {formError && <ErrorBanner message={formError} />}
-        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder="Task title" />
+        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder={t('taskTitlePlaceholder')} />
         <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="Select due date" />
+        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder={t('selectDueDate')} />
         {isAdmin && (
           <View style={styles.pickerField}>
             <Text style={styles.pickerLabel}>{t('business')}</Text>
@@ -467,9 +468,9 @@ export default function Tasks() {
       {/* Edit Modal */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t('editTask')}>
         {formError && <ErrorBanner message={formError} />}
-        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder="Task title" />
+        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder={t('taskTitlePlaceholder')} />
         <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder="Select due date" />
+        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder={t('selectDueDate')} />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
             {t('cancel')}
@@ -492,7 +493,7 @@ export default function Tasks() {
           label={t('warningMessage')}
           value={warnMessage}
           onChangeText={setWarnMessage}
-          placeholder="Enter warning message..."
+          placeholder={t('enterWarningMessage')}
           rows={4}
         />
         <View style={styles.modalActions}>
