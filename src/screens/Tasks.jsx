@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
+import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
 import { Input, MultilineInput, DateInput } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -357,7 +357,7 @@ export default function Tasks() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('tasks')}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
@@ -505,7 +505,7 @@ export default function Tasks() {
           </DangerButton>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
+import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { spacing, radius, fontSize } from '../theme/theme';
 
@@ -239,7 +239,7 @@ export default function AdminUsers() {
   const regularUsers = allUsers.filter((u) => u.role === 'user');
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container} bottomOffset={56}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -364,7 +364,7 @@ export default function AdminUsers() {
           </PrimaryButton>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 

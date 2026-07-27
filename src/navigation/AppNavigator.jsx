@@ -3,7 +3,7 @@ import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'rea
 import { NavigationContainer, useNavigation, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -228,6 +228,8 @@ export default function AppNavigator() {
         )}
         <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
         <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

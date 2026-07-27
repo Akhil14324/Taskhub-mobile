@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
@@ -10,6 +10,15 @@ function useThemedStyles() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return { colors, styles };
+}
+
+export function Screen({ children, style, bottomOffset = 0 }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + bottomOffset }, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function Card({ children, style, onPress }) {
@@ -64,9 +73,8 @@ export function LoadingSpinner() {
 
 export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
   const { colors, styles } = useThemedStyles();
-  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+    <View style={[styles.header, { paddingTop: spacing.md }]}>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.headerActions}>
         <TouchableOpacity onPress={toggleLang} style={styles.langBtn} activeOpacity={0.7}>

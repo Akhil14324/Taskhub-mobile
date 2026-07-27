@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, Image, ActivityIndicator,
   Modal, Pressable, Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ import { useChat } from '../context/ChatContext';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { Screen } from '../components/UI';
 
 const DELETE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -266,8 +267,9 @@ export default function ChatThreadScreen() {
     : '';
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
+    <Screen style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.inner}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
@@ -391,12 +393,14 @@ export default function ChatThreadScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.gray[50] },
+  inner: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

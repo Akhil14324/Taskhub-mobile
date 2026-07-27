@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
+import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton } from '../components/Button';
 import { spacing, radius, fontSize } from '../theme/theme';
 
@@ -118,7 +118,7 @@ export default function Notifications() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.header}>{t('notifications')}</Text>
@@ -151,7 +151,7 @@ export default function Notifications() {
           />
         }
       />
-    </View>
+    </Screen>
   );
 }
 

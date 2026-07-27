@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -23,7 +23,7 @@ function AppRoot() {
     console.warn('[app] font load error:', fontError);
   }
 
-  if (!fontsLoaded && !fontError) {
+  if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.gray[50] }}>
         <ActivityIndicator size="large" color={colors.brand[600]} />

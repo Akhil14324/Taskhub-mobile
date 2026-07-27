@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { Screen } from '../components/UI';
 import Modal from '../components/Modal';
 import api from '../api/client';
 
@@ -23,6 +24,7 @@ export default function ChatListScreen() {
   const [chatType, setChatType] = useState('direct');
   const [groupName, setGroupName] = useState('');
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('users');
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -59,6 +61,8 @@ export default function ChatListScreen() {
     }
   };
 
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+
   const openNewModal = () => {
     setSelected([]);
     setChatType('direct');
@@ -80,6 +84,7 @@ export default function ChatListScreen() {
     const recipients = selected.filter((id) => String(id) !== String(user?.id));
     if (recipients.length === 0) return;
     if (chatType === 'direct' && recipients.length !== 1) return;
+    if (chatType === 'group' && !isAdmin) return;
     if (chatType === 'group' && !groupName.trim()) return;
     if (chatType === 'group' && recipients.length < 2) return;
     try {
@@ -152,6 +157,18 @@ export default function ChatListScreen() {
     u.username?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const tabs = useMemo(
+    () => [
+      { key: 'users', type: 'direct', label: t('users') },
+      { key: 'groups', type: 'group', label: t('groups') },
+    ],
+    [t]
+  );
+  const filteredConversations = useMemo(
+    () => conversations.filter((c) => c.type === tabs.find((tab) => tab.key === activeTab).type),
+    [conversations, activeTab, tabs]
+  );
+
   const renderItem = ({ item }) => {
     const title = getConversationTitle(item);
     const lastMsg = item.last_message;
@@ -204,20 +221,33 @@ export default function ChatListScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('chat')}</Text>
         <TouchableOpacity onPress={openNewModal} style={styles.newBtn}>
           <Ionicons name="create-outline" size={22} color={colors.brand[600]} />
         </TouchableOpacity>
       </View>
+      <View style={styles.tabRow}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key)}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <FlatList
-        data={conversations}
+        data={filteredConversations}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         extraData={lang}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={conversations.length === 0 ? styles.emptyContainer : null}
+        contentContainerStyle={filteredConversations.length === 0 ? styles.emptyContainer : null}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={48} color={colors.gray[300]} />
@@ -238,13 +268,15 @@ export default function ChatListScreen() {
               <Ionicons name="person" size={16} color={chatType === 'direct' ? colors.white : colors.gray[600]} />
               <Text style={[styles.typeBtnText, chatType === 'direct' && styles.typeBtnTextActive]}>{t('direct')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeBtn, chatType === 'group' && styles.typeBtnActive]}
-              onPress={() => { setChatType('group'); setSelected([]); }}
-            >
-              <Ionicons name="people" size={16} color={chatType === 'group' ? colors.white : colors.gray[600]} />
-              <Text style={[styles.typeBtnText, chatType === 'group' && styles.typeBtnTextActive]}>{t('group')}</Text>
-            </TouchableOpacity>
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.typeBtn, chatType === 'group' && styles.typeBtnActive]}
+                onPress={() => { setChatType('group'); setSelected([]); }}
+              >
+                <Ionicons name="people" size={16} color={chatType === 'group' ? colors.white : colors.gray[600]} />
+                <Text style={[styles.typeBtnText, chatType === 'group' && styles.typeBtnTextActive]}>{t('group')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {chatType === 'group' && (
@@ -308,7 +340,7 @@ export default function ChatListScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
@@ -325,6 +357,23 @@ const createStyles = (colors) => StyleSheet.create({
   },
   headerTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.gray[900] },
   newBtn: { padding: spacing.xs },
+  tabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  tab: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray[100],
+  },
+  tabActive: { backgroundColor: colors.brand[600] },
+  tabText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.gray[600] },
+  tabTextActive: { color: colors.white },
   convItem: {
     flexDirection: 'row',
     alignItems: 'center',

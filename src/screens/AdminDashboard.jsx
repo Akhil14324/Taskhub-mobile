@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme, useColors } from '../context/ThemeContext';
 import api from '../api/client';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, ProgressBar, Header } from '../components/UI';
+import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, ProgressBar, Header, Screen } from '../components/UI';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function AdminDashboard() {
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container} bottomOffset={56}>
       <Header
         title={t('appName')}
         lang={lang}
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 

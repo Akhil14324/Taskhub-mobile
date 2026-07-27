@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState } from '../components/UI';
+import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { Input } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -208,7 +208,7 @@ export default function AdminBusinesses() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <View style={styles.container}>
+    <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('businesses')}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
@@ -261,7 +261,7 @@ export default function AdminBusinesses() {
           </PrimaryButton>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
