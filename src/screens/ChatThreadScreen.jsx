@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -46,47 +46,48 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const soundRef = useRef(null);
+  const playerRef = useRef(null);
+  const subscriptionRef = useRef(null);
 
-  const stop = useCallback(async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-    } catch {
-      // ignore
+  const stop = useCallback(() => {
+    const player = playerRef.current;
+    if (player) {
+      player.pause();
+      player.seekTo(0);
     }
     setIsPlaying(false);
     setProgress(0);
   }, []);
 
-  const play = useCallback(async () => {
+  const play = useCallback(() => {
     // Stop any other currently-playing audio
     if (activeAudioStopRef && activeAudioStopRef !== stop) {
       activeAudioStopRef();
     }
     try {
-      const { sound } = await Audio.Sound.createAsync({ uri });
-      soundRef.current = sound;
+      let player = playerRef.current;
+      if (!player) {
+        player = createAudioPlayer({ uri });
+        playerRef.current = player;
+        subscriptionRef.current = player.addListener('playbackStatusUpdate', (status) => {
+          if (status.didJustFinish) {
+            stop();
+          } else if (status.isLoaded && status.duration > 0) {
+            setDuration(status.duration * 1000);
+            setProgress(status.currentTime / status.duration);
+          }
+        });
+      }
       activeAudioStopRef = stop;
       setIsPlaying(true);
       setProgress(0);
       setDuration(0);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          stop();
-        } else if (status.isLoaded && status.durationMillis > 0) {
-          setDuration(status.durationMillis);
-          setProgress(status.positionMillis / status.durationMillis);
-        }
-      });
+      player.seekTo(0);
+      player.play();
     } catch {
       // ignore
     }
-  }, [stop]);
+  }, [stop, uri]);
 
   const toggle = useCallback(() => {
     if (isPlaying) {
@@ -99,9 +100,13 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   useEffect(() => {
     return () => {
       if (activeAudioStopRef === stop) activeAudioStopRef = null;
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-        soundRef.current = null;
+      if (subscriptionRef.current) {
+        subscriptionRef.current.remove();
+        subscriptionRef.current = null;
+      }
+      if (playerRef.current) {
+        playerRef.current.remove();
+        playerRef.current = null;
       }
     };
   }, [stop]);
@@ -380,6 +385,7 @@ export default function ChatThreadScreen() {
   const [showAttachSheet, setShowAttachSheet] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recordDotScale = useSharedValue(1);
   const recordInputOpacity = useSharedValue(1);
   useEffect(() => {
@@ -750,21 +756,18 @@ export default function ChatThreadScreen() {
     }
   };
 
-  const recordingRef = useRef(null);
   const recordTimerRef = useRef(null);
 
   const startRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+      if (!granted) {
         Alert.alert(t('microphonePermissionRequired'));
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HighQuality);
-      await rec.startRecording();
-      recordingRef.current = rec;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setRecording(true);
       setRecordDuration(0);
       recordTimerRef.current = setInterval(() => {
@@ -783,9 +786,9 @@ export default function ChatThreadScreen() {
 
   const stopRecording = async (send) => {
     try {
-      if (recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync();
-        const uri = recordingRef.current.getURI();
+      if (recorder.isRecording) {
+        await recorder.stop();
+        const uri = recorder.uri;
         if (send && uri) {
           setUploading(true);
           try {
@@ -802,11 +805,10 @@ export default function ChatThreadScreen() {
       // ignore
     }
     clearInterval(recordTimerRef.current);
-    recordingRef.current = null;
     setRecording(false);
     setRecordDuration(0);
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await setAudioModeAsync({ allowsRecording: false });
     } catch {
       // ignore
     }
@@ -814,10 +816,10 @@ export default function ChatThreadScreen() {
 
   useEffect(() => {
     return () => {
-      if (recordingRef.current) recordingRef.current.stopAndUnloadAsync();
+      if (recorder.isRecording) recorder.stop();
       clearInterval(recordTimerRef.current);
     };
-  }, []);
+  }, [recorder]);
 
   const canDeleteForEveryone = (() => {
     if (!deleteTarget) return false;
