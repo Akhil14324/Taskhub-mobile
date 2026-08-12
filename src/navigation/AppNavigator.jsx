@@ -1,14 +1,26 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { NavigationContainer, useNavigation, useNavigationContainerRef } from '@react-navigation/native';
+import { ActivityIndicator, Text, View, StyleSheet, Platform } from 'react-native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { MoreMenu } from '../components/UI';
 import { addNotificationResponseListener } from '../services/notifications';
 
@@ -24,9 +36,63 @@ import SuperAdminUsersScreen from '../screens/SuperAdminUsers';
 import ProfileScreen from '../screens/Profile';
 import ChatListScreen from '../screens/ChatListScreen';
 import ChatThreadScreen from '../screens/ChatThreadScreen';
+import GroupInfoScreen from '../screens/GroupInfoScreen';
+import LegalScreen from '../screens/Legal';
+import OopsScreen from '../screens/Oops';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+const ICON_SPRING = { damping: 14, stiffness: 300, mass: 0.5, overshootClamping: false };
+
+/**
+ * Animated tab bar icon — scales up with a spring when focused.
+ */
+function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
+  const scale = useSharedValue(focused ? 1.15 : 1);
+  const badgeScale = useSharedValue(badge ? 1 : 0);
+  const prevBadgeRef = useRef(badge);
+
+  useEffect(() => {
+    scale.value = withSpring(focused ? 1.15 : 1, ICON_SPRING);
+    if (focused) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [focused, scale]);
+
+  // Badge pop animation when count changes
+  useEffect(() => {
+    if (badge && prevBadgeRef.current !== badge) {
+      badgeScale.value = withSequence(
+        withTiming(1.3, { duration: 120 }),
+        withSpring(1, { damping: 12, stiffness: 300, mass: 0.5 }),
+      );
+    } else if (badge) {
+      badgeScale.value = withSpring(1, { damping: 14, stiffness: 300, mass: 0.5 });
+    } else {
+      badgeScale.value = withSpring(0, { damping: 16, stiffness: 300, mass: 0.5 });
+    }
+    prevBadgeRef.current = badge;
+  }, [badge, badgeScale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScale.value }],
+    opacity: badgeScale.value,
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Ionicons name={name} size={size} color={color} />
+      {badge > 0 && (
+        <Animated.View style={[tabStyles.badge, badgeStyle]} pointerEvents="none">
+          <Text style={tabStyles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+}
 
 function MoreTabButton({ onPress, accessibilityState }) {
   const colors = useColors();
@@ -34,10 +100,10 @@ function MoreTabButton({ onPress, accessibilityState }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const focused = accessibilityState?.selected;
   return (
-    <TouchableOpacity onPress={onPress} style={styles.tabBtn} activeOpacity={0.7}>
+    <AnimatedPressable onPress={onPress} style={styles.tabBtn} haptic="light">
       <Ionicons name="ellipsis-horizontal-outline" size={22} color={focused ? colors.brand[600] : colors.gray[400]} />
       <Text style={[styles.tabLabel, { color: focused ? colors.brand[600] : colors.gray[400] }]}>{t('more')}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -83,8 +149,13 @@ function MainTabs() {
             paddingTop: 4,
             height: 56 + insets.bottom,
             backgroundColor: colors.white,
-            borderTopColor: colors.gray[200],
-            borderTopWidth: 1,
+            borderTopColor: 'transparent',
+            borderTopWidth: 0,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 8,
           },
           tabBarLabelStyle: {
             fontSize: 10,
@@ -97,7 +168,7 @@ function MainTabs() {
           options={{
             tabBarLabel: isAdmin ? t('home') : t('dashboard'),
             tabBarIcon: ({ focused, color }) => (
-              <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+              <AnimatedTabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} />
             ),
           }}
         />
@@ -107,7 +178,7 @@ function MainTabs() {
           options={{
             tabBarLabel: t('tasks'),
             tabBarIcon: ({ focused, color }) => (
-              <Ionicons name={focused ? 'clipboard' : 'clipboard-outline'} size={22} color={color} />
+              <AnimatedTabIcon name={focused ? 'clipboard' : 'clipboard-outline'} focused={focused} color={color} />
             ),
           }}
         />
@@ -117,9 +188,8 @@ function MainTabs() {
           options={{
             tabBarLabel: t('chat'),
             tabBarIcon: ({ focused, color }) => (
-              <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={22} color={color} />
+              <AnimatedTabIcon name={focused ? 'chatbubble' : 'chatbubble-outline'} focused={focused} color={color} badge={chatUnread} />
             ),
-            tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined,
           }}
         />
         {isAdmin && (
@@ -130,7 +200,7 @@ function MainTabs() {
               options={{
                 tabBarLabel: t('businesses'),
                 tabBarIcon: ({ focused, color }) => (
-                  <Ionicons name={focused ? 'business' : 'business-outline'} size={22} color={color} />
+                  <AnimatedTabIcon name={focused ? 'business' : 'business-outline'} focused={focused} color={color} />
                 ),
               }}
             />
@@ -140,7 +210,7 @@ function MainTabs() {
               options={{
                 tabBarLabel: t('users'),
                 tabBarIcon: ({ focused, color }) => (
-                  <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />
+                  <AnimatedTabIcon name={focused ? 'people' : 'people-outline'} focused={focused} color={color} />
                 ),
               }}
             />
@@ -165,6 +235,44 @@ function MorePlaceholder() {
   return null;
 }
 
+// Custom transition: soft slide + fade (spring-based on iOS, timing on Android)
+const screenTransition = Platform.select({
+  ios: {
+    gestureEnabled: true,
+    gestureResponseDistance: { horizontal: 50 },
+    transitionSpec: {
+      open: { animation: 'spring', config: { stiffness: 1000, damping: 500, mass: 3 } },
+      close: { animation: 'spring', config: { stiffness: 1000, damping: 500, mass: 3 } },
+    },
+    cardStyleInterpolator: ({ current, next, layouts }) => {
+      const translateX = current.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [layouts.screen.width * 0.3, 0],
+      });
+      const opacity = current.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 1],
+      });
+      const nextScale = next?.progress?.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0.92],
+      });
+      return {
+        cardStyle: { opacity, transform: [{ translateX }] },
+        nextCardStyle: { transform: [{ scale: nextScale }] },
+      };
+    },
+  },
+  android: {
+    animation: 'fade',
+    config: { duration: 250 },
+  },
+  default: {
+    animation: 'fade',
+    config: { duration: 250 },
+  },
+});
+
 const createStyles = (colors) => StyleSheet.create({
   tabBtn: {
     flex: 1,
@@ -179,10 +287,32 @@ const createStyles = (colors) => StyleSheet.create({
   },
 });
 
+const tabStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+});
+
 export default function AppNavigator() {
   const { user, loading } = useAuth();
   const colors = useColors();
-  const navigationRef = useNavigationContainerRef();
   const notificationListenerRef = useRef(null);
 
   useEffect(() => {
@@ -217,7 +347,12 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          ...screenTransition,
+        }}
+      >
         {!user ? (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -227,9 +362,12 @@ export default function AppNavigator() {
           <Stack.Screen name="Main" component={MainTabs} />
         )}
         <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
+        <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
         <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Legal" component={LegalScreen} />
+        <Stack.Screen name="Oops" component={OopsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

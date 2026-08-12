@@ -1,6 +1,7 @@
 import { Component } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useLang } from '../context/LanguageContext';
+import AnimatedPressable from './AnimatedPressable';
 
 function withTranslations(WrappedComponent) {
   return function TranslatedErrorBoundary(props) {
@@ -38,9 +39,9 @@ class ErrorBoundary extends Component {
           <Text style={styles.message}>
             {this.state.error?.message || this.props.t('unexpectedError')}
           </Text>
-          <TouchableOpacity style={styles.button} onPress={this.handleReset}>
+          <AnimatedPressable style={styles.button} onPress={this.handleReset} haptic="light">
             <Text style={styles.buttonText}>{this.props.t('tryAgain')}</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       );
     }

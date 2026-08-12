@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, SuccessBanner, EmptyState, ProgressBar } from '../components/UI';
+import { Card, Badge, ErrorBanner, SuccessBanner, EmptyState, ProgressBar } from '../components/UI';
 import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
 import { Input } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { SkeletonBlock } from '../components/Skeleton';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 
 function getRoleStyles(colors) {
   return {
@@ -52,6 +56,7 @@ export default function Profile() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const [stats, setStats] = useState(null);
@@ -224,9 +229,25 @@ export default function Profile() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
-
   const roleStyles = useMemo(() => getRoleStyles(colors), [colors]);
+
+  if (loading) return (
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.lg }}>
+      <View style={{ alignItems: 'center', marginBottom: spacing.xl, marginTop: spacing.xxl }}>
+        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.gray[200] }} />
+        <View style={{ height: spacing.md }} />
+        <SkeletonBlock width={120} height={20} />
+        <View style={{ height: spacing.xs }} />
+        <SkeletonBlock width={80} height={14} />
+      </View>
+      <View style={{ gap: spacing.md }}>
+        <SkeletonBlock width="100%" height={80} />
+        <SkeletonBlock width="100%" height={120} />
+        <SkeletonBlock width="100%" height={60} />
+      </View>
+    </ScrollView>
+  );
+
   const avatarStyle = (roleStyles[user?.role] || roleStyles.user);
   const roleBadgeStyle = (roleStyles[user?.role] || roleStyles.user);
   const roleLabel = t(ROLE_LABEL[user?.role] || 'user');
@@ -252,7 +273,7 @@ export default function Profile() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + spacing.xxxl }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* Header Card */}
       <Card style={styles.headerCard}>
@@ -271,10 +292,10 @@ export default function Profile() {
               </Badge>
             </View>
           </View>
-          <TouchableOpacity onPress={openEditModal} style={styles.editBtn}>
+          <AnimatedPressable onPress={openEditModal} style={styles.editBtn} haptic="light">
             <Ionicons name="create-outline" size={16} color={colors.gray[600]} />
             <Text style={styles.editBtnText}>{t('editProfile')}</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
         {editSuccess && <SuccessBanner message={editSuccess} style={{ marginTop: spacing.md }} />}
       </Card>
@@ -400,6 +421,29 @@ export default function Profile() {
         </Card>
       )}
 
+      {/* Legal */}
+      <Card style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>{t('legal')}</Text>
+        <AnimatedPressable
+          style={styles.legalRow}
+          onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}
+          haptic="light"
+        >
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.gray[500]} />
+          <Text style={styles.legalText}>{t('privacyPolicy')}</Text>
+          <Ionicons name="chevron-forward-outline" size={16} color={colors.gray[400]} />
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.legalRow}
+          onPress={() => navigation.navigate('Legal', { doc: 'terms' })}
+          haptic="light"
+        >
+          <Ionicons name="document-text-outline" size={18} color={colors.gray[500]} />
+          <Text style={styles.legalText}>{t('termsOfService')}</Text>
+          <Ionicons name="chevron-forward-outline" size={16} color={colors.gray[400]} />
+        </AnimatedPressable>
+      </Card>
+
       {/* Danger Zone */}
       <Card style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('dangerZone')}</Text>
@@ -517,6 +561,20 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.gray[600],
     fontWeight: '500',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray[200],
+  },
+  legalText: {
+    flex: 1,
+    fontSize: fontSize.base,
+    color: colors.gray[800],
   },
   statsGrid: {
     flexDirection: 'row',

@@ -1,79 +1,80 @@
-import { useMemo } from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { memo, useMemo } from 'react';
+import { Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from './AnimatedPressable';
 
-export function PrimaryButton({ children, onPress, disabled, style, loading }) {
+export const PrimaryButton = memo(function PrimaryButton({ children, onPress, disabled, style, loading }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled || loading}
       style={[styles.primary, disabled && styles.disabled, style]}
-      activeOpacity={0.7}
+      haptic="light"
     >
       {loading ? (
         <ActivityIndicator color={colors.white} size="small" />
       ) : (
         <Text style={styles.primaryText}>{children}</Text>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
-}
+});
 
-export function SecondaryButton({ children, onPress, disabled, style, loading }) {
+export const SecondaryButton = memo(function SecondaryButton({ children, onPress, disabled, style, loading }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled || loading}
       style={[styles.secondary, disabled && styles.disabled, style]}
-      activeOpacity={0.7}
+      haptic="light"
     >
       {loading ? (
         <ActivityIndicator color={colors.gray[600]} size="small" />
       ) : (
         <Text style={styles.secondaryText}>{children}</Text>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
-}
+});
 
-export function DangerButton({ children, onPress, disabled, style, loading }) {
+export const DangerButton = memo(function DangerButton({ children, onPress, disabled, style, loading }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled || loading}
       style={[styles.danger, disabled && styles.disabled, style]}
-      activeOpacity={0.7}
+      haptic="medium"
     >
       {loading ? (
         <ActivityIndicator color={colors.white} size="small" />
       ) : (
         <Text style={styles.dangerText}>{children}</Text>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
-}
+});
 
-export function GhostButton({ children, onPress, disabled, style }) {
+export const GhostButton = memo(function GhostButton({ children, onPress, disabled, style }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
       style={[styles.ghost, style]}
-      activeOpacity={0.7}
+      haptic="light"
     >
       <Text style={styles.ghostText}>{children}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
-}
+});
 
 const createStyles = (colors) => StyleSheet.create({
   primary: {

@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme, useColors } from '../context/ThemeContext';
 import api from '../api/client';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, ProgressBar, Header, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, ProgressBar, Header, Screen } from '../components/UI';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -63,7 +67,21 @@ export default function AdminDashboard() {
     fetchData();
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <Screen style={styles.container}>
+      <Header
+        title={t('appName')}
+        lang={lang}
+        toggleLang={toggleLang}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.header}>{t('adminDashboard')}</Text>
+        <SkeletonList count={4} type="task" />
+      </ScrollView>
+    </Screen>
+  );
 
   const totalTasks = businesses.reduce((sum, b) => sum + parseInt(b.task_count || 0), 0);
   const totalCompleted = businesses.reduce((sum, b) => sum + parseInt(b.completed_count || 0), 0);
@@ -100,20 +118,22 @@ export default function AdminDashboard() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.header}>{t('adminDashboard')}</Text>
         {error && <ErrorBanner message={error} />}
 
         <View style={styles.statsGrid}>
           {stats.map((stat, index) => (
-            <Card key={index} style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: stat.bg }]}>
-                <Ionicons name={stat.icon} size={20} color={stat.color} />
-              </View>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </Card>
+            <FadeInItem key={index} index={index}>
+              <Card style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: stat.bg }]}>
+                  <Ionicons name={stat.icon} size={20} color={stat.color} />
+                </View>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </Card>
+            </FadeInItem>
           ))}
         </View>
 
@@ -133,9 +153,9 @@ export default function AdminDashboard() {
         <View style={styles.businessSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('businessOverview')}</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Businesses')}>
+            <AnimatedPressable haptic="light" onPress={() => navigation.navigate('Businesses')}>
               <Text style={styles.sectionLink}>{t('manage')} →</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
           {businesses.length === 0 ? (
             <EmptyState
@@ -143,73 +163,75 @@ export default function AdminDashboard() {
               message={t('noBusinessesYet')}
             />
           ) : (
-            businesses.map((biz) => {
+            businesses.map((biz, index) => {
               const rate = biz.task_count > 0 ? Math.round((biz.completed_count / biz.task_count) * 100) : 0;
               return (
-                <TouchableOpacity key={biz.id} activeOpacity={0.7} onPress={() => navigation.navigate('Tasks', { business_id: biz.id })}>
-                  <Card style={styles.bizCard}>
-                    <View style={styles.bizHeader}>
-                      <View>
-                        <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
-                        <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: spacing.xs }}>
-                          {getTypeLabel(biz.type)}
-                        </Badge>
-                      </View>
-                      {parseInt(biz.warned_count) > 0 && (
-                        <View style={[styles.warnBadge, { backgroundColor: colors.red[100] }]}>
-                          <Ionicons name="warning-outline" size={12} color={colors.red[700]} />
-                          <Text style={[styles.warnText, { color: colors.red[700] }]}>{biz.warned_count}</Text>
+                <FadeInItem key={biz.id} index={index}>
+                  <AnimatedPressable activeOpacity={0.7} haptic="light" onPress={() => navigation.navigate('Tasks', { business_id: biz.id })}>
+                    <Card style={styles.bizCard}>
+                      <View style={styles.bizHeader}>
+                        <View>
+                          <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
+                          <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: spacing.xs }}>
+                            {getTypeLabel(biz.type)}
+                          </Badge>
                         </View>
-                      )}
-                    </View>
-                    <View style={styles.bizStats}>
-                      <View style={styles.bizStat}>
-                        <Text style={styles.bizStatValue}>{biz.task_count}</Text>
-                        <Text style={styles.bizStatLabel}>{t('total')}</Text>
+                        {parseInt(biz.warned_count) > 0 && (
+                          <View style={[styles.warnBadge, { backgroundColor: colors.red[100] }]}>
+                            <Ionicons name="warning-outline" size={12} color={colors.red[700]} />
+                            <Text style={[styles.warnText, { color: colors.red[700] }]}>{biz.warned_count}</Text>
+                          </View>
+                        )}
                       </View>
-                      <View style={styles.bizStat}>
-                        <Text style={[styles.bizStatValue, { color: colors.green[600] }]}>{biz.completed_count}</Text>
-                        <Text style={styles.bizStatLabel}>{t('done')}</Text>
+                      <View style={styles.bizStats}>
+                        <View style={styles.bizStat}>
+                          <Text style={styles.bizStatValue}>{biz.task_count}</Text>
+                          <Text style={styles.bizStatLabel}>{t('total')}</Text>
+                        </View>
+                        <View style={styles.bizStat}>
+                          <Text style={[styles.bizStatValue, { color: colors.green[600] }]}>{biz.completed_count}</Text>
+                          <Text style={styles.bizStatLabel}>{t('done')}</Text>
+                        </View>
+                        <View style={styles.bizStat}>
+                          <Text style={[styles.bizStatValue, { color: colors.yellow[600] }]}>{biz.pending_count}</Text>
+                          <Text style={styles.bizStatLabel}>{t('pending')}</Text>
+                        </View>
+                        <View style={styles.bizStat}>
+                          <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.on_hold_count || 0}</Text>
+                          <Text style={styles.bizStatLabel}>{t('onHold')}</Text>
+                        </View>
                       </View>
-                      <View style={styles.bizStat}>
-                        <Text style={[styles.bizStatValue, { color: colors.yellow[600] }]}>{biz.pending_count}</Text>
-                        <Text style={styles.bizStatLabel}>{t('pending')}</Text>
+                      <View style={styles.bizProgress}>
+                        <View style={styles.progressTrack}>
+                          <View style={[styles.progressFill, { width: `${rate}%` }]} />
+                        </View>
+                        <Text style={styles.bizProgressText}>{rate}% {t('complete')} · {biz.user_count} {t('usersCount')}</Text>
                       </View>
-                      <View style={styles.bizStat}>
-                        <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.on_hold_count || 0}</Text>
-                        <Text style={styles.bizStatLabel}>{t('onHold')}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.bizProgress}>
-                      <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${rate}%` }]} />
-                      </View>
-                      <Text style={styles.bizProgressText}>{rate}% {t('complete')} · {biz.user_count} {t('usersCount')}</Text>
-                    </View>
-                  </Card>
-                </TouchableOpacity>
+                    </Card>
+                  </AnimatedPressable>
+                </FadeInItem>
               );
             })
           )}
         </View>
 
         <View style={styles.quickLinks}>
-          <TouchableOpacity style={styles.quickLink} onPress={() => navigation.navigate('Businesses')} activeOpacity={0.7}>
+          <AnimatedPressable style={styles.quickLink} haptic="light" onPress={() => navigation.navigate('Businesses')} activeOpacity={0.7}>
             <Ionicons name="business-outline" size={24} color={colors.brand[600]} />
             <Text style={styles.quickLinkText}>{t('manageBusinesses')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickLink} onPress={() => navigation.navigate('Tasks')} activeOpacity={0.7}>
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.quickLink} haptic="light" onPress={() => navigation.navigate('Tasks')} activeOpacity={0.7}>
             <Ionicons name="checkmark-circle-outline" size={24} color={colors.green[600]} />
             <Text style={styles.quickLinkText}>{t('viewAllTasks')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickLink} onPress={() => navigation.navigate('Users')} activeOpacity={0.7}>
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.quickLink} haptic="light" onPress={() => navigation.navigate('Users')} activeOpacity={0.7}>
             <Ionicons name="people-outline" size={24} color={colors.purple[600]} />
             <Text style={styles.quickLinkText}>{t('manageUsers')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickLink} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}>
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.quickLink} haptic="light" onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}>
             <Ionicons name="notifications-outline" size={24} color={colors.yellow[600]} />
             <Text style={styles.quickLinkText}>{t('notifications')}</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       </ScrollView>
     </Screen>

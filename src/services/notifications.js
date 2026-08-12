@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import api from '../api/client';
 
-const PROJECT_ID = '6ff08814-1fa6-4d0a-8a30-57eef8ed87d8';
+const PROJECT_ID = '258933dd-9920-4b20-81bf-447c736f5200';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -16,6 +16,17 @@ Notifications.setNotificationHandler({
 
 async function registerForPushNotifications() {
   if (Platform.OS === 'web') return null;
+
+  // Android 13+ requires an explicit notification channel before any notification
+  // can be shown, and the POST_NOTIFICATIONS runtime permission.
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'TaskHub Alerts',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#4f46e5',
+    });
+  }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -36,7 +47,7 @@ async function registerForPushNotifications() {
     });
     return tokenResponse.data;
   } catch (err) {
-    console.error('[notifications] Error getting push token:', err.message);
+    console.warn('[notifications] Push token unavailable:', err.message);
     return null;
   }
 }

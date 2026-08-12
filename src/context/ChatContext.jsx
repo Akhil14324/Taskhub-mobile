@@ -7,9 +7,7 @@ import { useAuth } from './AuthContext';
 
 const ChatContext = createContext(null);
 
-const SOCKET_URL = __DEV__
-  ? 'http://localhost:5000'
-  : 'https://vgrand-taskhub-backend.onrender.com';
+const SOCKET_URL = 'https://vgrand-taskhub-backend.onrender.com';
 
 export function ChatProvider({ children }) {
   const { user } = useAuth();
@@ -20,6 +18,7 @@ export function ChatProvider({ children }) {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [totalUnread, setTotalUnread] = useState(0);
   const [connected, setConnected] = useState(false);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
   const socketRef = useRef(null);
   const messagesRef = useRef([]);
   const conversationsRef = useRef([]);
@@ -44,6 +43,7 @@ export function ChatProvider({ children }) {
     if (!user) return;
 
     let socket;
+    let fallbackTimer;
 
     (async () => {
       const token = await SecureStore.getItemAsync('token');
@@ -70,7 +70,7 @@ export function ChatProvider({ children }) {
       });
 
       // Fallback: fetch conversations via REST if socket doesn't connect within 3s
-      const fallbackTimer = setTimeout(() => {
+      fallbackTimer = setTimeout(() => {
         if (!socket.connected) {
           console.warn('[chat] Socket not connected after 3s, fetching conversations via REST');
           fetchConversations();
@@ -84,6 +84,11 @@ export function ChatProvider({ children }) {
           conversationId: Number(msg.conversationId),
           senderId: Number(msg.senderId),
           readBy: msg.readBy || [],
+          deleted_at: msg.deleted_at ?? msg.deletedAt ?? null,
+          replyToId: msg.replyToId ?? msg.reply_to_id ?? null,
+          replyTo: msg.replyTo ?? null,
+          reactions: msg.reactions ?? {},
+          isEdited: msg.isEdited ?? msg.is_edited ?? false,
         };
         const isActive = normalized.conversationId === Number(activeConversationIdRef.current);
 
@@ -209,6 +214,36 @@ export function ChatProvider({ children }) {
           );
         });
       });
+
+      socket.on('message:reaction', (data) => {
+        const { messageId, reactions } = data;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, reactions }
+              : m
+          )
+        );
+      });
+
+      socket.on('message:edited', (data) => {
+        const { messageId, conversationId, body, editedAt } = data;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, body, isEdited: true, editedAt }
+              : m
+          )
+        );
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === Number(conversationId) && c.last_message?.id === messageId
+              ? { ...c, last_message: { ...c.last_message, body } }
+              : c
+          )
+        );
+      });
+
     })();
 
     return () => {
@@ -274,7 +309,11 @@ export function ChatProvider({ children }) {
           attachmentType: m.attachment_type ?? m.attachmentType,
           createdAt: m.created_at ?? m.createdAt,
           editedAt: m.edited_at ?? m.editedAt,
-          deletedAt: m.deleted_at ?? m.deletedAt,
+          isEdited: m.is_edited ?? m.isEdited ?? false,
+          deleted_at: m.deleted_at ?? m.deletedAt ?? null,
+          replyToId: m.replyToId ?? m.reply_to_id ?? null,
+          replyTo: m.replyTo ?? null,
+          reactions: m.reactions ?? {},
           readBy: m.readBy || [],
         }));
       if (before) {
@@ -288,13 +327,13 @@ export function ChatProvider({ children }) {
     }
   }, []);
 
-  const sendMessage = useCallback(async (conversationId, body, attachmentUrl, attachmentType) => {
+  const sendMessage = useCallback(async (conversationId, body, attachmentUrl, attachmentType, replyToId) => {
     const clientTempId = `temp_${Date.now()}_${Math.random()}`;
     if (socketRef.current && socketRef.current.connected) {
       return new Promise((resolve, reject) => {
         socketRef.current.emit(
           'send_message',
-          { conversationId, body, attachmentUrl, attachmentType, clientTempId },
+          { conversationId, body, attachmentUrl, attachmentType, clientTempId, replyToId },
           (response) => {
             if (response?.error) reject(new Error(response.error));
             else resolve(response);
@@ -304,7 +343,7 @@ export function ChatProvider({ children }) {
       });
     }
     const res = await api.post(`/chat/conversations/${conversationId}/messages`, {
-      body, attachmentUrl, attachmentType, clientTempId,
+      body, attachmentUrl, attachmentType, clientTempId, replyToId,
     });
     return res.data;
   }, []);
@@ -346,6 +385,93 @@ export function ChatProvider({ children }) {
     await fetchConversations();
     return conv;
   }, [fetchConversations]);
+
+  const reactToMessage = useCallback((messageId, emoji) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('react_to_message', { messageId, emoji });
+    }
+  }, []);
+
+  const editMessage = useCallback(async (messageId, body) => {
+    if (socketRef.current && socketRef.current.connected) {
+      return new Promise((resolve, reject) => {
+        socketRef.current.emit(
+          'edit_message',
+          { messageId, body },
+          (response) => {
+            if (response?.error) reject(new Error(response.error));
+            else resolve(response);
+          }
+        );
+        setTimeout(() => reject(new Error('Edit timeout')), 10000);
+      });
+    }
+    const res = await api.patch(`/chat/messages/${messageId}`, { body });
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === Number(messageId)
+          ? { ...m, body, isEdited: true, editedAt: res?.data?.editedAt || new Date().toISOString() }
+          : m
+      )
+    );
+    return res.data;
+  }, []);
+
+  const forwardMessage = useCallback(async (messageId, targetConversationId) => {
+    if (socketRef.current && socketRef.current.connected) {
+      return new Promise((resolve, reject) => {
+        socketRef.current.emit(
+          'forward_message',
+          { messageId, targetConversationId },
+          (response) => {
+            if (response?.error) reject(new Error(response.error));
+            else resolve(response);
+          }
+        );
+        setTimeout(() => reject(new Error('Forward timeout')), 10000);
+      });
+    }
+    const original = messagesRef.current.find((m) => m.id === Number(messageId));
+    if (!original) {
+      throw new Error('Original message not found');
+    }
+    const res = await api.post(`/chat/conversations/${targetConversationId}/messages`, {
+      body: original.body,
+      attachmentUrl: original.attachmentUrl,
+      attachmentType: original.attachmentType,
+    });
+    return res.data;
+  }, []);
+
+  const pinMessage = useCallback(async (conversationId, messageId) => {
+    if (socketRef.current && socketRef.current.connected) {
+      return new Promise((resolve, reject) => {
+        socketRef.current.emit(
+          'pin_message',
+          { conversationId, messageId },
+          (response) => {
+            if (response?.error) reject(new Error(response.error));
+            else resolve(response);
+          }
+        );
+        setTimeout(() => reject(new Error('Pin timeout')), 10000);
+      });
+    }
+    const res = await api.put(`/chat/conversations/${conversationId}/pinned`, { messageId });
+    return res.data;
+  }, []);
+
+  const updateLastSeen = useCallback(() => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('update_last_seen');
+    } else {
+      api.patch('/chat/last-seen').catch(() => {});
+    }
+  }, []);
+
+  const muteConversation = useCallback(async (conversationId, muted) => {
+    await api.patch(`/chat/conversations/${conversationId}/mute`, { muted });
+  }, []);
 
   const deleteMessage = useCallback(async (messageId, scope) => {
     // Track the deleted message ID so it doesn't reappear on re-fetch
@@ -403,6 +529,17 @@ export function ChatProvider({ children }) {
     setActiveConversationId(conversationId);
     setMessages([]);
     setTypingUsers({});
+    setPinnedMessage(null);
+  }, []);
+
+  const fetchPinnedMessage = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+    try {
+      const res = await api.get(`/chat/conversations/${conversationId}/pinned`);
+      setPinnedMessage(res.data?.pinnedMessage || null);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const value = {
@@ -413,6 +550,7 @@ export function ChatProvider({ children }) {
     onlineUsers,
     totalUnread,
     connected,
+    pinnedMessage,
     fetchConversations,
     loadMessages,
     sendMessage,
@@ -425,6 +563,13 @@ export function ChatProvider({ children }) {
     syncMessages,
     uploadFile,
     setActiveConversation,
+    reactToMessage,
+    editMessage,
+    forwardMessage,
+    pinMessage,
+    fetchPinnedMessage,
+    updateLastSeen,
+    muteConversation,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -1,9 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { navigate, getCurrentRouteName } from '../navigation/navigationRef';
 
-const API_URL = __DEV__
-  ? 'http://localhost:5000/api'
-  : 'https://vgrand-taskhub-backend.onrender.com/api';
+const API_URL = 'https://vgrand-taskhub-backend.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -33,6 +32,18 @@ api.interceptors.response.use(
         // ignore
       }
     }
+
+    // No connectivity or request timed out → show the cat screen.
+    // Skip if the request opted out (e.g. background polling) or we're already there.
+    const isNetworkError = error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED';
+    if (
+      isNetworkError &&
+      !error.config?.__skipOops &&
+      getCurrentRouteName() !== 'Oops'
+    ) {
+      navigate('Oops', { mode: 'offline' });
+    }
+
     return Promise.reject(error);
   }
 );

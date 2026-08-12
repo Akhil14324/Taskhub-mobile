@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton } from '../components/Button';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 
 function getNotifIcons(colors) {
   return {
@@ -29,6 +33,28 @@ function timeAgo(dateStr, t) {
   const days = Math.floor(hrs / 24);
   return `${days}${t('dayAgo')}`;
 }
+
+const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, t, onMarkRead }) => {
+  const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
+  return (
+    <AnimatedPressable
+      onPress={() => !item.is_read && onMarkRead(item.id)}
+      activeOpacity={0.7}
+      haptic="light"
+    >
+      <Card style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
+        <View style={[styles.notifIcon, { backgroundColor: config.bg }]}>
+          <Ionicons name={config.icon} size={20} color={config.color} />
+        </View>
+        <View style={styles.notifContent}>
+          <Text style={styles.notifMessage}>{getDynamic(item.message)}</Text>
+          <Text style={styles.notifTime}>{timeAgo(item.created_at, t)}</Text>
+        </View>
+        {!item.is_read && <View style={styles.unreadDot} />}
+      </Card>
+    </AnimatedPressable>
+  );
+});
 
 export default function Notifications() {
   const { t, lang, translateDynamic, getDynamic } = useLang();
@@ -70,7 +96,7 @@ export default function Notifications() {
     fetchNotifications();
   };
 
-  const handleMarkRead = async (id) => {
+  const handleMarkRead = useCallback(async (id) => {
     try {
       await api.put(`/notifications/${id}/read`);
       setNotifications((prev) =>
@@ -80,7 +106,7 @@ export default function Notifications() {
     } catch (err) {
       Alert.alert(t('error'), err.response?.data?.error || t('failedMarkRead'));
     }
-  };
+  }, [t]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -94,28 +120,33 @@ export default function Notifications() {
 
   const notifIcons = useMemo(() => getNotifIcons(colors), [colors]);
 
-  const renderItem = ({ item }) => {
-    const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
-    return (
-      <TouchableOpacity
-        onPress={() => !item.is_read && handleMarkRead(item.id)}
-        activeOpacity={0.7}
-      >
-        <Card style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
-          <View style={[styles.notifIcon, { backgroundColor: config.bg }]}>
-            <Ionicons name={config.icon} size={20} color={config.color} />
-          </View>
-          <View style={styles.notifContent}>
-            <Text style={styles.notifMessage}>{getDynamic(item.message)}</Text>
-            <Text style={styles.notifTime}>{timeAgo(item.created_at, t)}</Text>
-          </View>
-          {!item.is_read && <View style={styles.unreadDot} />}
-        </Card>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item, index }) => (
+      <FadeInItem index={index}>
+        <NotificationItem
+          item={item}
+          colors={colors}
+          styles={styles}
+          notifIcons={notifIcons}
+          getDynamic={getDynamic}
+          t={t}
+          onMarkRead={handleMarkRead}
+        />
+      </FadeInItem>
+    ),
+    [colors, styles, notifIcons, getDynamic, t, handleMarkRead]
+  );
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <Screen style={styles.container}>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.header}>{t('notifications')}</Text>
+        </View>
+      </View>
+      <SkeletonList count={6} type="notification" />
+    </Screen>
+  );
 
   return (
     <Screen style={styles.container}>
@@ -142,8 +173,13 @@ export default function Notifications() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         extraData={lang}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={10}
+        removeClippedSubviews
+        style={{ flex: 1 }}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
             icon={<Ionicons name="notifications-off-outline" size={32} color={colors.gray[300]} />}

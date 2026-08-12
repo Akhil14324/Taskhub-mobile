@@ -1,13 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, Alert, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 function getRoleBadge(colors) {
@@ -25,6 +29,80 @@ function getStatusBadge(colors) {
     inactive: { bg: colors.gray[100], text: colors.gray[600] },
   };
 }
+
+function roleLabel(role, t) {
+  if (role === 'super_admin') return t('superAdmin');
+  if (role === 'admin') return t('admin');
+  return t('user');
+}
+
+const UserItem = memo(function UserItem({
+  user, isUnassigned, styles, colors, t, getDynamic, isSuperAdmin,
+  onAssign, onRoleChange, onDelete,
+}) {
+  const renderRoleBadge = (role) => {
+    const c = (getRoleBadge(colors)[role] || getRoleBadge(colors).user);
+    return <Badge bg={c.bg} color={c.text}>{roleLabel(role, t)}</Badge>;
+  };
+
+  const renderStatusBadge = (status) => {
+    const c = (getStatusBadge(colors)[status] || getStatusBadge(colors).active);
+    const label = status === 'warned' ? t('warned') : status === 'inactive' ? t('inactive') : t('active');
+    return <Badge bg={c.bg} color={c.text}>{label}</Badge>;
+  };
+
+  return (
+    <Card key={user.id} style={styles.userCard}>
+      <View style={styles.userHeader}>
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{getDynamic(user.name)}</Text>
+          <Text style={styles.userEmail}>{user.username}</Text>
+        </View>
+        <View style={styles.userBadges}>
+          {renderRoleBadge(user.role)}
+          {renderStatusBadge(user.status)}
+        </View>
+      </View>
+
+      {!isUnassigned && user.businesses && user.businesses.length > 0 && (
+        <View style={styles.userBusinesses}>
+          <Ionicons name="business-outline" size={14} color={colors.gray[400]} />
+          <Text style={styles.userBizText} numberOfLines={1}>
+            {user.businesses.map((b) => getDynamic(b.name)).join(', ')}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.userActions}>
+        <AnimatedPressable style={styles.userActionBtn} onPress={() => onAssign(user)} haptic="light">
+          <Ionicons name="business-outline" size={16} color={colors.brand[600]} />
+          <Text style={[styles.userActionText, { color: colors.brand[600] }]}>
+            {user.businesses?.length ? t('reassign') : t('assign')}
+          </Text>
+        </AnimatedPressable>
+
+        {isSuperAdmin && user.role === 'user' && (
+          <AnimatedPressable style={styles.userActionBtn} onPress={() => onRoleChange(user, 'promote')} haptic="light">
+            <Ionicons name="arrow-up-circle-outline" size={16} color={colors.green[600]} />
+            <Text style={[styles.userActionText, { color: colors.green[600] }]}>{t('promote')}</Text>
+          </AnimatedPressable>
+        )}
+
+        {isSuperAdmin && user.role === 'admin' && (
+          <AnimatedPressable style={styles.userActionBtn} onPress={() => onRoleChange(user, 'demote')} haptic="light">
+            <Ionicons name="arrow-down-circle-outline" size={16} color={colors.red[600]} />
+            <Text style={[styles.userActionText, { color: colors.red[600] }]}>{t('demote')}</Text>
+          </AnimatedPressable>
+        )}
+
+        <AnimatedPressable style={styles.userActionBtn} onPress={() => onDelete(user.id, getDynamic(user.name))} haptic="medium">
+          <Ionicons name="trash-outline" size={16} color={colors.red[500]} />
+          <Text style={[styles.userActionText, { color: colors.red[500] }]}>{t('delete')}</Text>
+        </AnimatedPressable>
+      </View>
+    </Card>
+  );
+});
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
@@ -93,12 +171,12 @@ export default function AdminUsers() {
     fetchData();
   };
 
-  const openAssignModal = (user) => {
+  const openAssignModal = useCallback((user) => {
     setSelectedUser(user);
     setSelectedBusinessIds(user.businesses?.map((b) => b.id) || []);
     setAssignError('');
     setAssignModalOpen(true);
-  };
+  }, []);
 
   const toggleBusiness = (bizId) => {
     setSelectedBusinessIds((prev) =>
@@ -120,12 +198,12 @@ export default function AdminUsers() {
     }
   };
 
-  const openRoleModal = (user, action) => {
+  const openRoleModal = useCallback((user, action) => {
     setRoleModalUser(user);
     setRoleModalAction(action);
     setRoleError('');
     setRoleModalOpen(true);
-  };
+  }, []);
 
   const handleRoleChange = async () => {
     if (!roleModalUser || !roleModalAction) return;
@@ -142,7 +220,7 @@ export default function AdminUsers() {
     }
   };
 
-  const handleDeleteUser = (userId, userName) => {
+  const handleDeleteUser = useCallback((userId, userName) => {
     Alert.alert(
       t('deleteUser'),
       t('deleteUserConfirmMsg').replace('{name}', userName),
@@ -162,78 +240,34 @@ export default function AdminUsers() {
         },
       ]
     );
-  };
+  }, [t, fetchData]);
 
-  const roleLabel = (role) => {
-    if (role === 'super_admin') return t('superAdmin');
-    if (role === 'admin') return t('admin');
-    return t('user');
-  };
+  const renderItem = useCallback(({ item, index, isUnassigned }) => (
+    <FadeInItem index={index}>
+      <UserItem
+        key={item.id}
+        user={item}
+        isUnassigned={isUnassigned}
+        styles={styles}
+        colors={colors}
+        t={t}
+        getDynamic={getDynamic}
+        isSuperAdmin={isSuperAdmin}
+        onAssign={openAssignModal}
+        onRoleChange={openRoleModal}
+        onDelete={handleDeleteUser}
+      />
+    </FadeInItem>
+  ), [styles, colors, t, getDynamic, isSuperAdmin, openAssignModal, openRoleModal, handleDeleteUser]);
 
-  const roleBadge = (role) => {
-    const c = (getRoleBadge(colors)[role] || getRoleBadge(colors).user);
-    return <Badge bg={c.bg} color={c.text}>{roleLabel(role)}</Badge>;
-  };
-
-  const statusBadge = (status) => {
-    const c = (getStatusBadge(colors)[status] || getStatusBadge(colors).active);
-    const label = status === 'warned' ? t('warned') : status === 'inactive' ? t('inactive') : t('active');
-    return <Badge bg={c.bg} color={c.text}>{label}</Badge>;
-  };
-
-  const renderUserCard = (user, isUnassigned = false) => (
-    <Card key={user.id} style={styles.userCard}>
-      <View style={styles.userHeader}>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{getDynamic(user.name)}</Text>
-          <Text style={styles.userEmail}>{user.username}</Text>
-        </View>
-        <View style={styles.userBadges}>
-          {roleBadge(user.role)}
-          {statusBadge(user.status)}
-        </View>
+  if (loading) return (
+    <Screen style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.header}>{t('users')}</Text>
+        <SkeletonList count={6} type="task" />
       </View>
-
-      {!isUnassigned && user.businesses && user.businesses.length > 0 && (
-        <View style={styles.userBusinesses}>
-          <Ionicons name="business-outline" size={14} color={colors.gray[400]} />
-          <Text style={styles.userBizText} numberOfLines={1}>
-            {user.businesses.map((b) => getDynamic(b.name)).join(', ')}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.userActions}>
-        <TouchableOpacity style={styles.userActionBtn} onPress={() => openAssignModal(user)}>
-          <Ionicons name="business-outline" size={16} color={colors.brand[600]} />
-          <Text style={[styles.userActionText, { color: colors.brand[600] }]}>
-            {user.businesses?.length ? t('reassign') : t('assign')}
-          </Text>
-        </TouchableOpacity>
-
-        {isSuperAdmin && user.role === 'user' && (
-          <TouchableOpacity style={styles.userActionBtn} onPress={() => openRoleModal(user, 'promote')}>
-            <Ionicons name="arrow-up-circle-outline" size={16} color={colors.green[600]} />
-            <Text style={[styles.userActionText, { color: colors.green[600] }]}>{t('promote')}</Text>
-          </TouchableOpacity>
-        )}
-
-        {isSuperAdmin && user.role === 'admin' && (
-          <TouchableOpacity style={styles.userActionBtn} onPress={() => openRoleModal(user, 'demote')}>
-            <Ionicons name="arrow-down-circle-outline" size={16} color={colors.red[600]} />
-            <Text style={[styles.userActionText, { color: colors.red[600] }]}>{t('demote')}</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.userActionBtn} onPress={() => handleDeleteUser(user.id, getDynamic(user.name))}>
-          <Ionicons name="trash-outline" size={16} color={colors.red[500]} />
-          <Text style={[styles.userActionText, { color: colors.red[500] }]}>{t('delete')}</Text>
-        </TouchableOpacity>
-      </View>
-    </Card>
+    </Screen>
   );
-
-  if (loading) return <LoadingSpinner />;
 
   const adminUsers = allUsers.filter((u) => u.role === 'admin');
   const regularUsers = allUsers.filter((u) => u.role === 'user');
@@ -241,8 +275,9 @@ export default function AdminUsers() {
   return (
     <Screen style={styles.container} bottomOffset={56}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.header}>{t('users')}</Text>
         {error && <ErrorBanner message={error} />}
@@ -259,7 +294,7 @@ export default function AdminUsers() {
           />
         ) : (
           <View style={styles.section}>
-            {unassigned.map((u) => renderUserCard(u, true))}
+            {unassigned.map((u, i) => renderItem({ item: u, index: i, isUnassigned: true }))}
           </View>
         )}
 
@@ -275,7 +310,7 @@ export default function AdminUsers() {
           />
         ) : (
           <View style={styles.section}>
-            {adminUsers.map((u) => renderUserCard(u))}
+            {adminUsers.map((u, i) => renderItem({ item: u, index: i, isUnassigned: false }))}
           </View>
         )}
 
@@ -291,7 +326,7 @@ export default function AdminUsers() {
           />
         ) : (
           <View style={styles.section}>
-            {regularUsers.map((u) => renderUserCard(u))}
+            {regularUsers.map((u, i) => renderItem({ item: u, index: i, isUnassigned: false }))}
           </View>
         )}
       </ScrollView>
@@ -308,10 +343,11 @@ export default function AdminUsers() {
         <Text style={styles.pickerLabel}>{t('selectBusinessesMultiple')}</Text>
         <ScrollView style={styles.bizList} showsVerticalScrollIndicator={false}>
           {businesses.map((biz) => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={biz.id}
               style={styles.bizCheckItem}
               onPress={() => toggleBusiness(biz.id)}
+              haptic="light"
             >
               <Ionicons
                 name={selectedBusinessIds.includes(biz.id) ? 'checkbox' : 'square-outline'}
@@ -319,7 +355,7 @@ export default function AdminUsers() {
                 color={selectedBusinessIds.includes(biz.id) ? colors.brand[600] : colors.gray[400]}
               />
               <Text style={styles.bizCheckText}>{getDynamic(biz.name)}</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
         </ScrollView>
         {selectedBusinessIds.length > 0 ? (
@@ -348,7 +384,7 @@ export default function AdminUsers() {
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName}>{getDynamic(roleModalUser.name)}</Text>
             <Text style={styles.selectedUserEmail}>{roleModalUser.username}</Text>
-            <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleLabel(roleModalUser.role)}</Text>
+            <Text style={styles.selectedUserRole}>{t('currentRole')}: {roleLabel(roleModalUser.role, t)}</Text>
           </View>
         )}
         <Text style={styles.roleDesc}>

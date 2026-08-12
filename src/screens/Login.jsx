@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -10,6 +11,7 @@ import api from '../api/client';
 import { Input } from '../components/Input';
 import { PrimaryButton } from '../components/Button';
 import { ErrorBanner } from '../components/UI';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 export default function Login() {
@@ -28,6 +30,21 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const logoOpacity = useSharedValue(0);
+  const logoTranslateY = useSharedValue(20);
+  const formOpacity = useSharedValue(0);
+  const formTranslateY = useSharedValue(20);
+
+  useEffect(() => {
+    logoOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
+    logoTranslateY.value = withSpring(0, { damping: 18, stiffness: 200, mass: 0.8 });
+    formOpacity.value = withDelay(200, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+    formTranslateY.value = withDelay(200, withSpring(0, { damping: 18, stiffness: 200, mass: 0.8 }));
+  }, [logoOpacity, logoTranslateY, formOpacity, formTranslateY]);
+
+  const logoStyle = useAnimatedStyle(() => ({ opacity: logoOpacity.value, transform: [{ translateY: logoTranslateY.value }] }));
+  const formStyle = useAnimatedStyle(() => ({ opacity: formOpacity.value, transform: [{ translateY: formTranslateY.value }] }));
 
   const handleSubmit = async () => {
     if (!username || !password) {
@@ -55,52 +72,65 @@ export default function Login() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
           <View style={styles.toggles}>
-            <TouchableOpacity onPress={toggleTheme} style={styles.toggleBtn}>
+            <AnimatedPressable onPress={toggleTheme} style={styles.toggleBtn} haptic="light">
               <Ionicons
                 name={theme === 'dark' ? 'sunny' : 'moon'}
                 size={20}
                 color={colors.gray[500]}
               />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={toggleLang} style={styles.toggleBtn}>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={toggleLang} style={styles.toggleBtn} haptic="light">
               <Text style={styles.toggleText}>{lang === 'en' ? 'తె' : 'EN'}</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
-          <View style={styles.logo}>
-            <Ionicons name="checkmark-done-circle" size={56} color={colors.brand[600]} />
-            <Text style={styles.appName}>{t('appName')}</Text>
-            <Text style={styles.tagline}>{t('tagline')}</Text>
-          </View>
+          <Animated.View style={[logoStyle]}>
+            <View style={styles.logo}>
+              <Ionicons name="checkmark-done-circle" size={56} color={colors.brand[600]} />
+              <Text style={styles.appName}>{t('appName')}</Text>
+              <Text style={styles.tagline}>{t('tagline')}</Text>
+            </View>
+          </Animated.View>
         </View>
 
-        <View style={styles.form}>
-          <Text style={styles.title}>{t('signIn')}</Text>
-          {error && <ErrorBanner message={error} />}
-          <Input
-            label={t('username')}
-            value={username}
-            onChangeText={setUsername}
-            placeholder={t('usernamePlaceholder')}
-            autoCapitalize="none"
-          />
-          <Input
-            label={t('password')}
-            value={password}
-            onChangeText={setPassword}
-            placeholder={t('passwordPlaceholder')}
-            secureTextEntry
-            onFocus={scrollToBottom}
-          />
-          <PrimaryButton onPress={handleSubmit} loading={loading}>
-            {loading ? t('signingIn') : t('signIn')}
-          </PrimaryButton>
-          <View style={styles.signupRow}>
-            <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-              <Text style={styles.signupLink}>{t('signUp')}</Text>
-            </TouchableOpacity>
+        <Animated.View style={[formStyle]}>
+          <View style={styles.form}>
+            <Text style={styles.title}>{t('signIn')}</Text>
+            {error && <ErrorBanner message={error} />}
+            <Input
+              label={t('username')}
+              value={username}
+              onChangeText={setUsername}
+              placeholder={t('usernamePlaceholder')}
+              autoCapitalize="none"
+            />
+            <Input
+              label={t('password')}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={t('passwordPlaceholder')}
+              secureTextEntry
+              onFocus={scrollToBottom}
+            />
+            <PrimaryButton onPress={handleSubmit} loading={loading}>
+              {loading ? t('signingIn') : t('signIn')}
+            </PrimaryButton>
+            <View style={styles.signupRow}>
+              <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
+              <AnimatedPressable onPress={() => navigation.navigate('Signup')} haptic="light">
+                <Text style={styles.signupLink}>{t('signUp')}</Text>
+              </AnimatedPressable>
+            </View>
+            <View style={styles.legalRow}>
+              <AnimatedPressable onPress={() => navigation.navigate('Legal', { doc: 'privacy' })} haptic="light">
+                <Text style={styles.legalLink}>{t('privacyPolicy')}</Text>
+              </AnimatedPressable>
+              <Text style={styles.legalDot}>·</Text>
+              <AnimatedPressable onPress={() => navigation.navigate('Legal', { doc: 'terms' })} haptic="light">
+                <Text style={styles.legalLink}>{t('termsOfService')}</Text>
+              </AnimatedPressable>
+            </View>
           </View>
-        </View>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -125,8 +155,8 @@ const createStyles = (colors) => StyleSheet.create({
     gap: spacing.sm,
   },
   toggleBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     backgroundColor: colors.gray[100],
     alignItems: 'center',
@@ -179,5 +209,20 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.brand[600],
     fontWeight: '600',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.lg,
+  },
+  legalLink: {
+    fontSize: fontSize.xs,
+    color: colors.gray[500],
+  },
+  legalDot: {
+    fontSize: fontSize.xs,
+    color: colors.gray[400],
   },
 });

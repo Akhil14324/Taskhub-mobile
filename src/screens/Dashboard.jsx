@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -7,8 +7,12 @@ import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api/client';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, ProgressBar } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, ProgressBar } from '../components/UI';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -59,7 +63,12 @@ export default function Dashboard() {
     fetchTasks();
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.header}>{t('dashboard')}</Text>
+      <SkeletonList count={4} type="task" />
+    </ScrollView>
+  );
 
   const total = tasks.length;
   const completed = tasks.filter((task) => task.status === 'completed').length;
@@ -81,7 +90,7 @@ export default function Dashboard() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 56 }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Text style={styles.header}>{t('dashboard')}</Text>
       {error && <ErrorBanner message={error} />}
@@ -117,9 +126,9 @@ export default function Dashboard() {
       <View style={styles.recentSection}>
         <View style={styles.recentHeader}>
           <Text style={styles.recentTitle}>{t('recentTasks')}</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
+          <AnimatedPressable onPress={() => navigation.navigate('Tasks')} haptic="light">
             <Text style={styles.viewAll}>{t('viewAll')}</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
         {recent.length === 0 ? (
           <EmptyState
@@ -127,8 +136,9 @@ export default function Dashboard() {
             message={t('noTasksYet')}
           />
         ) : (
-          recent.map((task) => (
-            <Card key={task.id} style={styles.taskCard}>
+          recent.map((task, index) => (
+            <FadeInItem key={task.id} index={index}>
+            <Card style={styles.taskCard}>
               <View style={styles.taskRow}>
                 <View style={styles.taskInfo}>
                   <Text style={styles.taskTitle} numberOfLines={2}>{getDynamic(task.title)}</Text>
@@ -158,6 +168,7 @@ export default function Dashboard() {
                 </View>
               </View>
             </Card>
+            </FadeInItem>
           ))
         )}
       </View>

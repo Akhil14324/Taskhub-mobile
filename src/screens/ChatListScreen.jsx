@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
+import { memo, useEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, TextInput, Alert, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useColors } from '../context/ThemeContext';
@@ -9,7 +10,120 @@ import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { Screen } from '../components/UI';
 import Modal from '../components/Modal';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import api from '../api/client';
+
+function formatChatTime(dateStr, t) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) {
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+  if (diffDays === 1) return t('yesterday');
+  if (diffDays < 7) {
+    return d.toLocaleDateString('en-US', { weekday: 'short' });
+  }
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+}
+
+const ConversationItem = memo(function ConversationItem({ item, userId, colors, styles, t, getDynamic, isOnline, onPress, onShowOptions, onDelete }) {
+  const isGroup = item.type === 'group';
+  const title = isGroup
+    ? getDynamic(item.name)
+    : getDynamic(item.participants?.find((p) => String(p.id) !== String(userId))?.name) || t('unknown');
+  const lastMsg = item.last_message;
+  const senderPrefix = isGroup && lastMsg && !lastMsg.deleted_at && lastMsg.sender_id
+    ? (() => {
+        const sender = item.participants?.find((p) => String(p.id) === String(lastMsg.sender_id));
+        const name = sender ? getDynamic(sender.name) : '';
+        return name ? `${name.split(' ')[0]}: ` : '';
+      })()
+    : '';
+  const preview = lastMsg
+    ? lastMsg.deleted_at
+      ? t('messageDeleted')
+      : `${senderPrefix}${getDynamic(lastMsg.body) || t('attachment')}`
+    : t('noMessagesYet');
+
+  const renderRightActions = useCallback(() => (
+    <AnimatedPressable
+      style={styles.deleteAction}
+      haptic="medium"
+      onPress={() => {
+        Alert.alert(
+          t('deleteChat'),
+          '',
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('delete'),
+              style: 'destructive',
+              onPress: () => onDelete(item.id),
+            },
+          ]
+        );
+      }}
+    >
+      <Ionicons name="trash" size={22} color={colors.white} />
+    </AnimatedPressable>
+  ), [styles, t, colors, onDelete, item.id]);
+
+  return (
+    <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+      <AnimatedPressable
+        style={styles.convItem}
+        haptic="light"
+        onPress={() => onPress(item.id)}
+      >
+        <View style={styles.avatar}>
+          {isGroup ? (
+            <Ionicons name="people" size={22} color={colors.indigo[600]} />
+          ) : (
+            <Text style={styles.avatarText}>{title?.charAt(0)?.toUpperCase() || '?'}</Text>
+          )}
+          {isOnline && <View style={styles.onlineDot} />}
+        </View>
+        <View style={styles.convContent}>
+          <View style={styles.convHeader}>
+            <View style={styles.titleRow}>
+              <Text style={styles.convTitle} numberOfLines={1}>{title}</Text>
+              {item.unread_count > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>
+                    {item.unread_count > 99 ? '99+' : item.unread_count}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {lastMsg && (
+              <Text style={styles.convTime} numberOfLines={1}>
+                {formatChatTime(lastMsg.created_at, t)}
+              </Text>
+            )}
+          </View>
+          <View style={styles.previewRow}>
+            <Text style={styles.convPreview} numberOfLines={1}>{preview}</Text>
+            <AnimatedPressable
+              onPress={(e) => { e.stopPropagation(); onShowOptions(item); }}
+              style={styles.optionsBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color={colors.gray[500]} />
+            </AnimatedPressable>
+          </View>
+        </View>
+      </AnimatedPressable>
+    </Swipeable>
+  );
+});
 
 export default function ChatListScreen() {
   const { user } = useAuth();
@@ -25,11 +139,17 @@ export default function ChatListScreen() {
   const [groupName, setGroupName] = useState('');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('users');
+  const [loading, setLoading] = useState(true);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
-    fetchConversations();
+    let mounted = true;
+    (async () => {
+      await fetchConversations();
+      if (mounted) setLoading(false);
+    })();
+    return () => { mounted = false; };
   }, [fetchConversations]);
 
   // Translate conversation titles and last messages when in Telugu
@@ -96,7 +216,7 @@ export default function ChatListScreen() {
     }
   };
 
-  const handleMarkConversationRead = async (conversationId) => {
+  const handleMarkConversationRead = useCallback(async (conversationId) => {
     const conv = conversations.find((c) => c.id === conversationId);
     const lastMsg = conv?.last_message;
     if (lastMsg && conv?.unread_count > 0) {
@@ -107,9 +227,9 @@ export default function ChatListScreen() {
         // ignore
       }
     }
-  };
+  }, [conversations, markRead, fetchConversations]);
 
-  const showChatOptions = (item) => {
+  const showChatOptions = useCallback((item) => {
     const options = [
       { text: t('cancel'), style: 'cancel' },
     ];
@@ -144,13 +264,7 @@ export default function ChatListScreen() {
       },
     });
     Alert.alert(t('chatOptions'), '', options);
-  };
-
-  const getConversationTitle = (conv) => {
-    if (conv.type === 'group') return getDynamic(conv.name);
-    const other = conv.participants?.find((p) => String(p.id) !== String(user.id));
-    return getDynamic(other?.name) || t('unknown');
-  };
+  }, [t, handleMarkConversationRead, deleteConversation]);
 
   const filteredUsers = users.filter((u) =>
     u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -169,76 +283,65 @@ export default function ChatListScreen() {
     [conversations, activeTab, tabs]
   );
 
-  const renderItem = ({ item }) => {
-    const title = getConversationTitle(item);
-    const lastMsg = item.last_message;
-    const preview = lastMsg
-      ? lastMsg.deleted_at
-        ? t('messageDeleted')
-        : getDynamic(lastMsg.body) || t('attachment')
-      : t('noMessagesYet');
+  const handleDeleteConversation = useCallback(async (conversationId) => {
+    try { await deleteConversation(conversationId); } catch { /* ignore */ }
+  }, [deleteConversation]);
+
+  const handlePressConversation = useCallback((conversationId) => {
+    navigation.navigate('ChatThread', { conversationId });
+  }, [navigation]);
+
+  const renderItem = useCallback(({ item, index }) => {
     const isGroup = item.type === 'group';
     const otherParticipant = !isGroup ? item.participants?.find((p) => String(p.id) !== String(user.id)) : null;
-    const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
-
+    const isOnline = !!(otherParticipant && onlineUsers.has(otherParticipant.id));
     return (
-      <TouchableOpacity
-        style={styles.convItem}
-        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id })}
-      >
-        <View style={styles.avatar}>
-          {isGroup ? (
-            <Ionicons name="people" size={22} color={colors.indigo[600]} />
-          ) : (
-            <Text style={styles.avatarText}>{title?.charAt(0)?.toUpperCase() || '?'}</Text>
-          )}
-          {isOnline && <View style={styles.onlineDot} />}
-        </View>
-        <View style={styles.convContent}>
-          <View style={styles.convHeader}>
-            <View style={styles.titleRow}>
-              <Text style={styles.convTitle} numberOfLines={1}>{title}</Text>
-              {item.unread_count > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadText}>
-                    {item.unread_count > 99 ? '99+' : item.unread_count}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); showChatOptions(item); }}
-              style={styles.optionsBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="ellipsis-vertical" size={20} color={colors.gray[500]} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.convPreview} numberOfLines={1}>{preview}</Text>
-        </View>
-      </TouchableOpacity>
+      <FadeInItem index={index}>
+        <ConversationItem
+          item={item}
+          userId={user.id}
+          colors={colors}
+          styles={styles}
+          t={t}
+          getDynamic={getDynamic}
+          isOnline={isOnline}
+          onPress={handlePressConversation}
+          onShowOptions={showChatOptions}
+          onDelete={handleDeleteConversation}
+        />
+      </FadeInItem>
     );
-  };
+  }, [user.id, colors, styles, t, getDynamic, onlineUsers, handlePressConversation, showChatOptions, handleDeleteConversation]);
+
+  if (loading) return (
+    <Screen style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('chat')}</Text>
+      </View>
+      <SkeletonList count={8} type="conversation" />
+    </Screen>
+  );
 
   return (
     <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('chat')}</Text>
-        <TouchableOpacity onPress={openNewModal} style={styles.newBtn}>
+        <AnimatedPressable onPress={openNewModal} style={styles.newBtn} haptic="light">
           <Ionicons name="create-outline" size={22} color={colors.brand[600]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
       <View style={styles.tabRow}>
         {tabs.map((tab) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            haptic="light"
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
       </View>
       <FlatList
@@ -246,36 +349,43 @@ export default function ChatListScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         extraData={lang}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={{ flex: 1 }}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={filteredConversations.length === 0 ? styles.emptyContainer : null}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={10}
+        removeClippedSubviews
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={48} color={colors.gray[300]} />
             <Text style={styles.emptyText}>{t('noConversations')}</Text>
-            <TouchableOpacity onPress={openNewModal} style={styles.emptyBtn}>
+            <AnimatedPressable onPress={openNewModal} style={styles.emptyBtn} haptic="light">
               <Text style={styles.emptyBtnText}>{t('startAChat')}</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         }
       />
       <Modal open={showNewModal} onClose={() => setShowNewModal(false)} title={t('newConversation')}>
         <View style={styles.modalContent}>
           <View style={styles.typeRow}>
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.typeBtn, chatType === 'direct' && styles.typeBtnActive]}
               onPress={() => { setChatType('direct'); setSelected([]); }}
+              haptic="light"
             >
               <Ionicons name="person" size={16} color={chatType === 'direct' ? colors.white : colors.gray[600]} />
               <Text style={[styles.typeBtnText, chatType === 'direct' && styles.typeBtnTextActive]}>{t('direct')}</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
             {isAdmin && (
-              <TouchableOpacity
+              <AnimatedPressable
                 style={[styles.typeBtn, chatType === 'group' && styles.typeBtnActive]}
                 onPress={() => { setChatType('group'); setSelected([]); }}
+                haptic="light"
               >
                 <Ionicons name="people" size={16} color={chatType === 'group' ? colors.white : colors.gray[600]} />
                 <Text style={[styles.typeBtnText, chatType === 'group' && styles.typeBtnTextActive]}>{t('group')}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             )}
           </View>
 
@@ -297,15 +407,13 @@ export default function ChatListScreen() {
             placeholderTextColor={colors.gray[400]}
           />
 
-          <FlatList
-            data={filteredUsers}
-            keyExtractor={(item) => item.id.toString()}
-            style={styles.userList}
-            extraData={lang}
-            renderItem={({ item }) => (
-              <TouchableOpacity
+          <ScrollView style={styles.userList} showsVerticalScrollIndicator={false}>
+            {filteredUsers.map((item) => (
+              <AnimatedPressable
+                key={item.id.toString()}
                 style={[styles.userItem, selected.includes(item.id) && styles.userItemSelected]}
                 onPress={() => toggleSelect(item.id)}
+                haptic="light"
               >
                 <View style={styles.userAvatar}>
                   <Text style={styles.userAvatarText}>{item.name?.charAt(0)?.toUpperCase() || '?'}</Text>
@@ -317,26 +425,28 @@ export default function ChatListScreen() {
                 {selected.includes(item.id) && (
                   <Ionicons name="checkmark" size={20} color={colors.brand[600]} />
                 )}
-              </TouchableOpacity>
-            )}
-          />
+              </AnimatedPressable>
+            ))}
+          </ScrollView>
 
           <View style={styles.modalActions}>
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.cancelBtn}
               onPress={() => setShowNewModal(false)}
+              haptic="light"
             >
               <Text style={styles.cancelBtnText}>{t('cancel')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </AnimatedPressable>
+            <AnimatedPressable
               style={[styles.createBtn, selected.length === 0 && styles.createBtnDisabled]}
               onPress={handleCreate}
               disabled={selected.length === 0}
+              haptic="light"
             >
               <Text style={styles.createBtnText}>
                 {chatType === 'group' ? t('createGroup') : t('startChat')}
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         </View>
       </Modal>
@@ -379,8 +489,15 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray[200],
+    backgroundColor: colors.white,
+  },
+  deleteAction: {
+    backgroundColor: colors.red[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 72,
   },
   avatar: {
     width: 48,
@@ -407,6 +524,8 @@ const createStyles = (colors) => StyleSheet.create({
   convHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.sm },
   convTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
+  convTime: { fontSize: fontSize.xs, color: colors.gray[400], marginLeft: spacing.sm },
+  previewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   unreadBadge: {
     backgroundColor: colors.brand[600],
     borderRadius: 10,

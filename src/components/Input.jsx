@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
+import { memo, useState, useMemo } from 'react';
+import { View, Text, TextInput, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from './AnimatedPressable';
 
-export function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, style, onFocus }) {
+export const Input = memo(function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, style, onFocus }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -23,7 +24,7 @@ export function Input({ label, value, onChangeText, placeholder, secureTextEntry
       />
     </View>
   );
-}
+});
 
 function formatDate(date) {
   const year = date.getFullYear();
@@ -95,23 +96,23 @@ export function DateInput({ label, value, onChangeText, placeholder }) {
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TouchableOpacity onPress={onOpen} style={styles.input} activeOpacity={0.7}>
+      <AnimatedPressable onPress={onOpen} style={styles.input} haptic="light">
         <Text style={value ? styles.inputValue : styles.placeholder}>
           {value || placeholder || 'Select a date'}
         </Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       <Modal visible={show} transparent animationType="fade" onRequestClose={() => setShow(false)}>
-        <TouchableOpacity style={styles.calendarOverlay} activeOpacity={1} onPress={() => setShow(false)}>
+        <Pressable style={styles.calendarOverlay} onPress={() => setShow(false)}>
           <View style={styles.calendarSheet}>
             <View style={styles.calendarHeader}>
-              <TouchableOpacity onPress={() => changeMonth(-1)} hitSlop={8}>
+              <AnimatedPressable onPress={() => changeMonth(-1)} hitSlop={8} haptic="light">
                 <Ionicons name="chevron-back" size={24} color={colors.brand[600]} />
-              </TouchableOpacity>
+              </AnimatedPressable>
               <Text style={styles.calendarMonth}>{monthLabel}</Text>
-              <TouchableOpacity onPress={() => changeMonth(1)} hitSlop={8}>
+              <AnimatedPressable onPress={() => changeMonth(1)} hitSlop={8} haptic="light">
                 <Ionicons name="chevron-forward" size={24} color={colors.brand[600]} />
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
 
             <View style={styles.calendarWeek}>
@@ -131,26 +132,26 @@ export function DateInput({ label, value, onChangeText, placeholder }) {
                       selectedDate.getMonth() === viewDate.getMonth() &&
                       selectedDate.getFullYear() === viewDate.getFullYear();
                     return (
-                      <TouchableOpacity key={di} style={styles.calendarDay} onPress={() => selectDay(day)}>
+                      <AnimatedPressable key={di} style={styles.calendarDay} onPress={() => selectDay(day)} haptic="light">
                         <View style={[styles.calendarDayInner, isSelected && styles.calendarDaySelected]}>
                           <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>
                             {day}
                           </Text>
                         </View>
-                      </TouchableOpacity>
+                      </AnimatedPressable>
                     );
                   })}
                 </View>
               ))}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
     </View>
   );
 }
 
-export function MultilineInput({ label, value, onChangeText, placeholder, rows, style }) {
+export const MultilineInput = memo(function MultilineInput({ label, value, onChangeText, placeholder, rows, style }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -168,7 +169,7 @@ export function MultilineInput({ label, value, onChangeText, placeholder, rows, 
       />
     </View>
   );
-}
+});
 
 const createStyles = (colors) => StyleSheet.create({
   container: {

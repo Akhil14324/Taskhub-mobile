@@ -1,14 +1,18 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { Input } from '../components/Input';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 const DEFAULT_TYPES = [
@@ -18,6 +22,53 @@ const DEFAULT_TYPES = [
   { value: 'mines', labelKey: 'mines' },
   { value: 'it', labelKey: 'it' },
 ];
+
+const BusinessItem = memo(({ item: biz, styles, colors, getDynamic, getTypeLabel, openEdit, handleDelete, t }) => (
+  <Card style={styles.bizCard}>
+    <View style={styles.bizHeader}>
+      <View style={styles.bizInfo}>
+        <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
+        <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: 4 }}>
+          {getTypeLabel(biz.type)}
+        </Badge>
+      </View>
+      <View style={styles.bizActions}>
+        <AnimatedPressable onPress={() => openEdit(biz)} style={styles.iconBtn} haptic="light">
+          <Ionicons name="create-outline" size={18} color={colors.gray[400]} />
+        </AnimatedPressable>
+        <AnimatedPressable onPress={() => handleDelete(biz)} style={styles.iconBtn} haptic="medium">
+          <Ionicons name="trash-outline" size={18} color={colors.red[500]} />
+        </AnimatedPressable>
+      </View>
+    </View>
+    <View style={styles.bizStats}>
+      <View style={styles.bizStat}>
+        <Text style={styles.bizStatValue}>{biz.task_count}</Text>
+        <Text style={styles.bizStatLabel}>{t('tasks')}</Text>
+      </View>
+      <View style={styles.bizStat}>
+        <Text style={[styles.bizStatValue, { color: colors.green[600] }]}>{biz.completed_count}</Text>
+        <Text style={styles.bizStatLabel}>{t('done')}</Text>
+      </View>
+      <View style={styles.bizStat}>
+        <Text style={[styles.bizStatValue, { color: colors.yellow[600] }]}>{biz.pending_count}</Text>
+        <Text style={styles.bizStatLabel}>{t('pending')}</Text>
+      </View>
+      <View style={styles.bizStat}>
+        <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.on_hold_count || 0}</Text>
+        <Text style={styles.bizStatLabel}>{t('onHold')}</Text>
+      </View>
+      <View style={styles.bizStat}>
+        <Text style={[styles.bizStatValue, { color: colors.red[600] }]}>{biz.warned_count || 0}</Text>
+        <Text style={styles.bizStatLabel}>{t('warned')}</Text>
+      </View>
+      <View style={styles.bizStat}>
+        <Text style={[styles.bizStatValue, { color: colors.purple[600] }]}>{biz.user_count}</Text>
+        <Text style={styles.bizStatLabel}>{t('usersCount')}</Text>
+      </View>
+    </View>
+  </Card>
+));
 
 export default function AdminBusinesses() {
   const { t, lang, translateDynamic, getDynamic } = useLang();
@@ -81,10 +132,10 @@ export default function AdminBusinesses() {
 
   const typeOptions = [...new Set([...DEFAULT_TYPES.map((dt) => dt.value), ...businessTypes])];
 
-  const getTypeLabel = (type) => {
+  const getTypeLabel = useCallback((type) => {
     const found = DEFAULT_TYPES.find((dt) => dt.value === type);
     return found ? t(found.labelKey) : getDynamic(type.replace(/_/g, ' '));
-  };
+  }, [t, getDynamic]);
 
   const getFinalType = () => {
     if (form.type === '__custom__') {
@@ -100,13 +151,13 @@ export default function AdminBusinesses() {
     setModalOpen(true);
   };
 
-  const openEdit = (biz) => {
+  const openEdit = useCallback((biz) => {
     setEditing(biz);
     const isDefault = DEFAULT_TYPES.some((dt) => dt.value === biz.type);
     setForm({ name: biz.name, type: isDefault ? biz.type : '__custom__', customType: isDefault ? '' : biz.type });
     setFormError('');
     setModalOpen(true);
-  };
+  }, []);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -136,7 +187,7 @@ export default function AdminBusinesses() {
     }
   };
 
-  const handleDelete = (biz) => {
+  const handleDelete = useCallback((biz) => {
     Alert.alert(
       getDynamic(biz.name),
       t('deleteBusinessConfirm'),
@@ -156,64 +207,42 @@ export default function AdminBusinesses() {
         },
       ]
     );
-  };
+  }, [getDynamic, t, fetchBusinesses]);
 
-  const renderItem = ({ item: biz }) => (
-    <Card style={styles.bizCard}>
-      <View style={styles.bizHeader}>
-        <View style={styles.bizInfo}>
-          <Text style={styles.bizName}>{getDynamic(biz.name)}</Text>
-          <Badge bg={colors.brand[100]} color={colors.brand[700]} style={{ marginTop: 4 }}>
-            {getTypeLabel(biz.type)}
-          </Badge>
-        </View>
-        <View style={styles.bizActions}>
-          <TouchableOpacity onPress={() => openEdit(biz)} style={styles.iconBtn}>
-            <Ionicons name="create-outline" size={18} color={colors.gray[400]} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleDelete(biz)} style={styles.iconBtn}>
-            <Ionicons name="trash-outline" size={18} color={colors.red[500]} />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={styles.bizStats}>
-        <View style={styles.bizStat}>
-          <Text style={styles.bizStatValue}>{biz.task_count}</Text>
-          <Text style={styles.bizStatLabel}>{t('tasks')}</Text>
-        </View>
-        <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.green[600] }]}>{biz.completed_count}</Text>
-          <Text style={styles.bizStatLabel}>{t('done')}</Text>
-        </View>
-        <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.yellow[600] }]}>{biz.pending_count}</Text>
-          <Text style={styles.bizStatLabel}>{t('pending')}</Text>
-        </View>
-        <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.blue[600] }]}>{biz.on_hold_count || 0}</Text>
-          <Text style={styles.bizStatLabel}>{t('onHold')}</Text>
-        </View>
-        <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.red[600] }]}>{biz.warned_count || 0}</Text>
-          <Text style={styles.bizStatLabel}>{t('warned')}</Text>
-        </View>
-        <View style={styles.bizStat}>
-          <Text style={[styles.bizStatValue, { color: colors.purple[600] }]}>{biz.user_count}</Text>
-          <Text style={styles.bizStatLabel}>{t('usersCount')}</Text>
-        </View>
-      </View>
-    </Card>
+  const renderItem = useCallback(
+    ({ item: biz, index }) => (
+      <FadeInItem index={index}>
+        <BusinessItem
+          item={biz}
+          styles={styles}
+          colors={colors}
+          getDynamic={getDynamic}
+          getTypeLabel={getTypeLabel}
+          openEdit={openEdit}
+          handleDelete={handleDelete}
+          t={t}
+        />
+      </FadeInItem>
+    ),
+    [styles, colors, getDynamic, getTypeLabel, openEdit, handleDelete, t]
   );
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <Screen style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>{t('businesses')}</Text>
+      </View>
+      <SkeletonList count={6} type="task" />
+    </Screen>
+  );
 
   return (
     <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('businesses')}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
+        <AnimatedPressable style={styles.addBtn} onPress={openCreate} haptic="light">
           <Ionicons name="add" size={24} color={colors.white} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {error && <ErrorBanner message={error} />}
@@ -223,8 +252,13 @@ export default function AdminBusinesses() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         extraData={lang}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={10}
+        removeClippedSubviews
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
             icon={<Ionicons name="business-outline" size={32} color={colors.gray[300]} />}

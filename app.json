@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "TaskHub",
-    "slug": "vgrandtaskhub",
-    "owner": "vgrandtaskhub",
+    "slug": "taskhub-vgrand",
+    "owner": "akhil143241s-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -13,10 +13,24 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vgrand.taskhub",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "TaskHub uses the camera to attach photos to your tasks and chat messages.",
+        "NSPhotoLibraryUsageDescription": "TaskHub accesses your photo library so you can attach images to tasks and chat messages.",
+        "NSPhotoLibraryAddUsageDescription": "TaskHub can save images you receive in chat to your photo library.",
+        "NSMicrophoneUsageDescription": "TaskHub uses the microphone to record voice messages in chat."
+      }
     },
     "android": {
       "package": "com.vgrand.taskhub",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4f46e5"
@@ -24,7 +38,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "6ff08814-1fa6-4d0a-8a30-57eef8ed87d8"
+        "projectId": "258933dd-9920-4b20-81bf-447c736f5200"
       }
     },
     "plugins": [
@@ -42,7 +56,8 @@
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
-            "enableProguardInReleaseBuilds": false
+            "enableProguardInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": false
           }
         }
       ],
@@ -57,7 +72,21 @@
       "expo-secure-store",
       "expo-asset",
       "expo-notifications",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TaskHub accesses your photo library so you can attach images to tasks and chat messages.",
+          "cameraPermission": "TaskHub uses the camera to attach photos to your tasks and chat messages."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "TaskHub uses the microphone to record voice messages in chat."
+        }
+      ],
+      "expo-image"
     ]
   }
 }

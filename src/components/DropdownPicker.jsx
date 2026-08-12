@@ -1,8 +1,9 @@
 import { useState, useRef, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from './AnimatedPressable';
 
 export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
   const colors = useColors();
@@ -12,10 +13,10 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
 
   return (
     <>
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.trigger, style]}
         onPress={() => setOpen(true)}
-        activeOpacity={0.7}
+        haptic="light"
       >
         <Text
           style={[styles.triggerText, !selectedItem && styles.placeholderText]}
@@ -24,7 +25,7 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
           {selectedItem ? selectedItem.label : ''}
         </Text>
         <Ionicons name="chevron-down" size={16} color={colors.gray[400]} />
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableWithoutFeedback onPress={() => setOpen(false)}>
@@ -33,13 +34,14 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
               <View style={styles.sheet}>
                 <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                   {items.map((item) => (
-                    <TouchableOpacity
+                    <AnimatedPressable
                       key={item.value}
                       style={styles.option}
                       onPress={() => {
                         onValueChange(item.value);
                         setOpen(false);
                       }}
+                      haptic="light"
                     >
                       <Text
                         style={[
@@ -52,7 +54,7 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
                       {item.value === selectedValue && (
                         <Ionicons name="checkmark" size={18} color={colors.brand[600]} />
                       )}
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                   ))}
                 </ScrollView>
               </View>

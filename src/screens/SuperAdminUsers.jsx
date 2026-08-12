@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, SuccessBanner, EmptyState, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, SuccessBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
 import { Input } from '../components/Input';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 function getRoleBadge(colors) {
@@ -179,50 +183,57 @@ export default function SuperAdminUsers() {
           message={isSuperAdminSection ? t('noSuperAdminsFound') : title === t('admins') ? t('noAdminsFound') : t('noUsersFound')}
         />
       ) : (
-        users.map((u) => (
-          <Card key={u.id} style={styles.userCard}>
-            <View style={styles.userHeader}>
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{getDynamic(u.name)}</Text>
-                <Text style={styles.userEmail}>@{u.username}</Text>
-                {isSuperAdminSection && u.email && (
-                  <Text style={styles.userEmail}>{u.email}</Text>
-                )}
-                <Text style={styles.userJoined}>{t('joined')}: {formatDate(u.created_at, lang)}</Text>
+        users.map((u, index) => (
+          <FadeInItem key={u.id} index={index}>
+            <Card style={styles.userCard}>
+              <View style={styles.userHeader}>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{getDynamic(u.name)}</Text>
+                  <Text style={styles.userEmail}>@{u.username}</Text>
+                  {isSuperAdminSection && u.email && (
+                    <Text style={styles.userEmail}>{u.email}</Text>
+                  )}
+                  <Text style={styles.userJoined}>{t('joined')}: {formatDate(u.created_at, lang)}</Text>
+                </View>
+                {roleBadge(u.role)}
               </View>
-              {roleBadge(u.role)}
-            </View>
-            {!isSuperAdminSection && (
-              <View style={styles.userActions}>
-                <TouchableOpacity style={styles.userActionBtn} onPress={() => openPwModal(u)}>
-                  <Ionicons name="key-outline" size={16} color={colors.gray[600]} />
-                  <Text style={[styles.userActionText, { color: colors.gray[600] }]}>{t('changePassword')}</Text>
-                </TouchableOpacity>
-                {u.role === 'user' && (
-                  <TouchableOpacity style={styles.userActionBtn} onPress={() => openRoleModal(u, 'promote')}>
-                    <Ionicons name="arrow-up-circle-outline" size={16} color={colors.green[600]} />
-                    <Text style={[styles.userActionText, { color: colors.green[600] }]}>{t('promote')}</Text>
-                  </TouchableOpacity>
-                )}
-                {u.role === 'admin' && (
-                  <TouchableOpacity style={styles.userActionBtn} onPress={() => openRoleModal(u, 'demote')}>
-                    <Ionicons name="arrow-down-circle-outline" size={16} color={colors.red[600]} />
-                    <Text style={[styles.userActionText, { color: colors.red[600] }]}>{t('demote')}</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.userActionBtn} onPress={() => handleDeleteUser(u.id, getDynamic(u.name))}>
-                  <Ionicons name="trash-outline" size={16} color={colors.red[500]} />
-                  <Text style={[styles.userActionText, { color: colors.red[500] }]}>{t('delete')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </Card>
+              {!isSuperAdminSection && (
+                <View style={styles.userActions}>
+                  <AnimatedPressable style={styles.userActionBtn} onPress={() => openPwModal(u)} haptic="light">
+                    <Ionicons name="key-outline" size={16} color={colors.gray[600]} />
+                    <Text style={[styles.userActionText, { color: colors.gray[600] }]}>{t('changePassword')}</Text>
+                  </AnimatedPressable>
+                  {u.role === 'user' && (
+                    <AnimatedPressable style={styles.userActionBtn} onPress={() => openRoleModal(u, 'promote')} haptic="light">
+                      <Ionicons name="arrow-up-circle-outline" size={16} color={colors.green[600]} />
+                      <Text style={[styles.userActionText, { color: colors.green[600] }]}>{t('promote')}</Text>
+                    </AnimatedPressable>
+                  )}
+                  {u.role === 'admin' && (
+                    <AnimatedPressable style={styles.userActionBtn} onPress={() => openRoleModal(u, 'demote')} haptic="light">
+                      <Ionicons name="arrow-down-circle-outline" size={16} color={colors.red[600]} />
+                      <Text style={[styles.userActionText, { color: colors.red[600] }]}>{t('demote')}</Text>
+                    </AnimatedPressable>
+                  )}
+                  <AnimatedPressable style={styles.userActionBtn} onPress={() => handleDeleteUser(u.id, getDynamic(u.name))} haptic="medium">
+                    <Ionicons name="trash-outline" size={16} color={colors.red[500]} />
+                    <Text style={[styles.userActionText, { color: colors.red[500] }]}>{t('delete')}</Text>
+                  </AnimatedPressable>
+                </View>
+              )}
+            </Card>
+          </FadeInItem>
         ))
       )}
     </View>
   );
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <Screen style={styles.container}>
+      <Text style={styles.header}>{t('allUsers')}</Text>
+      <SkeletonList count={6} type="task" />
+    </Screen>
+  );
 
   const superAdminUsers = allUsers.filter((u) => u.role === 'super_admin');
   const adminUsers = allUsers.filter((u) => u.role === 'admin');
@@ -231,8 +242,9 @@ export default function SuperAdminUsers() {
   return (
     <Screen style={styles.container}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.header}>{t('allUsers')}</Text>
         {pwSuccess && <SuccessBanner message={pwSuccess} />}

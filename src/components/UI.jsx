@@ -1,10 +1,18 @@
-import { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { memo, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from './AnimatedPressable';
 
 function useThemedStyles() {
   const colors = useColors();
@@ -77,12 +85,12 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
     <View style={[styles.header, { paddingTop: spacing.md }]}>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.headerActions}>
-        <TouchableOpacity onPress={toggleLang} style={styles.langBtn} activeOpacity={0.7}>
+        <AnimatedPressable onPress={toggleLang} style={styles.langBtn} haptic="light">
           <Text style={styles.langText}>{lang === 'en' ? 'EN' : 'TE'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={toggleTheme} style={styles.iconBtn} activeOpacity={0.7}>
+        </AnimatedPressable>
+        <AnimatedPressable onPress={toggleTheme} style={styles.iconBtn} haptic="light">
           <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.gray[600]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
   );
@@ -91,47 +99,80 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
 export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
   const { colors, styles } = useThemedStyles();
   const { t } = useLang();
+  const insets = useSafeAreaInsets();
+  const sheetTranslateY = useSharedValue(400);
+  const overlayOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      sheetTranslateY.value = withSpring(0, { damping: 24, stiffness: 280, mass: 0.8, overshootClamping: true });
+      overlayOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.ease) });
+    }
+  }, [visible, sheetTranslateY, overlayOpacity]);
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
+  }));
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <View style={styles.sheet}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[styles.overlay, overlayStyle]}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <Animated.View style={[styles.sheet, { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{title || t('more')}</Text>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+            <AnimatedPressable onPress={onClose} style={styles.sheetCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">
               <Ionicons name="close-outline" size={22} color={colors.gray[400]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
           <View style={styles.sheetItems}>
             {items.map((item, index) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={index}
                 style={styles.sheetItem}
                 onPress={() => {
                   onClose();
                   onItemPress(item);
                 }}
-                activeOpacity={0.7}
+                haptic="light"
               >
                 <Ionicons name={item.icon} size={22} color={item.color || colors.gray[600]} />
                 <Text style={[styles.sheetItemText, { color: item.color || colors.gray[700] }]}>{item.label}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             ))}
           </View>
-        </View>
-      </Pressable>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
 
-export function EmptyState({ icon, message }) {
+export const EmptyState = memo(function EmptyState({ icon, message }) {
   const { styles } = useThemedStyles();
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(12);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) });
+    translateY.value = withSpring(0, { damping: 18, stiffness: 200, mass: 0.8 });
+  }, [opacity, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
   return (
-    <View style={styles.emptyState}>
+    <Animated.View style={[styles.emptyState, animatedStyle]}>
       {icon}
       <Text style={styles.emptyText}>{message}</Text>
-    </View>
+    </Animated.View>
   );
-}
+});
 
 export function ProgressBar({ percent, color }) {
   const { colors, styles } = useThemedStyles();
@@ -152,8 +193,13 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
   badge: {
     paddingHorizontal: spacing.sm,
@@ -247,10 +293,13 @@ const createStyles = (colors) => StyleSheet.create({
     gap: spacing.sm,
   },
   langBtn: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   langText: {
     fontSize: fontSize.xs,
@@ -258,7 +307,12 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.gray[600],
   },
   iconBtn: {
-    padding: spacing.xs,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   overlay: {
     flex: 1,
@@ -284,6 +338,13 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.gray[900],
+  },
+  sheetCloseBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -spacing.sm,
   },
   sheetItems: {
     paddingVertical: spacing.sm,

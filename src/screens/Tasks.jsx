@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useAuth } from '../context/AuthContext';
@@ -7,10 +7,14 @@ import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
 import Modal from '../components/Modal';
-import { Card, Badge, LoadingSpinner, ErrorBanner, EmptyState, Screen } from '../components/UI';
+import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
 import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
 import { Input, MultilineInput, DateInput } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { SkeletonList } from '../components/Skeleton';
+import { FadeInItem } from '../components/StaggeredFadeIn';
+import { BrandedRefresh } from '../components/BrandedRefreshControl';
 
 function getStatusColors(colors) {
   return {
@@ -20,6 +24,102 @@ function getStatusColors(colors) {
     warned: { bg: colors.red[100], text: colors.red[700] },
   };
 }
+
+const TaskItem = memo(function TaskItem({ task, colors, styles, t, lang, getDynamic, isAdmin, onComplete, onHold, onWarn, onEdit, onDelete }) {
+  const statusColors = getStatusColors(colors)[task.status] || getStatusColors(colors).pending;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
+  const isOverdue = dueDate && task.status !== 'completed' && task.status !== 'on_hold' && dueDate < today;
+
+  return (
+    <Card style={styles.taskCard}>
+      <View style={styles.taskHeader}>
+        <View style={styles.taskInfo}>
+          <Text style={styles.taskTitle}>{getDynamic(task.title)}</Text>
+          {task.business_name && <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>}
+          {task.description ? <Text style={styles.taskDesc} numberOfLines={2}>{getDynamic(task.description)}</Text> : null}
+          {task.assigned_user_name && (
+            <Text style={styles.taskAssigned}>{t('assignedTo')}: {getDynamic(task.assigned_user_name)}</Text>
+          )}
+          {dueDate && (
+            <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
+              {t('due')}: {dueDate.toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US')}
+            </Text>
+          )}
+          {task.created_by_name && (
+            <Text style={styles.taskCreatedBy}>{t('createdBy')}: {getDynamic(task.created_by_name)}</Text>
+          )}
+          {task.completed_by_name && (
+            <Text style={styles.taskCompletedBy}>{t('doneBy')}: {getDynamic(task.completed_by_name)}</Text>
+          )}
+          {task.is_warned && task.warning_message && (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningLabel}>{t('warning')}</Text>
+              <Text style={styles.warningText}>{getDynamic(task.warning_message)}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.taskBadges}>
+          <Badge bg={statusColors.bg} color={statusColors.text}>
+            {task.status === 'completed' ? t('completed') : task.status === 'on_hold' ? t('onHold') : task.is_warned ? t('warned') : t('pending')}
+          </Badge>
+          {isOverdue && <Badge bg={colors.red[100]} color={colors.red[700]}>{t('overdue')}</Badge>}
+        </View>
+      </View>
+
+      <View style={styles.taskActions}>
+        <AnimatedPressable
+          style={styles.actionBtn}
+          onPress={() => onComplete(task)}
+          haptic="light"
+        >
+          <Ionicons
+            name={task.status === 'completed' ? 'arrow-undo' : 'checkmark-circle'}
+            size={18}
+            color={task.status === 'completed' ? colors.yellow[600] : colors.green[600]}
+          />
+          <Text style={[styles.actionText, { color: task.status === 'completed' ? colors.yellow[600] : colors.green[600] }]}>
+            {task.status === 'completed' ? t('pending') : t('completed')}
+          </Text>
+        </AnimatedPressable>
+
+        {isAdmin && task.status !== 'completed' && (
+          <AnimatedPressable
+            style={styles.actionBtn}
+            onPress={() => onHold(task)}
+            haptic="light"
+          >
+            <Ionicons
+              name={task.status === 'on_hold' ? 'play-circle' : 'pause-circle'}
+              size={18}
+              color={colors.blue[600]}
+            />
+            <Text style={[styles.actionText, { color: colors.blue[600] }]}>
+              {task.status === 'on_hold' ? t('resumeFromHold') : t('putOnHold')}
+            </Text>
+          </AnimatedPressable>
+        )}
+        {isAdmin && task.status === 'pending' && (
+          <>
+            <AnimatedPressable style={styles.actionBtn} onPress={() => onWarn(task)} haptic="light">
+              <Ionicons name="warning-outline" size={18} color={colors.amber[600]} />
+              <Text style={[styles.actionText, { color: colors.amber[600] }]}>{t('sendWarning')}</Text>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.actionBtn} onPress={() => onEdit(task)} haptic="light">
+              <Ionicons name="create-outline" size={18} color={colors.brand[600]} />
+              <Text style={[styles.actionText, { color: colors.brand[600] }]}>{t('editTask')}</Text>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.actionBtn} onPress={() => onDelete(task)} haptic="light">
+              <Ionicons name="trash-outline" size={18} color={colors.red[600]} />
+              <Text style={[styles.actionText, { color: colors.red[600] }]}>{t('delete')}</Text>
+            </AnimatedPressable>
+          </>
+        )}
+      </View>
+    </Card>
+  );
+});
 
 export default function Tasks() {
   const { user, refreshUser } = useAuth();
@@ -135,20 +235,20 @@ export default function Tasks() {
     if (defaultBiz) fetchBusinessUsers(defaultBiz);
   };
 
-  const openEdit = (task) => {
+  const openEdit = useCallback((task) => {
     setEditingTask(task);
     const dueDate = task.due_date ? String(task.due_date).slice(0, 10) : '';
     setForm({ title: task.title, description: task.description || '', due_date: dueDate, business_id: '', assigned_user_id: '' });
     setFormError('');
     setEditModalOpen(true);
-  };
+  }, []);
 
-  const openWarn = (task) => {
+  const openWarn = useCallback((task) => {
     setWarningTask(task);
     setWarnMessage('');
     setWarnError('');
     setWarnModalOpen(true);
-  };
+  }, []);
 
   const handleCreate = async () => {
     if (!form.title.trim()) {
@@ -200,7 +300,7 @@ export default function Tasks() {
     }
   };
 
-  const handleComplete = async (task) => {
+  const handleComplete = useCallback(async (task) => {
     try {
       await api.put(`/tasks/${task.id}/complete`);
       fetchTasks();
@@ -208,16 +308,16 @@ export default function Tasks() {
     } catch (err) {
       Alert.alert(t('error'), err.response?.data?.error || t('failedUpdateTaskStatus'));
     }
-  };
+  }, [fetchTasks, refreshUser, t]);
 
-  const handleHold = async (task) => {
+  const handleHold = useCallback(async (task) => {
     try {
       await api.put(`/tasks/${task.id}/hold`);
       fetchTasks();
     } catch (err) {
       Alert.alert(t('error'), err.response?.data?.error || t('failedToggleHold'));
     }
-  };
+  }, [fetchTasks, t]);
 
   const handleWarn = async () => {
     if (!warnMessage.trim()) {
@@ -237,7 +337,7 @@ export default function Tasks() {
     }
   };
 
-  const handleDelete = (task) => {
+  const handleDelete = useCallback((task) => {
     Alert.alert(
       t('deleteTaskConfirm'),
       task.title,
@@ -258,111 +358,43 @@ export default function Tasks() {
         },
       ]
     );
-  };
+  }, [fetchTasks, refreshUser, t]);
 
-  const renderTask = ({ item: task }) => {
-    const statusColors = getStatusColors(colors)[task.status] || getStatusColors(colors).pending;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
-    const isOverdue = dueDate && task.status !== 'completed' && task.status !== 'on_hold' && dueDate < today;
+  const renderTask = useCallback(({ item: task, index }) => (
+    <FadeInItem index={index}>
+      <TaskItem
+        task={task}
+        colors={colors}
+        styles={styles}
+        t={t}
+        lang={lang}
+        getDynamic={getDynamic}
+        isAdmin={isAdmin}
+        onComplete={handleComplete}
+        onHold={handleHold}
+        onWarn={openWarn}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
+    </FadeInItem>
+  ), [colors, styles, t, lang, getDynamic, isAdmin, handleComplete, handleHold, openWarn, openEdit, handleDelete]);
 
-    return (
-      <Card style={styles.taskCard}>
-        <View style={styles.taskHeader}>
-          <View style={styles.taskInfo}>
-            <Text style={styles.taskTitle}>{getDynamic(task.title)}</Text>
-            {task.business_name && <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>}
-            {task.description ? <Text style={styles.taskDesc} numberOfLines={2}>{getDynamic(task.description)}</Text> : null}
-            {task.assigned_user_name && (
-              <Text style={styles.taskAssigned}>{t('assignedTo')}: {getDynamic(task.assigned_user_name)}</Text>
-            )}
-            {dueDate && (
-              <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
-                {t('due')}: {dueDate.toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US')}
-              </Text>
-            )}
-            {task.created_by_name && (
-              <Text style={styles.taskCreatedBy}>{t('createdBy')}: {getDynamic(task.created_by_name)}</Text>
-            )}
-            {task.completed_by_name && (
-              <Text style={styles.taskCompletedBy}>{t('doneBy')}: {getDynamic(task.completed_by_name)}</Text>
-            )}
-            {task.is_warned && task.warning_message && (
-              <View style={styles.warningBox}>
-                <Text style={styles.warningLabel}>{t('warning')}</Text>
-                <Text style={styles.warningText}>{getDynamic(task.warning_message)}</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.taskBadges}>
-            <Badge bg={statusColors.bg} color={statusColors.text}>
-              {task.status === 'completed' ? t('completed') : task.status === 'on_hold' ? t('onHold') : task.is_warned ? t('warned') : t('pending')}
-            </Badge>
-            {isOverdue && <Badge bg={colors.red[100]} color={colors.red[700]}>{t('overdue')}</Badge>}
-          </View>
-        </View>
-
-        <View style={styles.taskActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleComplete(task)}
-          >
-            <Ionicons
-              name={task.status === 'completed' ? 'undo' : 'checkmark-circle'}
-              size={18}
-              color={task.status === 'completed' ? colors.yellow[600] : colors.green[600]}
-            />
-            <Text style={[styles.actionText, { color: task.status === 'completed' ? colors.yellow[600] : colors.green[600] }]}>
-              {task.status === 'completed' ? t('pending') : t('completed')}
-            </Text>
-          </TouchableOpacity>
-
-          {isAdmin && task.status !== 'completed' && (
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => handleHold(task)}
-            >
-              <Ionicons
-                name={task.status === 'on_hold' ? 'play-circle' : 'pause-circle'}
-                size={18}
-                color={colors.blue[600]}
-              />
-              <Text style={[styles.actionText, { color: colors.blue[600] }]}>
-                {task.status === 'on_hold' ? t('resumeFromHold') : t('putOnHold')}
-              </Text>
-            </TouchableOpacity>
-          )}
-          {isAdmin && task.status === 'pending' && (
-            <>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => openWarn(task)}>
-                <Ionicons name="warning-outline" size={18} color={colors.amber[600]} />
-                <Text style={[styles.actionText, { color: colors.amber[600] }]}>{t('sendWarning')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => openEdit(task)}>
-                <Ionicons name="create-outline" size={18} color={colors.brand[600]} />
-                <Text style={[styles.actionText, { color: colors.brand[600] }]}>{t('editTask')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(task)}>
-                <Ionicons name="trash-outline" size={18} color={colors.red[600]} />
-                <Text style={[styles.actionText, { color: colors.red[600] }]}>{t('delete')}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </Card>
-    );
-  };
-
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <Screen style={styles.container} bottomOffset={56}>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>{t('tasks')}</Text>
+      </View>
+      <SkeletonList count={6} type="task" />
+    </Screen>
+  );
 
   return (
     <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('tasks')}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
+        <AnimatedPressable style={styles.addBtn} onPress={openCreate} haptic="light">
           <Ionicons name="add" size={24} color={colors.white} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {error && <ErrorBanner message={error} />}
@@ -406,8 +438,13 @@ export default function Tasks() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderTask}
         extraData={lang}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
+        initialNumToRender={10}
+        maxToRenderPerBatch={6}
+        windowSize={10}
+        removeClippedSubviews
         ListEmptyComponent={
           <EmptyState
             icon={<Ionicons name="clipboard-outline" size={32} color={colors.gray[300]} />}
