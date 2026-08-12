@@ -72,6 +72,11 @@ export default function Profile() {
   const [pwSuccess, setPwSuccess] = useState('');
   const [savingPw, setSavingPw] = useState(false);
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
   const fetchAll = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
@@ -118,6 +123,29 @@ export default function Profile() {
       { text: t('cancel'), style: 'cancel' },
       { text: t('logout'), style: 'destructive', onPress: () => logout() },
     ]);
+  };
+
+  const openDeleteModal = () => {
+    setDeletePassword('');
+    setDeleteError('');
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      setDeleteError(t('allFieldsRequired'));
+      return;
+    }
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await api.delete('/auth/me', { data: { password: deletePassword } });
+      await logout();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || t('failedDeleteAccount'));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const openEditModal = () => {
@@ -379,6 +407,10 @@ export default function Profile() {
           <Ionicons name="log-out-outline" size={18} color={colors.white} />
           <Text> {t('logout')}</Text>
         </DangerButton>
+        <DangerButton onPress={openDeleteModal} style={styles.logoutBtn}>
+          <Ionicons name="trash-outline" size={18} color={colors.white} />
+          <Text> {t('deleteAccount')}</Text>
+        </DangerButton>
       </Card>
 
       {/* Edit Modal */}
@@ -392,6 +424,22 @@ export default function Profile() {
           <PrimaryButton onPress={handleEditSave} loading={savingName} style={{ flex: 1, marginLeft: spacing.sm }}>
             {savingName ? t('saving') : t('saveChanges')}
           </PrimaryButton>
+        </View>
+      </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title={t('deleteAccount')}>
+        {deleteError && <ErrorBanner message={deleteError} />}
+        <Text style={styles.deleteWarning}>{t('deleteAccountConfirm')}</Text>
+        <Text style={styles.deleteSubtext}>{t('deleteAccountPasswordPrompt')}</Text>
+        <Input label={t('password')} value={deletePassword} onChangeText={setDeletePassword} placeholder={t('passwordPlaceholder')} secureTextEntry />
+        <View style={styles.modalActions}>
+          <SecondaryButton onPress={() => setDeleteModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
+            {t('cancel')}
+          </SecondaryButton>
+          <DangerButton onPress={handleDeleteAccount} loading={deleting} style={{ flex: 1, marginLeft: spacing.sm }}>
+            {deleting ? t('deleting') : t('deleteAccount')}
+          </DangerButton>
         </View>
       </Modal>
 
@@ -600,6 +648,16 @@ const createStyles = (colors) => StyleSheet.create({
   logoutBtn: {
     marginTop: spacing.md,
     paddingVertical: spacing.md,
+  },
+  deleteWarning: {
+    fontSize: fontSize.sm,
+    color: colors.red[700],
+    marginBottom: spacing.sm,
+  },
+  deleteSubtext: {
+    fontSize: fontSize.xs,
+    color: colors.gray[500],
+    marginBottom: spacing.md,
   },
   modalActions: {
     flexDirection: 'row',
