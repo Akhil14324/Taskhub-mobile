@@ -12,8 +12,6 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
-  interpolate,
-  Extrapolation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';

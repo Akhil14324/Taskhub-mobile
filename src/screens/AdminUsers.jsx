@@ -243,9 +243,8 @@ export default function AdminUsers() {
   }, [t, fetchData]);
 
   const renderItem = useCallback(({ item, index, isUnassigned }) => (
-    <FadeInItem index={index}>
+    <FadeInItem key={item.id} index={index}>
       <UserItem
-        key={item.id}
         user={item}
         isUnassigned={isUnassigned}
         styles={styles}

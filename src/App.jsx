@@ -9,7 +9,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  runOnJS,
   Easing,
 } from 'react-native-reanimated';
 import { AuthProvider } from './context/AuthContext';
