@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
-import { PrimaryButton, SecondaryButton } from '../components/Button';
+import { PrimaryButton } from '../components/Button';
 import Cat3D from '../components/Cat3D';
 import { spacing, radius, fontSize } from '../theme/theme';
 
@@ -91,40 +91,8 @@ export default function Oops() {
   const msgKeys = mode === 'offline' ? OFFLINE_MSG_KEYS : NOT_FOUND_MSG_KEYS;
   const [msgIndex, setMsgIndex] = useState(0);
 
-  const catBob = useSharedValue(0);
-  const catTilt = useSharedValue(0);
   const catScale = useSharedValue(1);
-  const signWobble = useSharedValue(0);
   const msgOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    catBob.value = withRepeat(
-      withSequence(
-        withTiming(-10, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1100, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      false
-    );
-    catTilt.value = withRepeat(
-      withSequence(
-        withTiming(-9, { duration: 550, easing: Easing.inOut(Easing.ease) }),
-        withTiming(9, { duration: 550, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 400 })
-      ),
-      -1,
-      false
-    );
-    signWobble.value = withRepeat(
-      withSequence(
-        withTiming(3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 500 })
-      ),
-      -1,
-      false
-    );
-  }, []);
 
   useEffect(() => {
     msgOpacity.value = 0;
@@ -136,15 +104,7 @@ export default function Oops() {
   }, [msgKeys.length]);
 
   const catStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: catBob.value },
-      { rotate: `${catTilt.value}deg` },
-      { scale: catScale.value },
-    ],
-  }));
-
-  const signStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${signWobble.value}deg` }],
+    transform: [{ scale: catScale.value }],
   }));
 
   const messageStyle = useAnimatedStyle(() => ({
@@ -166,11 +126,6 @@ export default function Oops() {
     }, 380);
   };
 
-  const handleHome = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Main');
-  };
-
   const statusText = mode === 'offline' ? t('oopsCatStatusOffline') : t('oopsCatStatusNotFound');
 
   return (
@@ -186,9 +141,9 @@ export default function Oops() {
           <Cat3D size={280} />
         </Animated.View>
 
-        <Animated.View style={[styles.sign, signStyle]}>
+        <View style={styles.sign}>
           <Text style={styles.signText}>{statusText}</Text>
-        </Animated.View>
+        </View>
 
         <Animated.View style={[styles.messageWrap, messageStyle]}>
           <Text style={styles.message}>{t(msgKeys[msgIndex])}</Text>
@@ -198,9 +153,6 @@ export default function Oops() {
           <PrimaryButton onPress={handlePet} style={styles.primaryBtn}>
             {t('petTheCatAndRetry')}
           </PrimaryButton>
-          <SecondaryButton onPress={handleHome} style={styles.secondaryBtn}>
-            {t('goHome')}
-          </SecondaryButton>
         </View>
       </View>
     </View>
@@ -254,12 +206,9 @@ const createStyles = (colors) =>
     actions: {
       width: '100%',
       maxWidth: 320,
-      gap: spacing.sm,
+      alignItems: 'center',
     },
     primaryBtn: {
-      width: '100%',
-    },
-    secondaryBtn: {
       width: '100%',
     },
   });
