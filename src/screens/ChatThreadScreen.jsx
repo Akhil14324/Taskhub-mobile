@@ -10,6 +10,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withRepeat,
+  withSequence,
   runOnJS,
   interpolate,
   Extrapolation,
@@ -50,10 +52,14 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   const subscriptionRef = useRef(null);
 
   const stop = useCallback(() => {
-    const player = playerRef.current;
-    if (player) {
-      player.pause();
-      player.seekTo(0);
+    try {
+      const player = playerRef.current;
+      if (player) {
+        player.pause();
+        player.seekTo(0);
+      }
+    } catch {
+      // player may have been released
     }
     setIsPlaying(false);
     setProgress(0);
@@ -100,12 +106,20 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   useEffect(() => {
     return () => {
       if (activeAudioStopRef === stop) activeAudioStopRef = null;
-      if (subscriptionRef.current) {
-        subscriptionRef.current.remove();
-        subscriptionRef.current = null;
+      try {
+        if (subscriptionRef.current) {
+          subscriptionRef.current.remove();
+          subscriptionRef.current = null;
+        }
+      } catch {
+        // ignore
       }
-      if (playerRef.current) {
-        playerRef.current.remove();
+      try {
+        if (playerRef.current) {
+          playerRef.current.release();
+          playerRef.current = null;
+        }
+      } catch {
         playerRef.current = null;
       }
     };
@@ -386,6 +400,8 @@ export default function ChatThreadScreen() {
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingRef = useRef(false);
+  const recorderAvailable = !!recorder && typeof recorder.record === 'function';
   const recordDotScale = useSharedValue(1);
   const recordInputOpacity = useSharedValue(1);
   useEffect(() => {
@@ -759,6 +775,10 @@ export default function ChatThreadScreen() {
   const recordTimerRef = useRef(null);
 
   const startRecording = async () => {
+    if (!recorderAvailable) {
+      Alert.alert(t('microphonePermissionRequired'));
+      return;
+    }
     try {
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) {
@@ -768,6 +788,7 @@ export default function ChatThreadScreen() {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
+      recordingRef.current = true;
       setRecording(true);
       setRecordDuration(0);
       recordTimerRef.current = setInterval(() => {
@@ -785,6 +806,9 @@ export default function ChatThreadScreen() {
   };
 
   const stopRecording = async (send) => {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    clearInterval(recordTimerRef.current);
     try {
       if (recorder.isRecording) {
         await recorder.stop();
@@ -802,9 +826,8 @@ export default function ChatThreadScreen() {
         }
       }
     } catch {
-      // ignore
+      // ignore - recorder may have been released
     }
-    clearInterval(recordTimerRef.current);
     setRecording(false);
     setRecordDuration(0);
     try {
@@ -816,8 +839,13 @@ export default function ChatThreadScreen() {
 
   useEffect(() => {
     return () => {
-      if (recorder.isRecording) recorder.stop();
+      recordingRef.current = false;
       clearInterval(recordTimerRef.current);
+      try {
+        if (recorder.isRecording) recorder.stop();
+      } catch {
+        // recorder may have been released already
+      }
     };
   }, [recorder]);
 
