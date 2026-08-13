@@ -1,0 +1,30 @@
+Chat UX improvements, admin delete, edit window, Lottie cat, legal updates
+
+Mobile:
+- AnimatedPressable: fix layout style propagation, split layout/visual styles
+- ChatThreadScreen: inverted list reverted to normal with onContentSizeChange scroll
+- ChatThreadScreen: keyboard handling via Keyboard events + Reanimated (no lag)
+- ChatThreadScreen: tap reply preview to scroll to original message with highlight
+- ChatThreadScreen: admin can delete any message, shows "deleted by admin"
+- ChatThreadScreen: 30-min edit window, hold-to-record mic (no tap trigger)
+- ChatThreadScreen: voice message bubble overflow fix
+- ChatThreadScreen: reaction count visible in dark mode
+- ChatThreadScreen: document viewer via expo-web-browser
+- ChatListScreen: type button overflow fix
+- ChatContext: handle deleted_by in socket events and message normalization
+- Cat3D: replaced SVG with Lottie animation
+- Oops: updated Cat3D size
+- Legal: updated privacy policy and terms (Cloudinary, voice messages, admin deletion)
+- translations: added messageDeletedByAdmin
+
+Backend:
+- Migration 026: add deleted_by column to messages
+- chat.js: soft-delete for "delete for everyone" (tracks deleted_by)
+- chat.js: admin can delete any message without time limit
+- chat.js: 30-min edit window enforcement
+- chat.js: include deleted_by in message queries
+- constants: add EDIT_WINDOW_MS
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

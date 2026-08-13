@@ -1,9 +1,10 @@
 import { memo, useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
-  Modal, Pressable, Linking, Alert, ScrollView, Dimensions,
+  Platform, ActivityIndicator,
+  Modal, Pressable, Linking, Alert, ScrollView, Dimensions, Keyboard,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -37,6 +38,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import TypingIndicator from '../components/TypingIndicator';
 
 const DELETE_WINDOW_MS = 15 * 60 * 1000;
+const EDIT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_RECORDING_SECONDS = 5 * 60;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const MAX_IMAGE_SIZE = Math.min(SCREEN_WIDTH * 0.6, 240);
@@ -147,7 +149,7 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   );
 });
 
-const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPress, onReply, onReact }) {
+const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPress, onReply, onReact, scrollToMessage, isHighlighted }) {
   const isOwn = item.senderId === user.id;
   const showAvatar = !prevMsg || prevMsg.senderId !== item.senderId;
   const isGrouped = nextMsg && nextMsg.senderId === item.senderId && getDayKey(nextMsg.createdAt) === getDayKey(item.createdAt);
@@ -253,16 +255,23 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                 <SmartImage source={profilePic} style={styles.msgAvatar} />
               )}
               <View style={styles.bubbleWrapper}>
-                <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther]}>
+                <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther, isHighlighted && styles.msgBubbleHighlighted]}>
                   {showAvatar && !isOwn && (
                     <Text style={styles.senderName}>{getDynamic(item.senderName)}</Text>
                   )}
                   {isDeleted ? (
-                    <Text style={styles.deletedMsg}>{t('messageDeleted')}</Text>
+                    <Text style={styles.deletedMsg}>
+                      {item.deleted_by && item.deleted_by !== item.senderId
+                        ? t('messageDeletedByAdmin')
+                        : t('messageDeleted')}
+                    </Text>
                   ) : (
                     <>
                       {item.replyTo && (
-                        <View style={[styles.replyPreview, isOwn && styles.replyPreviewOwn]}>
+                        <Pressable
+                          onPress={() => scrollToMessage?.(item.replyTo.id)}
+                          style={[styles.replyPreview, isOwn && styles.replyPreviewOwn]}
+                        >
                           <View style={styles.replyBar} />
                           <View style={styles.replyContent}>
                             <Text style={[styles.replyName, isOwn && styles.replyNameOwn]}>
@@ -272,7 +281,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                               {item.replyTo.body || (item.replyTo.attachmentUrl ? t('attachment') : '')}
                             </Text>
                           </View>
-                        </View>
+                        </Pressable>
                       )}
                       {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]} selectable>{getDynamic(item.body)}</Text>}
                       {item.attachmentUrl && item.attachmentType?.startsWith('image/') && (
@@ -282,7 +291,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                         <AudioMessage uri={item.attachmentUrl} isOwn={isOwn} colors={colors} styles={styles} t={t} />
                       )}
                       {item.attachmentUrl && !item.attachmentType?.startsWith('image/') && !item.attachmentType?.startsWith('audio/') && (
-                        <AnimatedPressable onPress={() => Linking.openURL(item.attachmentUrl)} haptic="light">
+                        <AnimatedPressable onPress={() => WebBrowser.openBrowserAsync(item.attachmentUrl)} haptic="light">
                           <Text style={[styles.attachmentLink, isOwn && styles.attachmentLinkOwn]}>{t('viewAttachment')}</Text>
                         </AnimatedPressable>
                       )}
@@ -398,6 +407,7 @@ export default function ChatThreadScreen() {
   }, [showScrollToBottom, scrollBtnScale]);
   const [showForwardModal, setShowForwardModal] = useState(null);
   const [showAttachSheet, setShowAttachSheet] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [waveformBars, setWaveformBars] = useState([]);
@@ -409,6 +419,25 @@ export default function ChatThreadScreen() {
   const recorderAvailable = !!recorder && typeof recorder.record === 'function';
   const recordDotScale = useSharedValue(1);
   const recordInputOpacity = useSharedValue(1);
+
+  // Keyboard handling — animated, no re-renders
+  const keyboardOffset = useSharedValue(0);
+  const keyboardBarStyle = useAnimatedStyle(() => ({
+    marginBottom: keyboardOffset.value,
+  }));
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardOffset.value = withTiming(e.endCoordinates.height + 4, { duration: 200 });
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardOffset.value = withTiming(0, { duration: 200 });
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   useEffect(() => {
     if (recording) {
       recordDotScale.value = withRepeat(
@@ -514,17 +543,24 @@ export default function ChatThreadScreen() {
 
   const prevMsgCountRef = useRef(0);
   const isFirstLoadRef = useRef(true);
+  const shouldScrollToBottomRef = useRef(false);
+
   useEffect(() => {
     const grew = messages.length > prevMsgCountRef.current;
     prevMsgCountRef.current = messages.length;
     if (grew && messages.length > 0) {
-      const timeout = setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: !isFirstLoadRef.current });
-        isFirstLoadRef.current = false;
-      }, 100);
-      return () => clearTimeout(timeout);
+      shouldScrollToBottomRef.current = true;
     }
   }, [messages]);
+
+  // Scroll to bottom when content actually renders
+  const handleContentSizeChange = useCallback(() => {
+    if (shouldScrollToBottomRef.current) {
+      shouldScrollToBottomRef.current = false;
+      flatListRef.current?.scrollToEnd({ animated: !isFirstLoadRef.current });
+      isFirstLoadRef.current = false;
+    }
+  }, []);
 
   const conversationTitle = useMemo(() => {
     if (!conversation) return t('chat');
@@ -744,6 +780,14 @@ export default function ChatThreadScreen() {
     }
   }, [messages.length]);
 
+  const scrollToMessage = useCallback((messageId) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+    setHighlightedMessageId(messageId);
+    setTimeout(() => setHighlightedMessageId(null), 1500);
+  }, [messages]);
+
   const showScrollRef = useRef(false);
   const handleScroll = useCallback((event) => {
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
@@ -751,7 +795,6 @@ export default function ChatThreadScreen() {
     const contentHeight = event.nativeEvent.contentSize.height;
     const isNearBottom = contentOffsetY + layoutHeight >= contentHeight - 100;
     const shouldShow = !isNearBottom && messages.length > 10;
-    // Guard: only setState when the value actually changes
     if (showScrollRef.current === shouldShow) return;
     showScrollRef.current = shouldShow;
     setShowScrollToBottom(shouldShow);
@@ -799,42 +842,47 @@ export default function ChatThreadScreen() {
 
   const recordTimerRef = useRef(null);
   const waveformScrollRef = useRef(null);
+  const recordStartTimerRef = useRef(null);
 
-  const startRecording = async () => {
-    if (!recorderAvailable) {
-      Alert.alert(t('microphonePermissionRequired'));
-      return;
-    }
-    try {
-      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) {
+  const startRecording = () => {
+    // Delay actual recording start so a quick tap doesn't trigger it
+    recordStartTimerRef.current = setTimeout(async () => {
+      if (!recorderAvailable) {
         Alert.alert(t('microphonePermissionRequired'));
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      recordingRef.current = true;
-      setRecording(true);
-      setRecordDuration(0);
-      setPendingRecordingUri(null);
-      waveformRef.current = [];
-      setWaveformBars([]);
-      recordTimerRef.current = setInterval(() => {
-        setRecordDuration((prev) => {
-          const next = prev + 1;
-          if (next >= MAX_RECORDING_SECONDS) {
-            stopRecording();
-          }
-          return next;
-        });
-      }, 1000);
-    } catch {
-      // ignore
-    }
+      try {
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        if (!granted) {
+          Alert.alert(t('microphonePermissionRequired'));
+          return;
+        }
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+        recordingRef.current = true;
+        setRecording(true);
+        setRecordDuration(0);
+        setPendingRecordingUri(null);
+        waveformRef.current = [];
+        setWaveformBars([]);
+        recordTimerRef.current = setInterval(() => {
+          setRecordDuration((prev) => {
+            const next = prev + 1;
+            if (next >= MAX_RECORDING_SECONDS) {
+              stopRecording();
+            }
+            return next;
+          });
+        }, 1000);
+      } catch {
+        // ignore
+      }
+    }, 250);
   };
 
   const stopRecording = async () => {
+    clearTimeout(recordStartTimerRef.current);
     if (!recordingRef.current) return;
     recordingRef.current = false;
     clearInterval(recordTimerRef.current);
@@ -858,6 +906,7 @@ export default function ChatThreadScreen() {
   };
 
   const cancelRecording = async () => {
+    clearTimeout(recordStartTimerRef.current);
     if (!recordingRef.current) return;
     recordingRef.current = false;
     clearInterval(recordTimerRef.current);
@@ -915,9 +964,13 @@ export default function ChatThreadScreen() {
     };
   }, [recorder]);
 
+  const isUserAdmin = ['admin', 'super_admin'].includes(user?.role);
   const canDeleteForEveryone = (() => {
     if (!deleteTarget) return false;
-    if (deleteTarget.senderId !== user.id) return false;
+    const isSender = deleteTarget.senderId === user.id;
+    // Admin can delete anyone's message; sender can delete own within time window
+    if (isUserAdmin) return true;
+    if (!isSender) return false;
     const created = new Date(deleteTarget.createdAt);
     if (isNaN(created.getTime())) return false;
     return Date.now() - created.getTime() <= DELETE_WINDOW_MS;
@@ -945,8 +998,10 @@ export default function ChatThreadScreen() {
       onLongPress={onLongPressMessage}
       onReply={handleReply}
       onReact={reactToMessage}
+      scrollToMessage={scrollToMessage}
+      isHighlighted={highlightedMessageId === item.id}
     />
-  ), [messages, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPressMessage, handleReply, reactToMessage]);
+  ), [messages, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPressMessage, handleReply, reactToMessage, scrollToMessage, highlightedMessageId]);
 
   const typingText = activeTyping.length > 0
     ? activeTyping.length === 1
@@ -956,11 +1011,7 @@ export default function ChatThreadScreen() {
 
   return (
     <Screen style={styles.container} bottomOffset={-insets.bottom}>
-      <KeyboardAvoidingView
-        style={styles.inner}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-    >
+      <View style={styles.inner}>
       <View style={styles.header}>
         <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn} haptic="light">
           <Ionicons name="arrow-back" size={24} color={colors.gray[700]} />
@@ -1027,6 +1078,10 @@ export default function ChatThreadScreen() {
         onEndReachedThreshold={0.1}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        onContentSizeChange={handleContentSizeChange}
+        onScrollToIndexFailed={(info) => {
+          flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+        }}
         onViewableItemsChanged={onViewableItemsChangedRef.current}
         viewabilityConfig={viewabilityConfigRef.current}
         initialNumToRender={12}
@@ -1087,7 +1142,7 @@ export default function ChatThreadScreen() {
         </View>
       )}
 
-      <View style={[styles.inputBar, { paddingBottom: spacing.sm + insets.bottom }]}>
+      <Animated.View style={[styles.inputBar, { paddingBottom: spacing.sm + insets.bottom }, keyboardBarStyle]}>
         {editingMessage ? (
           <AnimatedPressable onPress={() => { setEditingMessage(null); setText(''); }} style={styles.attachBtn} haptic="light">
             <Ionicons name="close" size={24} color={colors.red[500]} />
@@ -1169,7 +1224,7 @@ export default function ChatThreadScreen() {
             <Ionicons name="mic" size={22} color={colors.gray[500]} />
           </Pressable>
         )}
-      </View>
+      </Animated.View>
 
       <BottomSheet visible={showDeleteSheet} onClose={() => setShowDeleteSheet(false)}>
         <AnimatedPressable
@@ -1237,7 +1292,7 @@ export default function ChatThreadScreen() {
           <Ionicons name="copy-outline" size={22} color={colors.gray[700]} />
           <Text style={styles.reactionActionText}>{t('copy')}</Text>
         </AnimatedPressable>
-        {reactionTarget && reactionTarget.senderId === user.id && reactionTarget.body && (
+        {reactionTarget && reactionTarget.senderId === user.id && reactionTarget.body && (Date.now() - new Date(reactionTarget.createdAt).getTime() <= EDIT_WINDOW_MS) && (
           <AnimatedPressable style={styles.reactionAction} onPress={() => reactionTarget && handleEditMessage(reactionTarget)} haptic="light">
             <Ionicons name="create-outline" size={22} color={colors.gray[700]} />
             <Text style={styles.reactionActionText}>{t('edit')}</Text>
@@ -1320,7 +1375,7 @@ export default function ChatThreadScreen() {
           <Text style={styles.sheetCancelText}>{t('cancel')}</Text>
         </AnimatedPressable>
       </BottomSheet>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }
@@ -1422,6 +1477,10 @@ const createStyles = (colors) => StyleSheet.create({
   },
   msgBubbleOwn: { backgroundColor: colors.brand[600], borderBottomRightRadius: 4 },
   msgBubbleOther: { backgroundColor: colors.gray[100], borderBottomLeftRadius: 4 },
+  msgBubbleHighlighted: {
+    borderWidth: 2,
+    borderColor: colors.brand[400],
+  },
   senderName: { fontSize: fontSize.xs, color: colors.gray[500], marginBottom: 2 },
   msgText: { fontSize: fontSize.base, lineHeight: fontSize.base * 1.4, color: colors.gray[900] },
   msgTextOwn: { color: colors.white },
@@ -1630,17 +1689,18 @@ const createStyles = (colors) => StyleSheet.create({
     elevation: 3,
   },
   reactionBadgeOwn: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   reactionEmoji: {
     fontSize: 14,
   },
   reactionCount: {
     fontSize: 11,
-    color: colors.gray[700],
+    color: colors.gray[600],
+    fontWeight: '600',
   },
   reactionCountOwn: {
-    color: colors.white,
+    color: colors.gray[700],
   },
   replyBarContainer: {
     flexDirection: 'row',
@@ -1749,13 +1809,15 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xs,
-    minWidth: 160,
-    maxWidth: '100%',
+    minWidth: 120,
+    maxWidth: 220,
     overflow: 'hidden',
+    flexShrink: 1,
   },
   audioProgressContainer: {
     flex: 1,
     gap: 4,
+    overflow: 'hidden',
   },
   audioProgressBar: {
     height: 3,

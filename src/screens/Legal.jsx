@@ -9,12 +9,12 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 
 const SUPPORT_EMAIL = 'support@vgrand.com';
-const LAST_UPDATED = 'August 12, 2026';
+const LAST_UPDATED = 'August 13, 2026';
 
 const PRIVACY_SECTIONS = [
   {
     heading: 'Information We Collect',
-    body: 'TaskHub collects the following information to provide and improve the service:\n\n• Account information: your name, username, email address, and password (stored as a secure hash).\n• Profile and role data: your assigned role (user, admin, or super admin), business assignments, and account status.\n• Task and work data: tasks you create or are assigned, task status, due dates, descriptions, and attachments.\n• Communications: chat messages, voice messages, attachments, and conversation metadata between users within your organization.\n• Notifications: push notification tokens delivered through Apple Push Notification service (APNs) and Firebase Cloud Messaging (FCM) so we can send you task, chat, and warning alerts.\n• Usage data: device identifiers and limited app usage information used for security, troubleshooting, and abuse prevention.',
+    body: 'TaskHub collects the following information to provide and improve the service:\n\n• Account information: your name, username, email address, and password (stored as a secure hash).\n• Profile and role data: your assigned role (user, admin, or super admin), business assignments, and account status.\n• Task and work data: tasks you create or are assigned, task status, due dates, descriptions, and attachments.\n• Communications: chat messages, voice messages, image and document attachments, reactions, and conversation metadata between users within your organization.\n• Media: uploaded images, voice recordings, and documents are stored securely with our cloud media provider (Cloudinary) and linked to your account.\n• Notifications: push notification tokens delivered through Apple Push Notification service (APNs) and Firebase Cloud Messaging (FCM) so we can send you task, chat, and warning alerts.\n• Usage data: device identifiers and limited app usage information used for security, troubleshooting, and abuse prevention.',
   },
   {
     heading: 'How We Use Your Information',
@@ -22,11 +22,11 @@ const PRIVACY_SECTIONS = [
   },
   {
     heading: 'How We Share Your Information',
-    body: 'TaskHub is a business task-management tool. Your account, task, and chat data is visible to the administrators and super administrators within your organization, as needed to manage work. We do not sell your personal information. We share data only:\n\n• With authorized administrators in your organization as part of normal app functionality.\n• With service providers (such as hosting and push notification providers) who process data on our behalf under appropriate agreements.\n• When required by law or to protect the rights, property, or safety of TaskHub, our users, or others.',
+    body: 'TaskHub is a business task-management tool. Your account, task, and chat data is visible to the administrators and super administrators within your organization, as needed to manage work. We do not sell your personal information. We share data only:\n\n• With authorized administrators in your organization as part of normal app functionality.\n• With service providers (such as hosting providers, push notification services, and Cloudinary for media storage) who process data on our behalf under appropriate agreements.\n• When required by law or to protect the rights, property, or safety of TaskHub, our users, or others.',
   },
   {
     heading: 'Data Retention',
-    body: 'We retain your information for as long as your account is active. When you delete your account from within the app, your account and associated personal data (including tasks, messages, and attachments you authored) are permanently removed from our systems, except where retention is required for legal, accounting, or security purposes.',
+    body: 'We retain your information for as long as your account is active. Chat messages can be deleted by the sender (within 15 minutes of sending) or by an admin at any time. When a message is deleted for everyone, its content and attachments are permanently removed. When you delete your account from within the app, your account and associated personal data (including tasks, messages, and attachments you authored) are permanently removed from our systems, except where retention is required for legal, accounting, or security purposes.',
   },
   {
     heading: 'Your Rights',
@@ -65,7 +65,7 @@ const TERMS_SECTIONS = [
   },
   {
     heading: 'Acceptable Use',
-    body: 'You agree not to:\n\n• Use TaskHub for any unlawful purpose.\n• Upload content that is abusive, threatening, defamatory, or infringes someone else\u2019s rights.\n• Attempt to access data or accounts you are not authorized to access.\n• Interfere with the service\u2019s security or operation.\n• Use the service to send spam or unauthorized communications.',
+    body: 'You agree not to:\n\n• Use TaskHub for any unlawful purpose.\n• Upload content that is abusive, threatening, defamatory, or infringes someone else\u2019s rights.\n• Attempt to access data or accounts you are not authorized to access.\n• Interfere with the service\u2019s security or operation.\n• Use the service to send spam or unauthorized communications.\n\nAdministrators have the authority to delete any message in conversations they are part of, to maintain a respectful and appropriate communication environment.',
   },
   {
     heading: 'Your Content',
@@ -73,7 +73,7 @@ const TERMS_SECTIONS = [
   },
   {
     heading: 'Service Availability',
-    body: 'We strive to keep TaskHub available but do not guarantee uninterrupted access. We may modify, suspend, or discontinue features at any time without notice. Push notifications depend on third-party services (such as APNs) and may occasionally be delayed or unavailable.',
+    body: 'We strive to keep TaskHub available but do not guarantee uninterrupted access. We may modify, suspend, or discontinue features at any time without notice. Push notifications depend on third-party services (such as APNs and FCM) and may occasionally be delayed or unavailable.',
   },
   {
     heading: 'Limitation of Liability',

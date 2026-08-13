@@ -156,7 +156,7 @@ export function ChatProvider({ children }) {
       });
 
       socket.on('message:deleted', (data) => {
-        const { conversationId, messageId, deletedAt, permanent } = data;
+        const { conversationId, messageId, deletedAt, permanent, deletedBy, deletedByName } = data;
         if (permanent) {
           setMessages((prev) => prev.filter((m) => m.id !== messageId));
           setConversations((prev) =>
@@ -170,7 +170,7 @@ export function ChatProvider({ children }) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === messageId
-                ? { ...m, deleted_at: deletedAt, body: null, attachmentUrl: null, attachmentType: null }
+                ? { ...m, deleted_at: deletedAt, deleted_by: deletedBy, deleted_by_name: deletedByName, body: null, attachmentUrl: null, attachmentType: null }
                 : m
             )
           );
@@ -311,6 +311,7 @@ export function ChatProvider({ children }) {
           editedAt: m.edited_at ?? m.editedAt,
           isEdited: m.is_edited ?? m.isEdited ?? false,
           deleted_at: m.deleted_at ?? m.deletedAt ?? null,
+          deleted_by: m.deleted_by ?? m.deletedBy ?? null,
           replyToId: m.replyToId ?? m.reply_to_id ?? null,
           replyTo: m.replyTo ?? null,
           reactions: m.reactions ?? {},
@@ -474,14 +475,17 @@ export function ChatProvider({ children }) {
   }, []);
 
   const deleteMessage = useCallback(async (messageId, scope) => {
-    // Track the deleted message ID so it doesn't reappear on re-fetch
-    deletedMessageIdsRef.current.add(Number(messageId));
-    setMessages((prev) => prev.filter((m) => m.id !== Number(messageId)));
+    if (scope === 'me') {
+      // For "delete for me", remove from local state immediately
+      deletedMessageIdsRef.current.add(Number(messageId));
+      setMessages((prev) => prev.filter((m) => m.id !== Number(messageId)));
+    }
     try {
       await api.delete(`/chat/messages/${messageId}`, { params: { scope } });
     } catch (err) {
-      // If the API call fails, remove the ID from the deleted set so it can reappear
-      deletedMessageIdsRef.current.delete(Number(messageId));
+      if (scope === 'me') {
+        deletedMessageIdsRef.current.delete(Number(messageId));
+      }
       throw err;
     }
     fetchConversations();

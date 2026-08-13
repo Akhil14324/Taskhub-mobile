@@ -183,7 +183,7 @@ export default function Oops() {
 
       <View style={styles.content}>
         <Animated.View style={catStyle}>
-          <Cat3D size={180} />
+          <Cat3D size={280} />
         </Animated.View>
 
         <Animated.View style={[styles.sign, signStyle]}>

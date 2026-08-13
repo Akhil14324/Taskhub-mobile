@@ -1,5 +1,5 @@
 import { memo, useRef, useCallback, useState } from 'react';
-import { Pressable, Platform } from 'react-native';
+import { Pressable, Platform, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -160,12 +160,41 @@ function NativePressable({
     transform: [{ scale: isActive.value }],
   }));
 
+  // Extract layout-only props for the outer Pressable; full style goes on inner view
+  const layoutStyle = StyleSheet.flatten(style);
+  const layoutOnly = layoutStyle ? {
+    flex: layoutStyle.flex,
+    flexGrow: layoutStyle.flexGrow,
+    flexShrink: layoutStyle.flexShrink,
+    flexBasis: layoutStyle.flexBasis,
+    width: layoutStyle.width,
+    height: layoutStyle.height,
+    minWidth: layoutStyle.minWidth,
+    maxWidth: layoutStyle.maxWidth,
+    maxHeight: layoutStyle.maxHeight,
+    position: layoutStyle.position,
+    top: layoutStyle.top,
+    bottom: layoutStyle.bottom,
+    left: layoutStyle.left,
+    right: layoutStyle.right,
+    margin: layoutStyle.margin,
+    marginHorizontal: layoutStyle.marginHorizontal,
+    marginVertical: layoutStyle.marginVertical,
+    marginTop: layoutStyle.marginTop,
+    marginBottom: layoutStyle.marginBottom,
+    marginLeft: layoutStyle.marginLeft,
+    marginRight: layoutStyle.marginRight,
+    alignSelf: layoutStyle.alignSelf,
+  } : undefined;
+
   return (
     <Pressable
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
+      style={layoutOnly}
+      android_ripple={null}
       {...rest}
     >
       <Animated.View style={[style, animatedStyle]}>
