@@ -16,6 +16,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { PrimaryButton, SecondaryButton } from '../components/Button';
+import Cat3D from '../components/Cat3D';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -182,7 +183,7 @@ export default function Oops() {
 
       <View style={styles.content}>
         <Animated.View style={catStyle}>
-          <Text style={styles.cat}>🐱</Text>
+          <Cat3D size={180} />
         </Animated.View>
 
         <Animated.View style={[styles.sign, signStyle]}>
@@ -223,10 +224,6 @@ const createStyles = (colors) =>
       alignItems: 'center',
       paddingHorizontal: spacing.xl,
       zIndex: 1,
-    },
-    cat: {
-      fontSize: 96,
-      marginBottom: spacing.sm,
     },
     sign: {
       backgroundColor: colors.white,

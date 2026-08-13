@@ -166,10 +166,9 @@ function NativePressable({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
-      style={style}
       {...rest}
     >
-      <Animated.View style={animatedStyle}>
+      <Animated.View style={[style, animatedStyle]}>
         {children}
       </Animated.View>
     </Pressable>

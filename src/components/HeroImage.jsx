@@ -30,26 +30,39 @@ const SPRING_CLOSE = { damping: 26, stiffness: 280, mass: 0.8, overshootClamping
  * - contentFit: expo-image contentFit (default: 'cover' for thumb, 'contain' for fullscreen)
  * - recyclingKey: optional key for cache
  */
+function cloudinaryThumb(uri, width) {
+  if (!uri || !uri.includes('res.cloudinary.com')) return uri;
+  return uri.replace('/upload/', `/upload/c_limit,w_${width},q_auto,f_auto/`);
+}
+
 function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
   const colors = useColors();
   const [fullscreen, setFullscreen] = useState(false);
   const [measuredLayout, setMeasuredLayout] = useState(null);
   const [shouldRenderFullscreen, setShouldRenderFullscreen] = useState(false);
   const closeTimerRef = useRef(null);
+  const thumbRef = useRef(null);
 
   // Animated values for the fullscreen image position/size
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
+  const zoomScale = useSharedValue(1);
+  const savedZoom = useSharedValue(1);
   const opacity = useSharedValue(0);
   const bgOpacity = useSharedValue(0);
 
-  const openFullscreen = useCallback((event) => {
-    // Measure the thumbnail position on screen
-    const layout = event.nativeEvent.layout;
-    setMeasuredLayout(layout);
-    setFullscreen(true);
+  const openFullscreen = useCallback(() => {
+    thumbRef.current?.measureInWindow((x, y, w, h) => {
+      setMeasuredLayout({ x, y, width: w, height: h });
+      setFullscreen(true);
+    });
   }, []);
+
+  const tap = Gesture.Tap()
+    .onEnd(() => {
+      runOnJS(openFullscreen)();
+    });
 
   useEffect(() => {
     if (fullscreen && measuredLayout) {
@@ -66,6 +79,8 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
       const targetY = (SCREEN_HEIGHT - targetH) / 2;
 
       // Initial state: at thumbnail position
+      zoomScale.value = 1;
+      savedZoom.value = 1;
       translateX.value = thumbX + thumbW / 2 - SCREEN_WIDTH / 2;
       translateY.value = thumbY + thumbH / 2 - targetH / 2 - (SCREEN_HEIGHT - targetH) / 2;
       scale.value = thumbW / SCREEN_WIDTH;
@@ -94,6 +109,8 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
     const thumbH = measuredLayout.height;
 
     // Animate back to thumbnail position
+    zoomScale.value = 1;
+    savedZoom.value = 1;
     translateX.value = withSpring(thumbX + thumbW / 2 - SCREEN_WIDTH / 2, SPRING_CLOSE);
     translateY.value = withSpring(thumbY + thumbH / 2 - SCREEN_HEIGHT * 0.35 - (SCREEN_HEIGHT - SCREEN_HEIGHT * 0.7) / 2, SPRING_CLOSE);
     scale.value = withSpring(thumbW / SCREEN_WIDTH, SPRING_CLOSE);
@@ -108,32 +125,50 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 
-  // Pan-to-dismiss in fullscreen
+  // Pinch-to-zoom in fullscreen
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => {
+      zoomScale.value = savedZoom.value * e.scale;
+    })
+    .onEnd(() => {
+      if (zoomScale.value < 1) {
+        zoomScale.value = withSpring(1, SPRING_OPEN);
+        savedZoom.value = 1;
+      } else {
+        savedZoom.value = zoomScale.value;
+      }
+    });
+
+  // Pan-to-dismiss in fullscreen (only when not zoomed in)
   const pan = Gesture.Pan()
     .activeOffsetY(10)
     .failOffsetX(8)
     .onUpdate((e) => {
-      translateY.value = e.translationY;
-      bgOpacity.value = interpolate(
-        Math.abs(e.translationY),
-        [0, 200],
-        [1, 0.3],
-        Extrapolation.CLAMP,
-      );
-      scale.value = interpolate(
-        Math.abs(e.translationY),
-        [0, 200],
-        [1, 0.85],
-        Extrapolation.CLAMP,
-      );
+      if (savedZoom.value <= 1.01) {
+        translateY.value = e.translationY;
+        bgOpacity.value = interpolate(
+          Math.abs(e.translationY),
+          [0, 200],
+          [1, 0.3],
+          Extrapolation.CLAMP,
+        );
+        scale.value = interpolate(
+          Math.abs(e.translationY),
+          [0, 200],
+          [1, 0.85],
+          Extrapolation.CLAMP,
+        );
+      }
     })
     .onEnd((e) => {
-      if (Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 600) {
-        runOnJS(closeFullscreen)();
-      } else {
-        translateY.value = withSpring(0, SPRING_OPEN);
-        bgOpacity.value = withSpring(1, SPRING_OPEN);
-        scale.value = withSpring(1, SPRING_OPEN);
+      if (savedZoom.value <= 1.01) {
+        if (Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 600) {
+          runOnJS(closeFullscreen)();
+        } else {
+          translateY.value = withSpring(0, SPRING_OPEN);
+          bgOpacity.value = withSpring(1, SPRING_OPEN);
+          scale.value = withSpring(1, SPRING_OPEN);
+        }
       }
     });
 
@@ -141,7 +176,7 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
-      { scale: scale.value },
+      { scale: scale.value * zoomScale.value },
     ],
     opacity: opacity.value,
   }));
@@ -151,28 +186,36 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
   }));
 
   const uri = typeof source === 'string' ? source : source?.uri;
+  const thumbUri = cloudinaryThumb(uri, 400);
+  const thumbSource = thumbUri ? { uri: thumbUri } : source;
+  const fullSource = typeof source === 'string' ? { uri: source } : source;
 
   return (
     <>
-      <Pressable onPress={openFullscreen} style={thumbStyle}>
-        <ExpoImage
-          source={source}
-          style={thumbStyle}
-          contentFit={contentFit}
-          cachePolicy="memory-disk"
-          recyclingKey={recyclingKey || uri}
-          transition={150}
-        />
-      </Pressable>
+      <GestureDetector gesture={tap}>
+        <Animated.View
+          ref={thumbRef}
+          style={[thumbStyle, { overflow: 'hidden' }]}
+        >
+          <ExpoImage
+            source={thumbSource}
+            style={StyleSheet.absoluteFill}
+            contentFit={contentFit}
+            cachePolicy="memory-disk"
+            recyclingKey={recyclingKey || thumbUri}
+            transition={150}
+          />
+        </Animated.View>
+      </GestureDetector>
 
       {shouldRenderFullscreen && (
         <Modal visible transparent animationType="none" onRequestClose={closeFullscreen} statusBarTranslucent>
           <Animated.View style={[styles.overlay, bgStyle]}>
             <Pressable style={StyleSheet.absoluteFillObject} onPress={closeFullscreen} />
-            <GestureDetector gesture={pan}>
+            <GestureDetector gesture={Gesture.Simultaneous(pan, pinch)}>
               <Animated.View style={[styles.fullscreenContainer, fullscreenImageStyle]}>
                 <ExpoImage
-                  source={source}
+                  source={fullSource}
                   style={styles.fullscreenImage}
                   contentFit="contain"
                   cachePolicy="memory-disk"
