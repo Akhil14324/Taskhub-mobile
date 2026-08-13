@@ -5,6 +5,8 @@ import {
   Modal, Pressable, Linking, Alert, ScrollView, Dimensions, Keyboard,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import * as SecureStore from 'expo-secure-store';
+import { API_URL } from '../api/client';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -291,7 +293,20 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                         <AudioMessage uri={item.attachmentUrl} isOwn={isOwn} colors={colors} styles={styles} t={t} />
                       )}
                       {item.attachmentUrl && !item.attachmentType?.startsWith('image/') && !item.attachmentType?.startsWith('audio/') && (
-                        <AnimatedPressable onPress={() => WebBrowser.openBrowserAsync(item.attachmentUrl)} haptic="light">
+                        <AnimatedPressable onPress={async () => {
+                          try {
+                            const token = await SecureStore.getItemAsync('token');
+                            const proxyUrl = `${API_URL}/chat/attachment/${item.id}?token=${token}`;
+                            await WebBrowser.openBrowserAsync(proxyUrl);
+                          } catch {
+                            try {
+                              const token = await SecureStore.getItemAsync('token');
+                              await Linking.openURL(`${API_URL}/chat/attachment/${item.id}?token=${token}`);
+                            } catch {
+                              Alert.alert(t('error'), t('cannotOpenAttachment'));
+                            }
+                          }
+                        }} haptic="light">
                           <Text style={[styles.attachmentLink, isOwn && styles.attachmentLinkOwn]}>{t('viewAttachment')}</Text>
                         </AnimatedPressable>
                       )}

@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { DropdownPicker } from '../components/DropdownPicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
@@ -126,6 +127,7 @@ export default function Tasks() {
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const [tasks, setTasks] = useState([]);
@@ -380,7 +382,7 @@ export default function Tasks() {
   ), [colors, styles, t, lang, getDynamic, isAdmin, handleComplete, handleHold, openWarn, openEdit, handleDelete]);
 
   if (loading) return (
-    <Screen style={styles.container} bottomOffset={56}>
+    <Screen style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('tasks')}</Text>
       </View>
@@ -389,7 +391,7 @@ export default function Tasks() {
   );
 
   return (
-    <Screen style={styles.container} bottomOffset={56}>
+    <Screen style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.header}>{t('tasks')}</Text>
         <AnimatedPressable style={styles.addBtn} onPress={openCreate} haptic="light">
@@ -439,7 +441,7 @@ export default function Tasks() {
         renderItem={renderTask}
         extraData={lang}
         style={{ flex: 1 }}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 90 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
         initialNumToRender={10}
         maxToRenderPerBatch={6}

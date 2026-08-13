@@ -23,7 +23,7 @@ function useThemedStyles() {
 export function Screen({ children, style, bottomOffset = 0 }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + bottomOffset }, style]}>
+    <View style={[{ flex: 1, paddingTop: insets.top }, style]}>
       {children}
     </View>
   );

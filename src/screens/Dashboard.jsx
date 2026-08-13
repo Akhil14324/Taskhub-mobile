@@ -89,7 +89,7 @@ export default function Dashboard() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 56 }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: 90 + insets.bottom }]}
       refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Text style={styles.header}>{t('dashboard')}</Text>
@@ -183,7 +183,6 @@ const createStyles = (colors) => StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
   },
   header: {
     fontSize: fontSize.xxxl,

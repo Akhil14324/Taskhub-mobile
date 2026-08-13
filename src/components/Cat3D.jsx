@@ -10,7 +10,7 @@ import catAnimation from '../assets/Cat_playing_animation.json';
 // Source art is 1070x456 (wide scene). Size by width; height follows aspect.
 const ASPECT = catAnimation.h / catAnimation.w;
 
-export default function Cat3D({ size = 200 }) {
+export default function Cat3D({ size = 280 }) {
   const ref = useRef(null);
 
   useEffect(() => {

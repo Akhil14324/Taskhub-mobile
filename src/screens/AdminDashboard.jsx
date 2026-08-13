@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme, useColors } from '../context/ThemeContext';
@@ -20,6 +21,7 @@ export default function AdminDashboard() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const [businesses, setBusinesses] = useState([]);
   const [unassignedCount, setUnassignedCount] = useState(0);
@@ -107,7 +109,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <Screen style={styles.container} bottomOffset={56}>
+    <Screen style={styles.container}>
       <Header
         title={t('appName')}
         lang={lang}
@@ -117,7 +119,7 @@ export default function AdminDashboard() {
       />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.header}>{t('adminDashboard')}</Text>
@@ -248,7 +250,6 @@ const createStyles = (colors) => StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
   },
   header: {
     fontSize: fontSize.xxl,

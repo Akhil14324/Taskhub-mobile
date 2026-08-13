@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
@@ -109,6 +110,7 @@ export default function AdminUsers() {
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
   const [unassigned, setUnassigned] = useState([]);
@@ -272,10 +274,10 @@ export default function AdminUsers() {
   const regularUsers = allUsers.filter((u) => u.role === 'user');
 
   return (
-    <Screen style={styles.container} bottomOffset={56}>
+    <Screen style={styles.container}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.header}>{t('users')}</Text>
@@ -410,7 +412,6 @@ const createStyles = (colors) => StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
   },
   header: {
     fontSize: fontSize.xxxl,

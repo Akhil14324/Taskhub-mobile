@@ -2,6 +2,7 @@ import { memo, useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, Alert, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -131,6 +132,7 @@ export default function ChatListScreen() {
   const colors = useColors();
   const { t, lang, translateDynamic, getDynamic } = useLang();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [users, setUsers] = useState([]);
@@ -351,7 +353,7 @@ export default function ChatListScreen() {
         extraData={lang}
         style={{ flex: 1 }}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={filteredConversations.length === 0 ? styles.emptyContainer : null}
+        contentContainerStyle={filteredConversations.length === 0 ? styles.emptyContainer : { paddingBottom: 90 + insets.bottom }}
         initialNumToRender={12}
         maxToRenderPerBatch={8}
         windowSize={10}
