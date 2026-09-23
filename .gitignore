@@ -1,11 +1,27 @@
 node_modules
 .env
-/android
 /ios
 .expo
 *.log
 config-output.txt
 config-err.txt
 dist/
-
 build.exit
+
+# Android build artifacts
+/android/.gradle
+/android/build
+/android/app/build
+/android/local.properties
+/android/app/upload.keystore
+
+# Fastlane output
+/build
+
+# Signing secrets — never commit these
+*.keystore
+!**/debug.keystore
+*.p12
+*.mobileprovision
+*.p8
+AuthKey_*.p8

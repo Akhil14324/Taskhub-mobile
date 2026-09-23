@@ -1,0 +1,2 @@
+app_identifier(ENV["APP_IDENTIFIER"] || "com.vgrand.taskhub")
+apple_dev_portal_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
