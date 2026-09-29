@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../utils/secureStorage';
 import { navigate, getCurrentRouteName } from '../navigation/navigationRef';
 
 const API_URL = 'https://vgrand-taskhub-backend.onrender.com/api';

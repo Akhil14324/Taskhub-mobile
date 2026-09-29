@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../utils/secureStorage';
 import { AppState } from 'react-native';
 import api from '../api/client';
 import { useAuth } from './AuthContext';

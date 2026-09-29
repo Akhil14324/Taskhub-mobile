@@ -5,7 +5,7 @@ import {
   Modal, Pressable, Linking, Alert, ScrollView, Dimensions, Keyboard,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../utils/secureStorage';
 import { API_URL } from '../api/client';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {

@@ -104,6 +104,15 @@
         "backgroundColor": "#4f46e5"
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "TaskHub",
+      "shortName": "TaskHub",
+      "themeColor": "#4f46e5",
+      "backgroundColor": "#4f46e5",
+      "favicon": "./assets/icon.png"
+    },
     "extra": {
       "eas": {
         "projectId": "258933dd-9920-4b20-81bf-447c736f5200"
