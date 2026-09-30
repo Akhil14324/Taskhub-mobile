@@ -1,721 +1,328 @@
-import { memo, useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Alert } from 'react-native';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { DropdownPicker } from '../components/DropdownPicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useAuth } from '../context/AuthContext';
-import { useLang } from '../context/LanguageContext';
+import { useChat } from '../context/ChatContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
-import Modal from '../components/Modal';
-import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
-import { PrimaryButton, SecondaryButton, DangerButton } from '../components/Button';
-import { Input, MultilineInput, DateInput } from '../components/Input';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
+import BottomSheet from '../components/BottomSheet';
 import { SkeletonList } from '../components/Skeleton';
-import { FadeInItem } from '../components/StaggeredFadeIn';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
+import TaskCard from '../components/tasks/TaskCard';
+import TaskFormSheet from '../components/tasks/TaskFormSheet';
+import { Chip, Fab, IconButton, EmptyHero, accent } from '../components/kit';
+import { TASK_FILTERS } from '../utils/taskMeta';
+import { showToast } from '../utils/events';
 
-function getStatusColors(colors) {
-  return {
-    completed: { bg: colors.green[100], text: colors.green[700] },
-    pending: { bg: colors.yellow[100], text: colors.yellow[700] },
-    on_hold: { bg: colors.blue[100], text: colors.blue[700] },
-    warned: { bg: colors.red[100], text: colors.red[700] },
-  };
-}
-
-const TaskItem = memo(function TaskItem({ task, colors, styles, t, lang, getDynamic, isAdmin, onComplete, onHold, onWarn, onEdit, onDelete }) {
-  const statusColors = getStatusColors(colors)[task.status] || getStatusColors(colors).pending;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDate = task.due_date ? new Date(task.due_date + 'T00:00:00') : null;
-  const isOverdue = dueDate && task.status !== 'completed' && task.status !== 'on_hold' && dueDate < today;
-
-  return (
-    <Card style={styles.taskCard}>
-      <View style={styles.taskHeader}>
-        <View style={styles.taskInfo}>
-          <Text style={styles.taskTitle}>{getDynamic(task.title)}</Text>
-          {task.business_name && <Text style={styles.taskBusiness}>{getDynamic(task.business_name)}</Text>}
-          {task.description ? <Text style={styles.taskDesc} numberOfLines={2}>{getDynamic(task.description)}</Text> : null}
-          {task.assigned_user_name && (
-            <Text style={styles.taskAssigned}>{t('assignedTo')}: {getDynamic(task.assigned_user_name)}</Text>
-          )}
-          {dueDate && (
-            <Text style={[styles.taskDue, isOverdue && styles.taskOverdue]}>
-              {t('due')}: {dueDate.toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US')}
-            </Text>
-          )}
-          {task.created_by_name && (
-            <Text style={styles.taskCreatedBy}>{t('createdBy')}: {getDynamic(task.created_by_name)}</Text>
-          )}
-          {task.completed_by_name && (
-            <Text style={styles.taskCompletedBy}>{t('doneBy')}: {getDynamic(task.completed_by_name)}</Text>
-          )}
-          {task.is_warned && task.warning_message && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningLabel}>{t('warning')}</Text>
-              <Text style={styles.warningText}>{getDynamic(task.warning_message)}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.taskBadges}>
-          <Badge bg={statusColors.bg} color={statusColors.text}>
-            {task.status === 'completed' ? t('completed') : task.status === 'on_hold' ? t('onHold') : task.is_warned ? t('warned') : t('pending')}
-          </Badge>
-          {isOverdue && <Badge bg={colors.red[100]} color={colors.red[700]}>{t('overdue')}</Badge>}
-        </View>
-      </View>
-
-      <View style={styles.taskActions}>
-        <AnimatedPressable
-          style={styles.actionBtn}
-          onPress={() => onComplete(task)}
-          haptic="light"
-        >
-          <Ionicons
-            name={task.status === 'completed' ? 'arrow-undo' : 'checkmark-circle'}
-            size={18}
-            color={task.status === 'completed' ? colors.yellow[600] : colors.green[600]}
-          />
-          <Text style={[styles.actionText, { color: task.status === 'completed' ? colors.yellow[600] : colors.green[600] }]}>
-            {task.status === 'completed' ? t('pending') : t('completed')}
-          </Text>
-        </AnimatedPressable>
-
-        {isAdmin && task.status !== 'completed' && (
-          <AnimatedPressable
-            style={styles.actionBtn}
-            onPress={() => onHold(task)}
-            haptic="light"
-          >
-            <Ionicons
-              name={task.status === 'on_hold' ? 'play-circle' : 'pause-circle'}
-              size={18}
-              color={colors.blue[600]}
-            />
-            <Text style={[styles.actionText, { color: colors.blue[600] }]}>
-              {task.status === 'on_hold' ? t('resumeFromHold') : t('putOnHold')}
-            </Text>
-          </AnimatedPressable>
-        )}
-        {isAdmin && task.status === 'pending' && (
-          <>
-            <AnimatedPressable style={styles.actionBtn} onPress={() => onWarn(task)} haptic="light">
-              <Ionicons name="warning-outline" size={18} color={colors.amber[600]} />
-              <Text style={[styles.actionText, { color: colors.amber[600] }]}>{t('sendWarning')}</Text>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.actionBtn} onPress={() => onEdit(task)} haptic="light">
-              <Ionicons name="create-outline" size={18} color={colors.brand[600]} />
-              <Text style={[styles.actionText, { color: colors.brand[600] }]}>{t('editTask')}</Text>
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.actionBtn} onPress={() => onDelete(task)} haptic="light">
-              <Ionicons name="trash-outline" size={18} color={colors.red[600]} />
-              <Text style={[styles.actionText, { color: colors.red[600] }]}>{t('delete')}</Text>
-            </AnimatedPressable>
-          </>
-        )}
-      </View>
-    </Card>
-  );
-});
+const VIEWS = [
+  { key: 'mine', label: 'My tasks', icon: 'person' },
+  { key: 'delegated', label: 'I assigned', icon: 'arrow-redo' },
+  { key: 'all', label: 'All', icon: 'grid' },
+];
 
 export default function Tasks() {
-  const { user, refreshUser } = useAuth();
-  const { t, lang, translateDynamic, getDynamic } = useLang();
+  const { user } = useAuth();
+  const { subscribe } = useChat();
+  const { approvalCount } = useNotifications();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
-  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+  const navigation = useNavigation();
+  const route = useRoute();
 
-  const [tasks, setTasks] = useState([]);
+  const [view, setView] = useState(user?.is_leader ? 'all' : 'mine');
+  const [statusFilter, setStatusFilter] = useState('open');
+  const [businessId, setBusinessId] = useState(null);
   const [businesses, setBusinesses] = useState([]);
-  const [businessUsers, setBusinessUsers] = useState([]);
+  const [bizPickerOpen, setBizPickerOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const requestId = useRef(0);
 
-  const [filterBusiness, setFilterBusiness] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [warnModalOpen, setWarnModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
-  const [warningTask, setWarningTask] = useState(null);
-
-  const [form, setForm] = useState({ title: '', description: '', due_date: '', business_id: '', assigned_user_id: '' });
-  const [formError, setFormError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const [warnMessage, setWarnMessage] = useState('');
-  const [warnError, setWarnError] = useState('');
-  const [sendingWarn, setSendingWarn] = useState(false);
+  // Deep links: Tasks tab opened with a business filter or "new task" preset.
+  useEffect(() => {
+    const bid = Number(route.params?.business_id);
+    if (bid) {
+      setBusinessId(bid);
+      setView('all');
+      navigation.setParams({ business_id: undefined });
+    }
+    if (route.params?.create) {
+      setFormOpen(route.params.create === true ? true : route.params.create);
+      navigation.setParams({ create: undefined });
+    }
+  }, [route.params?.business_id, route.params?.create, navigation]);
 
   const fetchTasks = useCallback(async () => {
+    const id = ++requestId.current;
     try {
-      const params = {};
-      if (filterBusiness !== 'all') params.business_id = filterBusiness;
-      if (filterStatus !== 'all') params.status = filterStatus;
-      const res = await api.get('/tasks', { params });
-      let fetchedTasks = res.data.tasks || [];
-      if (filterStatus === 'warned') {
-        fetchedTasks = fetchedTasks.filter((task) => task.is_warned);
+      const params = { view, limit: 200 };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (businessId) params.business_id = businessId;
+      if (query.trim()) params.q = query.trim();
+      const [res, sum] = await Promise.all([
+        api.get('/tasks', { params, __skipOops: true }),
+        api.get('/tasks/summary', { __skipOops: true }),
+      ]);
+      if (id !== requestId.current) return;
+      setTasks(res.data.tasks || []);
+      setSummary(sum.data);
+    } catch (err) {
+      if (id === requestId.current) showToast({ message: err.response?.data?.error || 'Could not load tasks', tone: 'error' });
+    } finally {
+      if (id === requestId.current) {
+        setLoading(false);
+        setRefreshing(false);
       }
-      setTasks(fetchedTasks);
-    } catch (err) {
-      setError(err.response?.data?.error || t('failedLoadTasks'));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  }, [filterBusiness, filterStatus, t]);
-
-  const fetchBusinesses = useCallback(async () => {
-    if (!isAdmin) return;
-    try {
-      const res = await api.get('/businesses');
-      setBusinesses(res.data.businesses || []);
-    } catch {
-      // ignore
-    }
-  }, [isAdmin]);
+  }, [view, statusFilter, businessId, query]);
 
   useEffect(() => {
+    const t = setTimeout(fetchTasks, query ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [fetchTasks, query]);
+
+  useFocusEffect(useCallback(() => {
     fetchTasks();
-    fetchBusinesses();
-  }, [fetchTasks, fetchBusinesses]);
+  }, [fetchTasks]));
 
-  // Translate dynamic content when in Telugu
   useEffect(() => {
-    if (lang !== 'te' || tasks.length === 0) return;
-    const texts = [];
-    tasks.forEach((task) => {
-      if (task.title) texts.push(task.title);
-      if (task.description) texts.push(task.description);
-      if (task.business_name) texts.push(task.business_name);
-      if (task.assigned_user_name) texts.push(task.assigned_user_name);
-      if (task.completed_by_name) texts.push(task.completed_by_name);
-      if (task.created_by_name) texts.push(task.created_by_name);
-      if (task.warning_message) texts.push(task.warning_message);
+    api.get('/businesses/directory', { __skipOops: true }).then((res) => setBusinesses(res.data.businesses || [])).catch(() => {});
+  }, []);
+
+  // Live updates from other people.
+  useEffect(() => {
+    let timer;
+    const off = subscribe('task:changed', () => {
+      clearTimeout(timer);
+      timer = setTimeout(fetchTasks, 500);
     });
-    businesses.forEach((b) => { if (b.name) texts.push(b.name); });
-    const unique = [...new Set(texts)];
-    if (unique.length > 0) translateDynamic(unique);
-  }, [tasks, businesses, lang, translateDynamic]);
+    return () => {
+      clearTimeout(timer);
+      off();
+    };
+  }, [subscribe, fetchTasks]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchTasks();
-  };
-
-  const fetchBusinessUsers = async (bizId) => {
-    if (!bizId) {
-      setBusinessUsers([]);
-      return;
-    }
+  const toggleTask = useCallback(async (task) => {
+    const next = task.status === 'completed' ? 'pending' : 'completed';
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: next === 'completed' ? 'completed' : 'pending' } : t)));
     try {
-      const res = await api.get('/users');
-      const allUsers = res.data?.users || [];
-      setBusinessUsers(allUsers.filter((u) => u.businesses?.some((b) => b.id === parseInt(bizId)) && u.role === 'user'));
-    } catch {
-      setBusinessUsers([]);
-    }
-  };
-
-  const openCreate = () => {
-    if (isAdmin && businesses.length === 0) {
-      Alert.alert(t('businesses'), t('noBusinessesYet'));
-      return;
-    }
-    const defaultBiz = isAdmin ? (businesses[0]?.id?.toString() || '') : (user?.business_id?.toString() || '');
-    setForm({ title: '', description: '', due_date: '', business_id: defaultBiz, assigned_user_id: '' });
-    setFormError('');
-    setCreateModalOpen(true);
-    if (defaultBiz) fetchBusinessUsers(defaultBiz);
-  };
-
-  const openEdit = useCallback((task) => {
-    setEditingTask(task);
-    const dueDate = task.due_date ? String(task.due_date).slice(0, 10) : '';
-    setForm({ title: task.title, description: task.description || '', due_date: dueDate, business_id: '', assigned_user_id: '' });
-    setFormError('');
-    setEditModalOpen(true);
-  }, []);
-
-  const openWarn = useCallback((task) => {
-    setWarningTask(task);
-    setWarnMessage('');
-    setWarnError('');
-    setWarnModalOpen(true);
-  }, []);
-
-  const handleCreate = async () => {
-    if (!form.title.trim()) {
-      setFormError(t('taskTitle'));
-      return;
-    }
-    if (!form.business_id) {
-      setFormError(t('selectBusiness'));
-      return;
-    }
-    setFormError('');
-    setSaving(true);
-    try {
-      await api.post('/tasks', {
-        title: form.title.trim(),
-        description: form.description,
-        due_date: form.due_date || null,
-        business_id: parseInt(form.business_id),
-        assigned_user_id: form.assigned_user_id ? parseInt(form.assigned_user_id) : null,
-      });
-      setCreateModalOpen(false);
-      fetchTasks();
-    } catch (err) {
-      setFormError(err.response?.data?.error || t('failedCreateTask'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEdit = async () => {
-    if (!form.title.trim()) {
-      setFormError(t('taskTitle'));
-      return;
-    }
-    setFormError('');
-    setSaving(true);
-    try {
-      await api.put(`/tasks/${editingTask.id}`, {
-        title: form.title.trim(),
-        description: form.description,
-        due_date: form.due_date || null,
-      });
-      setEditModalOpen(false);
-      fetchTasks();
-    } catch (err) {
-      setFormError(err.response?.data?.error || t('failedUpdateTask'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleComplete = useCallback(async (task) => {
-    try {
-      await api.put(`/tasks/${task.id}/complete`);
-      fetchTasks();
-      refreshUser();
-    } catch (err) {
-      Alert.alert(t('error'), err.response?.data?.error || t('failedUpdateTaskStatus'));
-    }
-  }, [fetchTasks, refreshUser, t]);
-
-  const handleHold = useCallback(async (task) => {
-    try {
-      await api.put(`/tasks/${task.id}/hold`);
-      fetchTasks();
-    } catch (err) {
-      Alert.alert(t('error'), err.response?.data?.error || t('failedToggleHold'));
-    }
-  }, [fetchTasks, t]);
-
-  const handleWarn = async () => {
-    if (!warnMessage.trim()) {
-      setWarnError(t('warningMessageRequired'));
-      return;
-    }
-    setWarnError('');
-    setSendingWarn(true);
-    try {
-      await api.put(`/tasks/${warningTask.id}/warn`, { message: warnMessage.trim() });
-      setWarnModalOpen(false);
-      fetchTasks();
-    } catch (err) {
-      setWarnError(err.response?.data?.error || t('failedSendWarning'));
-    } finally {
-      setSendingWarn(false);
-    }
-  };
-
-  const handleDelete = useCallback((task) => {
-    Alert.alert(
-      t('deleteTaskConfirm'),
-      task.title,
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/tasks/${task.id}`);
-              fetchTasks();
-              refreshUser();
-            } catch (err) {
-              Alert.alert(t('error'), err.response?.data?.error || t('failedDeleteTask'));
-            }
+      const res = await api.put(`/tasks/${task.id}/status`, { status: next });
+      const updated = res.data.task;
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+      if (updated.status === 'in_review') {
+        showToast({ message: 'Sent for review ✅', tone: 'success', icon: 'shield-checkmark' });
+      } else if (updated.status === 'completed') {
+        showToast({
+          message: 'Task completed 🎉',
+          tone: 'success',
+          actionLabel: 'Undo',
+          onAction: async () => {
+            const r = await api.put(`/tasks/${task.id}/status`, { status: 'pending' }).catch(() => null);
+            if (r) setTasks((prev) => prev.map((t) => (t.id === task.id ? r.data.task : t)));
           },
-        },
-      ]
-    );
-  }, [fetchTasks, refreshUser, t]);
+        });
+      }
+      if (statusFilter === 'open' && updated.status === 'completed') {
+        setTimeout(() => setTasks((prev) => prev.filter((t) => t.id !== task.id)), 700);
+      }
+    } catch (err) {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+      showToast({ message: err.response?.data?.error || 'Could not update the task', tone: 'error' });
+    }
+  }, [statusFilter]);
 
-  const renderTask = useCallback(({ item: task, index }) => (
-    <FadeInItem index={index}>
-      <TaskItem
-        task={task}
-        colors={colors}
-        styles={styles}
-        t={t}
-        lang={lang}
-        getDynamic={getDynamic}
-        isAdmin={isAdmin}
-        onComplete={handleComplete}
-        onHold={handleHold}
-        onWarn={openWarn}
-        onEdit={openEdit}
-        onDelete={handleDelete}
-      />
-    </FadeInItem>
-  ), [colors, styles, t, lang, getDynamic, isAdmin, handleComplete, handleHold, openWarn, openEdit, handleDelete]);
+  const openTask = useCallback((task) => navigation.navigate('TaskDetail', { taskId: task.id }), [navigation]);
 
-  if (loading) return (
-    <Screen style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.header}>{t('tasks')}</Text>
-      </View>
-      <SkeletonList count={6} type="task" />
-    </Screen>
-  );
+  const selectedBiz = businesses.find((b) => b.id === businessId);
+  const viewCounts = { mine: summary?.mine_open, delegated: summary?.delegated_open };
 
   return (
-    <Screen style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.header}>{t('tasks')}</Text>
-        <AnimatedPressable style={styles.addBtn} onPress={openCreate} haptic="light">
-          <Ionicons name="add" size={24} color={colors.white} />
-        </AnimatedPressable>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Tasks</Text>
+          {summary && (
+            <Text style={styles.subtitle}>
+              {summary.mine_open} open for you
+              {summary.overdue ? ` · ${summary.overdue} overdue` : ''}
+              {summary.completed_week ? ` · ${summary.completed_week} done this week` : ''}
+            </Text>
+          )}
+        </View>
+        <IconButton icon={searchOpen ? 'close' : 'search'} onPress={() => { setSearchOpen((s) => !s); setQuery(''); }} />
+        <IconButton icon="shield-checkmark-outline" badge={approvalCount} onPress={() => navigation.navigate('Approvals')} accessibilityLabel="Approvals" />
       </View>
 
-      {error && <ErrorBanner message={error} />}
-
-      {isAdmin && businesses.length > 0 && (
-        <View style={styles.filters}>
-          <View style={styles.filterItem}>
-            <Text style={styles.filterLabel}>{t('business')}</Text>
-            <View style={styles.pickerWrap}>
-              <DropdownPicker
-                selectedValue={filterBusiness}
-                onValueChange={setFilterBusiness}
-                items={[
-                  { label: t('allBusinesses'), value: 'all' },
-                  ...businesses.map((b) => ({ label: getDynamic(b.name), value: b.id.toString() })),
-                ]}
-              />
-            </View>
-          </View>
-          <View style={styles.filterItem}>
-            <Text style={styles.filterLabel}>{t('status')}</Text>
-            <View style={styles.pickerWrap}>
-              <DropdownPicker
-                selectedValue={filterStatus}
-                onValueChange={setFilterStatus}
-                items={[
-                  { label: t('allStatus'), value: 'all' },
-                  { label: t('pending'), value: 'pending' },
-                  { label: t('completed'), value: 'completed' },
-                  { label: t('onHold'), value: 'on_hold' },
-                  { label: t('warned'), value: 'warned' },
-                ]}
-              />
-            </View>
-          </View>
-        </View>
+      {searchOpen && (
+        <Animated.View entering={FadeIn.duration(150)} style={styles.searchBox}>
+          <Ionicons name="search" size={16} color={colors.gray[400]} />
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search tasks"
+            placeholderTextColor={colors.gray[400]}
+            style={styles.searchInput}
+          />
+        </Animated.View>
       )}
 
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderTask}
-        extraData={lang}
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.list, { paddingBottom: 90 + insets.bottom }]}
-        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
-        initialNumToRender={10}
-        maxToRenderPerBatch={6}
-        windowSize={10}
-        removeClippedSubviews
-        ListEmptyComponent={
-          <EmptyState
-            icon={<Ionicons name="clipboard-outline" size={32} color={colors.gray[300]} />}
-            message={t('noTasksYetTasks')}
+      {/* View switcher */}
+      <View style={styles.segment}>
+        {VIEWS.map((v) => {
+          const active = view === v.key;
+          return (
+            <AnimatedPressable key={v.key} style={[styles.segmentItem, active && styles.segmentActive]} onPress={() => setView(v.key)} haptic="light">
+              <Ionicons name={v.icon} size={14} color={active ? colors.brand[600] : colors.gray[500]} />
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v.label}</Text>
+              {!!viewCounts[v.key] && <Text style={[styles.segmentCount, active && { color: colors.brand[600] }]}>{viewCounts[v.key]}</Text>}
+            </AnimatedPressable>
+          );
+        })}
+      </View>
+
+      {/* Filters */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.filters}>
+        <Chip
+          icon="business"
+          label={selectedBiz ? selectedBiz.name : 'All businesses'}
+          color={selectedBiz ? accent(selectedBiz.color) : colors.gray[600]}
+          active={!!selectedBiz}
+          onPress={() => setBizPickerOpen(true)}
+          onRemove={selectedBiz ? () => setBusinessId(null) : undefined}
+        />
+        {TASK_FILTERS.map((f) => (
+          <Chip
+            key={f.key}
+            label={f.key === 'overdue' && summary?.overdue ? `Overdue ${summary.overdue}` : f.label}
+            color={f.key === 'overdue' ? colors.red[600] : colors.brand[600]}
+            active={statusFilter === f.key}
+            onPress={() => setStatusFilter(f.key)}
           />
-        }
+        ))}
+      </ScrollView>
+
+      {loading ? (
+        <SkeletonList count={5} type="task" />
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.list, { paddingBottom: 140 + insets.bottom }]}
+          refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTasks(); }} />}
+        >
+          {tasks.map((task) => (
+            <Animated.View key={task.id} layout={LinearTransition.springify().damping(18)} entering={FadeIn.duration(200)} exiting={FadeOut.duration(160)}>
+              <TaskCard task={task} currentUserId={user?.id} onPress={openTask} onToggle={toggleTask} />
+            </Animated.View>
+          ))}
+          {tasks.length === 0 && (
+            <EmptyHero
+              icon={statusFilter === 'completed' ? 'trophy-outline' : view === 'delegated' ? 'arrow-redo-outline' : 'checkmark-done'}
+              title={query ? 'No tasks match' : view === 'mine' ? 'Nothing on your plate' : view === 'delegated' ? 'You haven’t assigned anything' : 'No tasks here'}
+              message={view === 'delegated'
+                ? 'Tap “New task” to hand work to someone — in your business or any other.'
+                : 'New tasks assigned to you will show up here instantly.'}
+            />
+          )}
+        </ScrollView>
+      )}
+
+      <Fab icon="add" label="New task" color={colors.brand[600]} onPress={() => setFormOpen(true)} bottom={24 + insets.bottom} />
+
+      <TaskFormSheet
+        visible={!!formOpen}
+        onClose={() => setFormOpen(false)}
+        preset={typeof formOpen === 'object' ? formOpen : (businessId ? { business_id: businessId } : undefined)}
+        onSaved={() => fetchTasks()}
       />
 
-      {/* Create Modal */}
-      <Modal open={createModalOpen} onClose={() => setCreateModalOpen(false)} title={t('addTask')}>
-        {formError && <ErrorBanner message={formError} />}
-        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder={t('taskTitlePlaceholder')} />
-        <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder={t('selectDueDate')} />
-        {isAdmin && (
-          <View style={styles.pickerField}>
-            <Text style={styles.pickerLabel}>{t('business')}</Text>
-            <View style={styles.pickerWrap}>
-              <DropdownPicker
-                selectedValue={form.business_id}
-                onValueChange={(v) => {
-                  setForm({ ...form, business_id: v, assigned_user_id: '' });
-                  fetchBusinessUsers(v);
-                }}
-                items={[
-                  { label: t('selectBusinessPlaceholder'), value: '' },
-                  ...businesses.map((b) => ({ label: getDynamic(b.name), value: b.id.toString() })),
-                ]}
-              />
-            </View>
-          </View>
-        )}
-        {businessUsers.length > 0 && (
-          <View style={styles.pickerField}>
-            <Text style={styles.pickerLabel}>{t('assignToUser')} ({t('optional')})</Text>
-            <View style={styles.pickerWrap}>
-              <DropdownPicker
-                selectedValue={form.assigned_user_id}
-                onValueChange={(v) => setForm({ ...form, assigned_user_id: v })}
-                items={[
-                  { label: t('allUsersInBusiness'), value: '' },
-                  ...businessUsers.map((u) => ({ label: getDynamic(u.name), value: u.id.toString() })),
-                ]}
-              />
-            </View>
-          </View>
-        )}
-        <View style={styles.modalActions}>
-          <SecondaryButton onPress={() => setCreateModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
-            {t('cancel')}
-          </SecondaryButton>
-          <PrimaryButton onPress={handleCreate} loading={saving} style={{ flex: 1, marginLeft: spacing.sm }}>
-            {saving ? t('creating') : t('createTask')}
-          </PrimaryButton>
-        </View>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t('editTask')}>
-        {formError && <ErrorBanner message={formError} />}
-        <Input label={t('title')} value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder={t('taskTitlePlaceholder')} />
-        <MultilineInput label={t('description')} value={form.description} onChangeText={(v) => setForm({ ...form, description: v })} placeholder={t('optionalDetails')} />
-        <DateInput label={t('dueDate')} value={form.due_date} onChangeText={(v) => setForm({ ...form, due_date: v })} placeholder={t('selectDueDate')} />
-        <View style={styles.modalActions}>
-          <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
-            {t('cancel')}
-          </SecondaryButton>
-          <PrimaryButton onPress={handleEdit} loading={saving} style={{ flex: 1, marginLeft: spacing.sm }}>
-            {saving ? t('saving') : t('updateTask')}
-          </PrimaryButton>
-        </View>
-      </Modal>
-
-      {/* Warn Modal */}
-      <Modal open={warnModalOpen} onClose={() => setWarnModalOpen(false)} title={t('sendWarning')}>
-        {warnError && <ErrorBanner message={warnError} />}
-        {warningTask && (
-          <View style={styles.warnTaskInfo}>
-            <Text style={styles.warnTaskTitle}>{getDynamic(warningTask.title)}</Text>
-          </View>
-        )}
-        <MultilineInput
-          label={t('warningMessage')}
-          value={warnMessage}
-          onChangeText={setWarnMessage}
-          placeholder={t('enterWarningMessage')}
-          rows={4}
-        />
-        <View style={styles.modalActions}>
-          <SecondaryButton onPress={() => setWarnModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
-            {t('cancel')}
-          </SecondaryButton>
-          <DangerButton onPress={handleWarn} loading={sendingWarn} style={{ flex: 1, marginLeft: spacing.sm }}>
-            {sendingWarn ? t('sending') : t('sendWarning')}
-          </DangerButton>
-        </View>
-      </Modal>
-    </Screen>
+      <BottomSheet visible={bizPickerOpen} onClose={() => setBizPickerOpen(false)} maxHeight={520}>
+        <Text style={styles.sheetTitle}>Filter by business</Text>
+        <ScrollView style={{ flexShrink: 1 }}>
+          <AnimatedPressable style={styles.bizRow} onPress={() => { setBusinessId(null); setBizPickerOpen(false); }} haptic="light">
+            <Ionicons name="grid-outline" size={18} color={colors.gray[500]} />
+            <Text style={styles.bizName}>All businesses</Text>
+            {!businessId && <Ionicons name="checkmark" size={18} color={colors.brand[600]} />}
+          </AnimatedPressable>
+          {businesses.map((b) => (
+            <AnimatedPressable key={b.id} style={styles.bizRow} onPress={() => { setBusinessId(b.id); setBizPickerOpen(false); }} haptic="light">
+              <View style={[styles.bizDot, { backgroundColor: accent(b.color) }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bizName}>{b.name}</Text>
+                {!!b.heads?.length && <Text style={styles.bizHeads}>Head: {b.heads.map((h) => h.name).join(', ')}</Text>}
+              </View>
+              {businessId === b.id && <Ionicons name="checkmark" size={18} color={colors.brand[600]} />}
+            </AnimatedPressable>
+          ))}
+        </ScrollView>
+      </BottomSheet>
+    </View>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.gray[50],
-  },
-  headerRow: {
+  container: { flex: 1, backgroundColor: colors.gray[50] },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.xs },
+  title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
+  subtitle: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
+  searchBox: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray[200],
   },
-  header: {
-    fontSize: fontSize.xxxl,
-    fontWeight: '700',
-    color: colors.gray[900],
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' },
+  segment: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: 4,
+    borderRadius: radius.lg,
+    backgroundColor: colors.gray[100],
   },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.brand[600],
+  segmentItem: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  filterItem: {
-    flex: 1,
-  },
-  filterLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.gray[600],
-    marginBottom: spacing.xs,
-  },
-  pickerWrap: {
-    borderWidth: 1,
-    borderColor: colors.gray[300],
+    gap: 5,
+    paddingVertical: 8,
     borderRadius: radius.md,
+  },
+  segmentActive: {
     backgroundColor: colors.white,
-    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
-  picker: {
-    height: 44,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: 0,
-    gap: spacing.sm,
-  },
-  taskCard: {
-    padding: spacing.lg,
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  taskInfo: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  taskTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.gray[900],
-  },
-  taskBusiness: {
-    fontSize: fontSize.sm,
-    color: colors.gray[400],
-    marginTop: 2,
-  },
-  taskDesc: {
-    fontSize: fontSize.sm,
-    color: colors.gray[500],
-    marginTop: spacing.xs,
-  },
-  taskAssigned: {
-    fontSize: fontSize.sm,
-    color: colors.gray[500],
-    marginTop: spacing.xs,
-  },
-  taskDue: {
-    fontSize: fontSize.sm,
-    color: colors.gray[500],
-    marginTop: spacing.xs,
-  },
-  taskOverdue: {
-    color: colors.red[600],
-    fontWeight: '500',
-  },
-  taskCompletedBy: {
-    fontSize: fontSize.sm,
-    color: colors.green[600],
-    marginTop: spacing.xs,
-  },
-  taskBadges: {
-    flexDirection: 'column',
-    gap: spacing.xs,
-    alignItems: 'flex-end',
-  },
-  taskActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[100],
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  actionText: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-  },
-  pickerField: {
-    marginBottom: spacing.md,
-  },
-  pickerLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.gray[700],
-    marginBottom: spacing.xs,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    marginTop: spacing.md,
-  },
-  warnTaskInfo: {
-    backgroundColor: colors.gray[50],
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  warnTaskTitle: {
-    fontSize: fontSize.base,
-    fontWeight: '600',
-    color: colors.gray[900],
-  },
-  taskCreatedBy: {
-    fontSize: fontSize.sm,
-    color: colors.gray[400],
-    marginTop: spacing.xs,
-  },
-  warningBox: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.red[50],
-    borderLeftWidth: 3,
-    borderLeftColor: colors.red[500],
-    borderRadius: radius.sm,
-    padding: spacing.sm,
-  },
-  warningLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.red[700],
-  },
-  warningText: {
-    fontSize: fontSize.sm,
-    color: colors.red[700],
-    marginTop: 2,
-  },
+  segmentText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[500] },
+  segmentTextActive: { color: colors.gray[900] },
+  segmentCount: { fontSize: 11, fontWeight: '700', color: colors.gray[400] },
+  filters: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  list: { paddingHorizontal: spacing.lg },
+  sheetTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.gray[900], paddingHorizontal: spacing.sm, marginBottom: spacing.sm },
+  bizRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
+  bizDot: { width: 12, height: 12, borderRadius: 6 },
+  bizName: { flex: 1, fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
+  bizHeads: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 2 },
 });

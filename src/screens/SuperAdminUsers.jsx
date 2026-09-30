@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AnimatedPressable from '../components/AnimatedPressable';
+import BackTitle from '../components/BackTitle';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import api from '../api/client';
@@ -230,7 +231,7 @@ export default function SuperAdminUsers() {
 
   if (loading) return (
     <Screen style={styles.container}>
-      <Text style={styles.header}>{t('allUsers')}</Text>
+      <BackTitle style={styles.header} title={t('allUsers')} />
       <SkeletonList count={6} type="task" />
     </Screen>
   );
@@ -246,7 +247,7 @@ export default function SuperAdminUsers() {
         contentContainerStyle={styles.content}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.header}>{t('allUsers')}</Text>
+        <BackTitle style={styles.header} title={t('allUsers')} />
         {pwSuccess && <SuccessBanner message={pwSuccess} />}
         {error && <ErrorBanner message={error} />}
 

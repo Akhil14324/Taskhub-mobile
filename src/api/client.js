@@ -1,8 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from '../utils/secureStorage';
 import { navigate, getCurrentRouteName } from '../navigation/navigationRef';
-
-const API_URL = 'https://vgrand-taskhub-backend.onrender.com/api';
+import { API_URL } from '../config';
 
 const api = axios.create({
   baseURL: API_URL,

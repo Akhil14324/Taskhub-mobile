@@ -15,7 +15,11 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ChatProvider } from './context/ChatContext';
+import { TodoProvider } from './context/TodoContext';
+import { NotificationProvider } from './context/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import DialogHost from './components/DialogHost';
+import ToastHost from './components/ToastHost';
 import AppNavigator from './navigation/AppNavigator';
 
 // Prevent splash screen from auto-hiding so we can control the transition
@@ -87,13 +91,19 @@ function AppRoot() {
         <ThemedStatusBar />
         <AuthProvider>
           <ChatProvider>
-            <LanguageProvider>
-              <ErrorBoundary>
-                <ThemeCrossfade>
-                  <AppNavigator />
-                </ThemeCrossfade>
-              </ErrorBoundary>
-            </LanguageProvider>
+            <TodoProvider>
+              <NotificationProvider>
+                <LanguageProvider>
+                  <ErrorBoundary>
+                    <ThemeCrossfade>
+                      <AppNavigator />
+                    </ThemeCrossfade>
+                  </ErrorBoundary>
+                  <ToastHost />
+                  <DialogHost />
+                </LanguageProvider>
+              </NotificationProvider>
+            </TodoProvider>
           </ChatProvider>
         </AuthProvider>
       </SafeAreaProvider>

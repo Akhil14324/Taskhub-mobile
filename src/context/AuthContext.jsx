@@ -23,14 +23,18 @@ export function AuthProvider({ children }) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await api.get('/auth/me', { signal: controller.signal });
+      const res = await api.get('/auth/me', { signal: controller.signal, __skipOops: true });
       setUser(res.data.user);
       try {
         await SecureStore.setItemAsync('user', JSON.stringify(res.data.user));
       } catch {}
     } catch (err) {
+      const status = err.response?.status;
       if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError' || err.name === 'AbortError') {
         console.warn('[auth] session validation timed out');
+      } else if (!status || status >= 500) {
+        // Offline or the server is waking up — keep the cached session.
+        console.warn('[auth] could not validate session:', err.message);
       } else {
         try {
           await SecureStore.deleteItemAsync('token');

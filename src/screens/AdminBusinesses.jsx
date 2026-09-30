@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AnimatedPressable from '../components/AnimatedPressable';
+import BackTitle from '../components/BackTitle';
 import { DropdownPicker } from '../components/DropdownPicker';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
@@ -230,7 +231,7 @@ export default function AdminBusinesses() {
   if (loading) return (
     <Screen style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.header}>{t('businesses')}</Text>
+        <BackTitle style={styles.header} title={t('businesses')} />
       </View>
       <SkeletonList count={6} type="task" />
     </Screen>
@@ -239,7 +240,7 @@ export default function AdminBusinesses() {
   return (
     <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.headerRow}>
-        <Text style={styles.header}>{t('businesses')}</Text>
+        <BackTitle style={styles.header} title={t('businesses')} />
         <AnimatedPressable style={styles.addBtn} onPress={openCreate} haptic="light">
           <Ionicons name="add" size={24} color={colors.white} />
         </AnimatedPressable>

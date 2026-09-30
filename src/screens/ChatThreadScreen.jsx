@@ -36,6 +36,9 @@ import { Screen } from '../components/UI';
 import SmartImage from '../components/SmartImage';
 import BottomSheet from '../components/BottomSheet';
 import HeroImage from '../components/HeroImage';
+import SharedTodosCard from '../components/SharedTodosCard';
+import MentionSuggestions from '../components/MentionSuggestions';
+import { activeMentionQuery, completeMention } from '../utils/quickAdd';
 import AnimatedPressable from '../components/AnimatedPressable';
 import TypingIndicator from '../components/TypingIndicator';
 
@@ -285,6 +288,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                           </View>
                         </Pressable>
                       )}
+                      {item.meta?.kind === 'todos' && <SharedTodosCard meta={item.meta} isOwn={isOwn} />}
                       {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]} selectable>{getDynamic(item.body)}</Text>}
                       {item.attachmentUrl && item.attachmentType?.startsWith('image/') && (
                         <HeroImage source={item.attachmentUrl} thumbStyle={styles.msgImage} />
@@ -585,6 +589,15 @@ export default function ChatThreadScreen() {
   }, [conversation, user.id, getDynamic]);
 
   const otherParticipants = conversation?.participants?.filter((p) => String(p.id) !== String(user.id)) || [];
+
+  // "@na…" in a group chat → suggest members; @all notifies everyone.
+  const mentionQuery = conversation?.type === 'group' ? activeMentionQuery(text) : null;
+  const mentionCandidates = mentionQuery === null ? [] : [
+    ...('all'.startsWith(mentionQuery.toLowerCase()) ? [{ id: 'all', name: 'Everyone in this group', username: 'all' }] : []),
+    ...otherParticipants
+      .filter((p) => p.username && (p.username.toLowerCase().includes(mentionQuery.toLowerCase()) || p.name?.toLowerCase().includes(mentionQuery.toLowerCase())))
+      .slice(0, 6),
+  ];
   const isOtherOnline = otherParticipants.length > 0 && otherParticipants.some((p) => onlineUsers.has(p.id));
 
   const handleSend = async () => {
@@ -1148,6 +1161,14 @@ export default function ChatThreadScreen() {
             <Ionicons name="close" size={20} color={colors.gray[500]} />
           </AnimatedPressable>
         </Animated.View>
+      )}
+
+      {mentionCandidates.length > 0 && (
+        <MentionSuggestions
+          people={mentionCandidates}
+          onPick={(p) => setText((current) => completeMention(current, p.username))}
+          style={{ marginHorizontal: spacing.md, marginBottom: spacing.xs }}
+        />
       )}
 
       {typingText && (

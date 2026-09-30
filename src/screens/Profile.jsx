@@ -15,6 +15,9 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { SkeletonBlock } from '../components/Skeleton';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
+import BackTitle from '../components/BackTitle';
+import { useNotifications } from '../context/NotificationContext';
+import { showToast } from '../utils/events';
 
 function getRoleStyles(colors) {
   return {
@@ -58,6 +61,7 @@ export default function Profile() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+  const { pushState, enablePush } = useNotifications();
 
   const [stats, setStats] = useState(null);
   const [businesses, setBusinesses] = useState([]);
@@ -275,6 +279,10 @@ export default function Profile() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + spacing.xxxl }]}
       refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      <View style={{ marginBottom: spacing.md }}>
+        <BackTitle title={t('profile')} style={{ fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900] }} />
+      </View>
+
       {/* Header Card */}
       <Card style={styles.headerCard}>
         <View style={styles.headerRow}>
@@ -285,7 +293,7 @@ export default function Profile() {
             <Text style={styles.userName}>{getDynamic(user?.name)}</Text>
             <View style={styles.headerBadges}>
               <Badge bg={roleBadgeStyle.bg} color={roleBadgeStyle.text}>
-                {roleLabel}
+                {user?.display_title || roleLabel}
               </Badge>
               <Badge bg={statusBadgeStyle.bg} color={statusBadgeStyle.text}>
                 {t(user?.status || 'active')}
@@ -323,15 +331,45 @@ export default function Profile() {
           <Text style={styles.emptyText}>{t('notAssignedToBusiness')}</Text>
         ) : (
           <View style={styles.badgeRow}>
-            {businesses.map((biz) => (
-              <Badge key={biz.id} bg={colors.brand[100]} color={colors.brand[700]}>
-                {getDynamic(biz.name)}
-              </Badge>
-            ))}
+            {businesses.map((biz) => {
+              const m = user?.memberships?.find((x) => x.business_id === biz.id);
+              return (
+                <Badge key={biz.id} bg={colors.brand[100]} color={colors.brand[700]}>
+                  {getDynamic(biz.name)}{m ? ` · ${m.title || m.designation_label}` : ''}
+                </Badge>
+              );
+            })}
           </View>
         )}
       </Card>
 
+      {/* Notifications */}
+      <Card style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="notifications-outline" size={18} color={colors.gray[400]} />
+          <Text style={styles.sectionTitle}>Notifications on this device</Text>
+        </View>
+        <Text style={styles.emptyText}>
+          {pushState === 'granted' ? 'On — you’ll get alerts for tasks, @mentions, reminders and chats.'
+            : pushState === 'denied' ? 'Blocked. Allow notifications for this site in your browser/phone settings.'
+              : pushState === 'needs-install' ? 'On iPhone, add TaskHub to your Home Screen first (Share → Add to Home Screen), then open it from there.'
+                : pushState === 'unconfigured' ? 'Push isn’t configured on this build yet (Firebase keys missing).'
+                  : pushState === 'unsupported' ? 'This browser doesn’t support push notifications.'
+                    : 'Off — turn them on so you never miss a task.'}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+          {pushState === 'default' && (
+            <PrimaryButton onPress={async () => { const r = await enablePush(); if (r === 'granted') showToast({ message: 'Notifications are on 🔔', tone: 'success' }); }} style={{ flex: 1 }}>
+              Turn on notifications
+            </PrimaryButton>
+          )}
+          {pushState === 'granted' && (
+            <SecondaryButton onPress={() => api.post('/notifications/test').then(() => showToast({ message: 'Test sent — check your notifications', tone: 'success' })).catch(() => showToast({ message: 'Could not send a test', tone: 'error' }))} style={{ flex: 1 }}>
+              Send me a test
+            </SecondaryButton>
+          )}
+        </View>
+      </Card>
       {/* Account Details */}
       <Card style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('accountDetails')}</Text>

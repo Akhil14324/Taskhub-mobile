@@ -16,16 +16,24 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
+import { useTodos } from '../context/TodoContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { MoreMenu } from '../components/UI';
 import { addNotificationResponseListener } from '../services/notifications';
+import { openNotificationTarget } from './navigationRef';
+import { todayYmd } from '../utils/dates';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
-import DashboardScreen from '../screens/Dashboard';
-import AdminDashboardScreen from '../screens/AdminDashboard';
+import HomeScreen from '../screens/HomeScreen';
+import TodosScreen from '../screens/TodosScreen';
+import TaskDetailScreen from '../screens/TaskDetailScreen';
+import ApprovalsScreen from '../screens/ApprovalsScreen';
+import OrganizationScreen from '../screens/OrganizationScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import TasksScreen from '../screens/Tasks';
 import NotificationsScreen from '../screens/Notifications';
 import AdminBusinessesScreen from '../screens/AdminBusinesses';
@@ -110,17 +118,28 @@ function MainTabs() {
   const { t } = useLang();
   const colors = useColors();
   const { totalUnread: chatUnread } = useChat();
+  const { todos } = useTodos();
+  const { unreadCount, approvalCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [moreVisible, setMoreVisible] = useState(false);
 
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+  const today = todayYmd();
+  const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today).length;
 
   const moreItems = [
-    { label: t('notifications'), icon: 'notifications-outline', route: 'Notifications' },
-    { label: t('chat'), icon: 'chatbubble-outline', route: 'ChatList' },
+    { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
+    { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
+    { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { label: t('profile'), icon: 'person-outline', route: 'Profile' },
+    ...(isAdmin
+      ? [
+        { label: t('businesses'), icon: 'business-outline', route: 'Businesses' },
+        { label: t('users'), icon: 'people-outline', route: 'Users' },
+      ]
+      : []),
     ...(isSuperAdmin
       ? [{ label: t('userPasswords'), icon: 'key-outline', route: 'UserPasswords' }]
       : []),
@@ -162,11 +181,21 @@ function MainTabs() {
       >
         <Tab.Screen
           name="Dashboard"
-          component={isAdmin ? AdminDashboardScreen : DashboardScreen}
+          component={HomeScreen}
           options={{
-            tabBarLabel: isAdmin ? t('home') : t('dashboard'),
+            tabBarLabel: t('home'),
             tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} />
+              <AnimatedTabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} badge={unreadCount} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Todos"
+          component={TodosScreen}
+          options={{
+            tabBarLabel: 'To-do',
+            tabBarIcon: ({ focused, color }) => (
+              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge} />
             ),
           }}
         />
@@ -176,7 +205,7 @@ function MainTabs() {
           options={{
             tabBarLabel: t('tasks'),
             tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'clipboard' : 'clipboard-outline'} focused={focused} color={color} />
+              <AnimatedTabIcon name={focused ? 'clipboard' : 'clipboard-outline'} focused={focused} color={color} badge={approvalCount} />
             ),
           }}
         />
@@ -190,30 +219,6 @@ function MainTabs() {
             ),
           }}
         />
-        {isAdmin && (
-          <>
-            <Tab.Screen
-              name="Businesses"
-              component={AdminBusinessesScreen}
-              options={{
-                tabBarLabel: t('businesses'),
-                tabBarIcon: ({ focused, color }) => (
-                  <AnimatedTabIcon name={focused ? 'business' : 'business-outline'} focused={focused} color={color} />
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Users"
-              component={AdminUsersScreen}
-              options={{
-                tabBarLabel: t('users'),
-                tabBarIcon: ({ focused, color }) => (
-                  <AnimatedTabIcon name={focused ? 'people' : 'people-outline'} focused={focused} color={color} />
-                ),
-              }}
-            />
-          </>
-        )}
         <Tab.Screen
           name="More"
           component={MorePlaceholder}
@@ -317,14 +322,8 @@ export default function AppNavigator() {
     if (!user) return;
 
     notificationListenerRef.current = addNotificationResponseListener((response) => {
-      const data = response.notification.request.content.data;
-      if (!data) return;
-
-      if (data.type === 'chat' && data.conversationId) {
-        navigationRef.current?.navigate('ChatThread', { conversationId: data.conversationId });
-      } else if (data.type === 'overdue' || data.type === 'task_added' || data.type === 'task_completed' || data.type === 'warning' || data.type === 'assignment') {
-        navigationRef.current?.navigate('Main', { screen: 'Notifications' });
-      }
+      const data = response?.notification?.request?.content?.data;
+      if (data) openNotificationTarget(data);
     });
 
     return () => {
@@ -356,14 +355,23 @@ export default function AppNavigator() {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
           </>
+        ) : user.must_change_password ? (
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         ) : (
-          <Stack.Screen name="Main" component={MainTabs} />
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
+            <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
+            <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
+            <Stack.Screen name="Approvals" component={ApprovalsScreen} />
+            <Stack.Screen name="Organization" component={OrganizationScreen} />
+            <Stack.Screen name="Businesses" component={AdminBusinessesScreen} />
+            <Stack.Screen name="Users" component={AdminUsersScreen} />
+            <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+          </>
         )}
-        <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
-        <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
-        <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
-        <Stack.Screen name="Notifications" component={NotificationsScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Legal" component={LegalScreen} />
         <Stack.Screen name="Oops" component={OopsScreen} />
       </Stack.Navigator>

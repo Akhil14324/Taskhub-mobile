@@ -1,58 +1,63 @@
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
+import { useChat } from '../context/ChatContext';
+import { useNotifications } from '../context/NotificationContext';
 import api from '../api/client';
-import { Card, Badge, ErrorBanner, EmptyState, Screen } from '../components/UI';
-import { PrimaryButton } from '../components/Button';
+import { ErrorBanner, EmptyState } from '../components/UI';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { SkeletonList } from '../components/Skeleton';
 import { FadeInItem } from '../components/StaggeredFadeIn';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
+import { IconButton } from '../components/kit';
+import { openNotificationTarget } from '../navigation/navigationRef';
+import { timeAgo } from '../utils/dates';
+import { showToast, confirmDialog } from '../utils/events';
 
 function getNotifIcons(colors) {
   return {
     warning: { icon: 'warning', color: colors.red[600], bg: colors.red[50] },
-    assignment: { icon: 'person-add', color: colors.brand[600], bg: colors.brand[50] },
+    assignment: { icon: 'business', color: colors.brand[600], bg: colors.brand[50] },
     task_added: { icon: 'add-circle', color: colors.blue[600], bg: colors.blue[50] },
+    task_assigned: { icon: 'person-add', color: colors.blue[600], bg: colors.blue[50] },
+    task_status: { icon: 'swap-horizontal', color: colors.blue[600], bg: colors.blue[50] },
+    task_comment: { icon: 'chatbubble-ellipses', color: colors.brand[600], bg: colors.brand[50] },
+    task_deleted: { icon: 'trash', color: colors.gray[600], bg: colors.gray[100] },
     user_joined: { icon: 'person', color: colors.purple[600], bg: colors.purple[50] },
     task_completed: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
+    task_approved: { icon: 'ribbon', color: colors.green[600], bg: colors.green[50] },
+    task_rejected: { icon: 'arrow-undo', color: colors.amber[600], bg: colors.amber[50] },
+    approval_request: { icon: 'shield-checkmark', color: colors.purple[600], bg: colors.purple[50] },
+    approval_approved: { icon: 'checkmark-done-circle', color: colors.green[600], bg: colors.green[50] },
+    approval_rejected: { icon: 'close-circle', color: colors.red[600], bg: colors.red[50] },
+    overdue: { icon: 'alarm', color: colors.red[600], bg: colors.red[50] },
+    mention: { icon: 'at', color: colors.brand[600], bg: colors.brand[50] },
+    todo_shared: { icon: 'list', color: '#dc4c3e', bg: colors.red[50] },
+    todo_reminder: { icon: 'alarm', color: colors.amber[600], bg: colors.amber[50] },
+    todo_done: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
   };
 }
 
-function timeAgo(dateStr, t) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t('justNow');
-  if (mins < 60) return `${mins}${t('minAgo')}`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}${t('hrAgo')}`;
-  const days = Math.floor(hrs / 24);
-  return `${days}${t('dayAgo')}`;
-}
-
-const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, t, onMarkRead }) => {
+const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, onPress }) => {
   const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
   return (
-    <AnimatedPressable
-      onPress={() => !item.is_read && onMarkRead(item.id)}
-      activeOpacity={0.7}
-      haptic="light"
-    >
-      <Card style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
+    <AnimatedPressable onPress={() => onPress(item)} haptic="light">
+      <View style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
         <View style={[styles.notifIcon, { backgroundColor: config.bg }]}>
           <Ionicons name={config.icon} size={20} color={config.color} />
         </View>
         <View style={styles.notifContent}>
-          <Text style={styles.notifMessage}>{getDynamic(item.message)}</Text>
-          <Text style={styles.notifTime}>{timeAgo(item.created_at, t)}</Text>
+          {!!item.title && <Text style={styles.notifTitle} numberOfLines={2}>{getDynamic(item.title)}</Text>}
+          <Text style={item.title ? styles.notifBody : styles.notifMessage} numberOfLines={3}>{getDynamic(item.message)}</Text>
+          <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
         </View>
         {!item.is_read && <View style={styles.unreadDot} />}
-      </Card>
+      </View>
     </AnimatedPressable>
   );
 });
@@ -62,17 +67,19 @@ export default function Notifications() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { subscribe } = useChat();
+  const { markAllRead, decrementUnread, refreshCounts } = useNotifications();
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await api.get('/notifications');
+      const res = await api.get('/notifications', { params: { limit: 100 } });
       setNotifications(res.data.notifications || []);
-      setUnreadCount(res.data.unread_count || 0);
+      setError('');
     } catch (err) {
       setError(err.response?.data?.error || t('failedLoadNotifications'));
     } finally {
@@ -85,38 +92,51 @@ export default function Notifications() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Translate notification messages when in Telugu
+  // New notifications appear at the top while the screen is open.
+  useEffect(() => subscribe('notification:new', (n) => {
+    setNotifications((prev) => (prev.some((p) => p.id === n.id) ? prev : [n, ...prev]));
+  }), [subscribe]);
+
   useEffect(() => {
     if (lang !== 'te' || notifications.length === 0) return;
-    const texts = notifications.map((n) => n.message).filter(Boolean);
+    const texts = notifications.flatMap((n) => [n.title, n.message]).filter(Boolean);
     const unique = [...new Set(texts)];
     if (unique.length > 0) translateDynamic(unique);
   }, [notifications, lang, translateDynamic]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications();
-  };
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  const handleMarkRead = useCallback(async (id) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      Alert.alert(t('error'), err.response?.data?.error || t('failedMarkRead'));
+  const handlePress = useCallback(async (item) => {
+    if (!item.is_read) {
+      setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, is_read: true } : n)));
+      decrementUnread();
+      api.put(`/notifications/${item.id}/read`).catch(() => {});
     }
-  }, [t]);
+    const data = item.data || {};
+    if (data.conversationId || data.taskId || data.todoId || data.approvalId || item.type === 'approval_request' || item.type === 'user_joined') {
+      openNotificationTarget({ type: item.type, ...data });
+    }
+  }, [decrementUnread]);
 
   const handleMarkAllRead = async () => {
     try {
       await api.put('/notifications/read-all');
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
+      markAllRead();
     } catch (err) {
-      Alert.alert(t('error'), err.response?.data?.error || t('failedMarkAllRead'));
+      showToast({ message: err.response?.data?.error || t('failedMarkAllRead'), tone: 'error' });
+    }
+  };
+
+  const handleClearRead = async () => {
+    const ok = await confirmDialog({ title: 'Clear read notifications?', message: 'Unread ones stay.', confirmLabel: 'Clear', destructive: true });
+    if (!ok) return;
+    try {
+      await api.delete('/notifications/read');
+      setNotifications((prev) => prev.filter((n) => !n.is_read));
+      refreshCounts();
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not clear', tone: 'error' });
     }
   };
 
@@ -131,131 +151,74 @@ export default function Notifications() {
           styles={styles}
           notifIcons={notifIcons}
           getDynamic={getDynamic}
-          t={t}
-          onMarkRead={handleMarkRead}
+          onPress={handlePress}
         />
       </FadeInItem>
     ),
-    [colors, styles, notifIcons, getDynamic, t, handleMarkRead]
-  );
-
-  if (loading) return (
-    <Screen style={styles.container}>
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.header}>{t('notifications')}</Text>
-        </View>
-      </View>
-      <SkeletonList count={6} type="notification" />
-    </Screen>
+    [colors, styles, notifIcons, getDynamic, handlePress]
   );
 
   return (
-    <Screen style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.headerRow}>
-        <View>
+        {navigation.canGoBack() && <IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
+        <View style={{ flex: 1 }}>
           <Text style={styles.header}>{t('notifications')}</Text>
-          {unreadCount > 0 && (
-            <Badge bg={colors.brand[100]} color={colors.brand[700]} style={styles.unreadBadge}>
-              {unreadCount} {t('new')}
-            </Badge>
-          )}
+          <Text style={styles.subheader}>{unreadCount > 0 ? `${unreadCount} ${t('new')}` : 'You’re all caught up'}</Text>
         </View>
-        {unreadCount > 0 && (
-          <PrimaryButton onPress={handleMarkAllRead} style={styles.markAllBtn}>
-            {t('markAllRead')}
-          </PrimaryButton>
-        )}
+        {unreadCount > 0 && <IconButton icon="checkmark-done" color={colors.brand[600]} onPress={handleMarkAllRead} accessibilityLabel={t('markAllRead')} />}
+        {notifications.some((n) => n.is_read) && <IconButton icon="trash-outline" onPress={handleClearRead} accessibilityLabel="Clear read" />}
       </View>
 
-      {error && <ErrorBanner message={error} />}
+      {error ? <View style={{ paddingHorizontal: spacing.lg }}><ErrorBanner message={error} /></View> : null}
 
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        extraData={lang}
-        initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        windowSize={10}
-        removeClippedSubviews
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.list, { paddingBottom: 90 + insets.bottom }]}
-        refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <EmptyState
-            icon={<Ionicons name="notifications-off-outline" size={32} color={colors.gray[300]} />}
-            message={t('noNotifications')}
-          />
-        }
-      />
-    </Screen>
+      {loading ? (
+        <SkeletonList count={6} type="notification" />
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          extraData={lang}
+          initialNumToRender={12}
+          maxToRenderPerBatch={8}
+          windowSize={10}
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.list, { paddingBottom: 40 + insets.bottom }]}
+          refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchNotifications(); refreshCounts(); }} />}
+          ListEmptyComponent={
+            <EmptyState
+              icon={<Ionicons name="notifications-off-outline" size={32} color={colors.gray[300]} />}
+              message={t('noNotifications')}
+            />
+          }
+        />
+      )}
+    </View>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.gray[50],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  header: {
-    fontSize: fontSize.xxxl,
-    fontWeight: '700',
-    color: colors.gray[900],
-  },
-  unreadBadge: {
-    marginTop: spacing.xs,
-  },
-  markAllBtn: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: 0,
-    gap: spacing.sm,
-  },
+  container: { flex: 1, backgroundColor: colors.gray[50] },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.md },
+  header: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900], paddingLeft: spacing.xs },
+  subheader: { fontSize: fontSize.sm, color: colors.gray[500], paddingLeft: spacing.xs },
+  list: { padding: spacing.lg, paddingTop: 0, gap: spacing.sm },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray[200],
   },
-  unreadCard: {
-    backgroundColor: colors.brand[50],
-    borderColor: colors.brand[200],
-  },
-  notifIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  notifContent: {
-    flex: 1,
-  },
-  notifMessage: {
-    fontSize: fontSize.base,
-    color: colors.gray[900],
-  },
-  notifTime: {
-    fontSize: fontSize.xs,
-    color: colors.gray[400],
-    marginTop: 2,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.brand[600],
-    marginLeft: spacing.sm,
-  },
+  unreadCard: { backgroundColor: colors.brand[50], borderColor: colors.brand[200] },
+  notifIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  notifContent: { flex: 1 },
+  notifTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
+  notifBody: { fontSize: fontSize.sm, color: colors.gray[600], marginTop: 2 },
+  notifMessage: { fontSize: fontSize.base, color: colors.gray[900] },
+  notifTime: { fontSize: fontSize.xs, color: colors.gray[400], marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand[600], marginLeft: spacing.sm },
 });

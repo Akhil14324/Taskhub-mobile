@@ -1,13 +1,21 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import * as SecureStore from '../utils/secureStorage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import api from '../api/client';
+import { SOCKET_URL } from '../config';
 import { useAuth } from './AuthContext';
 
 const ChatContext = createContext(null);
 
-const SOCKET_URL = 'https://vgrand-taskhub-backend.onrender.com';
+// Non-chat realtime events other parts of the app can subscribe to (see `subscribe`).
+const RELAYED_EVENTS = ['todo:changed', 'task:changed', 'notification:new'];
+
+function previewFromMeta(meta) {
+  if (meta?.kind !== 'todos') return null;
+  const count = meta.items?.length || 0;
+  return count === 1 ? `📋 To-do: ${meta.items[0].title}` : `📋 Shared ${count} to-dos`;
+}
 
 export function ChatProvider({ children }) {
   const { user } = useAuth();
@@ -24,6 +32,15 @@ export function ChatProvider({ children }) {
   const conversationsRef = useRef([]);
   const activeConversationIdRef = useRef(null);
   const deletedMessageIdsRef = useRef(new Set());
+  const listenersRef = useRef(new Map());
+  const seenMessageIdsRef = useRef(new Set());
+
+  /** Listen to a relayed realtime event ('todo:changed' | 'task:changed' | 'notification:new'). */
+  const subscribe = useCallback((event, handler) => {
+    if (!listenersRef.current.has(event)) listenersRef.current.set(event, new Set());
+    listenersRef.current.get(event).add(handler);
+    return () => listenersRef.current.get(event)?.delete(handler);
+  }, []);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
@@ -60,6 +77,22 @@ export function ChatProvider({ children }) {
         fetchConversations();
       });
 
+      RELAYED_EVENTS.forEach((event) => {
+        socket.on(event, (payload) => {
+          listenersRef.current.get(event)?.forEach((handler) => {
+            try {
+              handler(payload);
+            } catch (err) {
+              console.warn(`[chat] ${event} listener failed:`, err.message);
+            }
+          });
+        });
+      });
+
+      socket.on('presence:snapshot', (data) => {
+        setOnlineUsers(new Set((data?.userIds || []).map(Number)));
+      });
+
       socket.on('disconnect', () => {
         setConnected(false);
       });
@@ -91,6 +124,7 @@ export function ChatProvider({ children }) {
           isEdited: msg.isEdited ?? msg.is_edited ?? false,
         };
         const isActive = normalized.conversationId === Number(activeConversationIdRef.current);
+        seenMessageIdsRef.current.add(normalized.id);
 
         setMessages((prev) => {
           if (!isActive || prev.some((m) => m.id === normalized.id)) return prev;
@@ -104,7 +138,7 @@ export function ChatProvider({ children }) {
                   ...c,
                   last_message: {
                     id: normalized.id,
-                    body: normalized.body,
+                    body: normalized.body || previewFromMeta(normalized.meta),
                     attachment_url: normalized.attachmentUrl,
                     attachment_type: normalized.attachmentType,
                     sender_id: normalized.senderId,
@@ -193,26 +227,34 @@ export function ChatProvider({ children }) {
         }
       });
 
+      // Sent to our personal room for every new message in our conversations. Rooms we
+      // already joined also deliver message:new, so skip messages we have already counted.
       socket.on('conversation:updated', (data) => {
-        setConversations((prev) => {
-          const existing = prev.find((c) => c.id === data.conversationId);
-          if (!existing) {
-            fetchConversations();
-            return prev;
-          }
-          return prev.map((c) =>
-            c.id === data.conversationId
+        const convId = Number(data.conversationId);
+        const existing = conversationsRef.current.find((c) => c.id === convId);
+        if (!existing) {
+          fetchConversations();
+          return;
+        }
+        if (data.messageId && seenMessageIdsRef.current.has(Number(data.messageId))) return;
+        if (data.messageId) seenMessageIdsRef.current.add(Number(data.messageId));
+        const isActive = convId === Number(activeConversationIdRef.current);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === convId
               ? {
                   ...c,
                   last_message: {
+                    id: data.messageId,
                     body: data.lastMessagePreview,
                     created_at: data.lastMessageAt,
                   },
-                  unread_count: c.unread_count + 1,
+                  unread_count: isActive ? 0 : c.unread_count + 1,
                 }
               : c
-          );
-        });
+          )
+        );
+        if (!isActive) setTotalUnread((prev) => prev + 1);
       });
 
       socket.on('message:reaction', (data) => {
@@ -518,12 +560,21 @@ export function ChatProvider({ children }) {
 
   const uploadFile = useCallback(async (fileUri, mimeType, fileName) => {
     const formData = new FormData();
-    formData.append('file', {
-      uri: fileUri,
-      type: mimeType || 'application/octet-stream',
-      name: fileName || `upload_${Date.now()}`,
-    });
-    const res = await api.post('/chat/upload', formData, {
+    const name = fileName || `upload_${Date.now()}`;
+    if (Platform.OS === 'web') {
+      // Browsers need a real Blob; pickers give blob:/data: URIs we can fetch.
+      const blob = await (await fetch(fileUri)).blob();
+      const typed = mimeType && blob.type !== mimeType ? new Blob([blob], { type: mimeType }) : blob;
+      formData.append('file', typed, name);
+    } else {
+      formData.append('file', {
+        uri: fileUri,
+        type: mimeType || 'application/octet-stream',
+        name,
+      });
+    }
+    // On web the browser must set the multipart boundary itself.
+    const res = await api.post('/chat/upload', formData, Platform.OS === 'web' ? undefined : {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data;
@@ -574,6 +625,7 @@ export function ChatProvider({ children }) {
     fetchPinnedMessage,
     updateLastSeen,
     muteConversation,
+    subscribe,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

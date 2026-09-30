@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AnimatedPressable from '../components/AnimatedPressable';
+import BackTitle from '../components/BackTitle';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
@@ -264,7 +265,7 @@ export default function AdminUsers() {
   if (loading) return (
     <Screen style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.header}>{t('users')}</Text>
+        <BackTitle style={styles.header} title={t('users')} />
         <SkeletonList count={6} type="task" />
       </View>
     </Screen>
@@ -280,7 +281,7 @@ export default function AdminUsers() {
         contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.header}>{t('users')}</Text>
+        <BackTitle style={styles.header} title={t('users')} />
         {error && <ErrorBanner message={error} />}
 
         {/* Unassigned */}

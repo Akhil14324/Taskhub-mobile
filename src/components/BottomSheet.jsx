@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { View, Modal, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, Modal, StyleSheet, Dimensions, Pressable, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -13,6 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius } from '../theme/theme';
+import useKeyboardInset from '../hooks/useKeyboardInset';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SPRING_CONFIG = { damping: 28, stiffness: 280, mass: 0.8, overshootClamping: true };
@@ -27,11 +28,16 @@ const CLOSE_DURATION = 220;
  * - onClose: () => void
  * - children: ReactNode
  * - maxHeight: number (optional, defaults to 60% of screen)
+ * - avoidKeyboard: lift the sheet above the on-screen keyboard (forms)
  */
-export default function BottomSheet({ visible, onClose, children, maxHeight = SCREEN_HEIGHT * 0.6 }) {
+export default function BottomSheet({ visible, onClose, children, maxHeight: requestedMaxHeight = SCREEN_HEIGHT * 0.6, avoidKeyboard = false }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, insets), [colors, insets]);
+  const keyboardInset = useKeyboardInset();
+  const { height: windowHeight } = useWindowDimensions();
+  const liftBy = avoidKeyboard ? keyboardInset : 0;
+  const maxHeight = Math.min(requestedMaxHeight, windowHeight - liftBy - insets.top - 24);
 
   // Internal render gate: stays true during close animation so Modal doesn't unmount early
   const [shouldRender, setShouldRender] = useState(false);
@@ -109,12 +115,15 @@ export default function BottomSheet({ visible, onClose, children, maxHeight = SC
     >
       <Animated.View style={[styles.overlay, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, { maxHeight }, sheetStyle]}>
-            <View style={styles.handle} />
-            {children}
-          </Animated.View>
-        </GestureDetector>
+        <Animated.View style={[styles.sheet, { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md }, sheetStyle]}>
+          {/* Drag only from the grip so scrollable content inside the sheet keeps scrolling. */}
+          <GestureDetector gesture={pan}>
+            <View style={styles.handleZone}>
+              <View style={styles.handle} />
+            </View>
+          </GestureDetector>
+          {children}
+        </Animated.View>
       </Animated.View>
     </Modal>
   );
@@ -134,12 +143,19 @@ const createStyles = (colors, insets) => StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  handleZone: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+    marginTop: -spacing.sm,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.gray[300],
     alignSelf: 'center',
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
 });
