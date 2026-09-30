@@ -30,7 +30,7 @@ npx expo start
 
 | Variable | Description | Default |
 |---|---|---|
-| `API_URL` | Backend API base URL | `https://vgrand-taskhub-backend.onrender.com/api` |
+| `EXPO_PUBLIC_API_URL` | Backend API base URL, e.g. `https://your-app.up.railway.app/api` | `http://localhost:5000/api` (with a console warning) |
 
 ### Architecture
 
