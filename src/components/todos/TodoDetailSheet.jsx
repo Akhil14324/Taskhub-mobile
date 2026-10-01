@@ -105,7 +105,7 @@ export default function TodoDetailSheet({ todoId, onClose }) {
           <View style={styles.chipRow}>
             <Chip label="Never" active={!todo.recurrence} onPress={() => save({ recurrence: null })} />
             {Object.entries(RECURRENCE_LABELS).map(([key, label]) => (
-              <Chip key={key} icon="repeat" color="#692ec2" label={label} active={todo.recurrence === key} onPress={() => save({ recurrence: key })} />
+              <Chip key={key} icon="repeat" color="#b91c1c" label={label} active={todo.recurrence === key} onPress={() => save({ recurrence: key })} />
             ))}
           </View>
 

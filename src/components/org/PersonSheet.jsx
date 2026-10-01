@@ -119,8 +119,8 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
           {!isMe && (
             <View style={styles.actions}>
               <Action icon="chatbubble-ellipses" label="Message" color={colors.brand[600]} onPress={message} disabled={busy} />
-              <Action icon="clipboard" label="Assign task" color="#246fe0" onPress={assignTask} />
-              <Action icon="checkbox" label="Add to-do" color="#dc4c3e" onPress={() => { onClose(); onAddTodo?.(person); }} />
+              <Action icon="clipboard" label="Assign task" color="#dc2626" onPress={assignTask} />
+              <Action icon="checkbox" label="Add to-do" color="#dc2626" onPress={() => { onClose(); onAddTodo?.(person); }} />
             </View>
           )}
 
@@ -145,7 +145,7 @@ function Action({ icon, label, color, onPress, disabled }) {
       onPress={onPress}
       disabled={disabled}
       haptic="light"
-      style={{ flex: 1, alignItems: 'center', gap: 6, paddingVertical: spacing.md, borderRadius: radius.lg, backgroundColor: tint(color.startsWith('#') ? color : '#6366f1', 0.1) }}
+      style={{ flex: 1, alignItems: 'center', gap: 6, paddingVertical: spacing.md, borderRadius: radius.lg, backgroundColor: tint(color.startsWith('#') ? color : '#dc2626', 0.1) }}
     >
       <Ionicons name={icon} size={22} color={color} />
       <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[800] }}>{label}</Text>

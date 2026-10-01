@@ -5,29 +5,38 @@ import { useColors } from '../context/ThemeContext';
 import { useTodos } from '../context/TodoContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
-import { PRIORITY, DueChip } from './kit';
+import { PRIORITY } from './kit';
+import { formatDue, formatTime } from '../utils/dates';
 import { showToast } from '../utils/events';
 
-const MAX_VISIBLE = 6;
+const COLLAPSED_COUNT = 5;
 
-/** Checklist card for to-dos shared into a chat (message.meta.kind === 'todos'). */
+/**
+ * Checklist card for to-dos shared into a chat (message.meta.kind === 'todos').
+ * Shows each to-do in full (notes, due date, priority) and lets the reader copy one or
+ * all of the open ones into their own list.
+ */
 function SharedTodosCard({ meta, isOwn }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors, isOwn), [colors, isOwn]);
   const { importTodos } = useTodos();
   const [expanded, setExpanded] = useState(false);
-  const [added, setAdded] = useState(false);
+  const [open, setOpen] = useState(null); // id of the to-do whose notes are showing
+  const [addedIds, setAddedIds] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const items = meta.items || [];
-  const visible = expanded ? items : items.slice(0, MAX_VISIBLE);
-  const openItems = items.filter((i) => !i.is_done);
+  const visible = expanded ? items : items.slice(0, COLLAPSED_COUNT);
+  const pending = items.filter((i) => !i.is_done && !addedIds.includes(i.id));
+  const allAdded = items.some((i) => !i.is_done) && pending.length === 0;
+  const subtle = isOwn ? 'rgba(255,255,255,0.8)' : colors.gray[500];
 
-  const add = async () => {
+  const add = async (list) => {
+    if (!list.length || busy) return;
     setBusy(true);
     try {
-      const created = await importTodos(openItems.map(({ title, notes, due_date, priority }) => ({ title, notes, due_date, priority })));
-      setAdded(true);
+      const created = await importTodos(list.map(({ title, notes, due_date, priority }) => ({ title, notes, due_date, priority })));
+      setAddedIds((prev) => [...prev, ...list.map((i) => i.id)]);
       showToast({ message: `Added ${created} to your Inbox`, tone: 'success', icon: 'checkbox' });
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not add', tone: 'error' });
@@ -39,34 +48,60 @@ function SharedTodosCard({ meta, isOwn }) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Ionicons name="list" size={15} color={isOwn ? colors.white : '#dc4c3e'} />
+        <Ionicons name="checkbox-outline" size={16} color={isOwn ? colors.white : colors.brand[600]} />
         <Text style={styles.heading} numberOfLines={1}>
           {meta.title || (items.length === 1 ? 'To-do' : 'To-do list')}
         </Text>
         <Text style={styles.count}>{items.length}</Text>
       </View>
-      {visible.map((item) => (
-        <View key={item.id} style={styles.item}>
-          <Ionicons
-            name={item.is_done ? 'checkmark-circle' : 'ellipse-outline'}
-            size={17}
-            color={item.is_done ? (isOwn ? colors.white : colors.green[600]) : (PRIORITY[item.priority]?.color || colors.gray[400])}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.itemTitle, item.is_done && styles.itemDone]} numberOfLines={2}>{item.title}</Text>
-            {item.due_date && !isOwn && <DueChip date={item.due_date} time={item.due_time} done={item.is_done} compact />}
+      {!!meta.owner?.name && !isOwn && <Text style={[styles.owner, { color: subtle }]}>From {meta.owner.name}</Text>}
+
+      {visible.map((item) => {
+        const isAdded = addedIds.includes(item.id);
+        const showNotes = open === item.id && !!item.notes;
+        return (
+          <View key={item.id} style={styles.item}>
+            <Ionicons
+              name={item.is_done ? 'checkmark-circle' : 'ellipse-outline'}
+              size={18}
+              color={item.is_done ? (isOwn ? colors.white : colors.brand[600]) : (isOwn ? colors.white : PRIORITY[item.priority]?.color || colors.gray[400])}
+            />
+            <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpen(showNotes ? null : item.id)} disabled={!item.notes}>
+              <Text style={[styles.itemTitle, item.is_done && styles.itemDone]} numberOfLines={showNotes ? undefined : 3}>{item.title}</Text>
+              <View style={styles.metaRow}>
+                {!!item.due_date && (
+                  <Text style={[styles.metaText, { color: subtle }]}>
+                    {formatDue(item.due_date)}{item.due_time ? ` ${formatTime(item.due_time)}` : ''}
+                  </Text>
+                )}
+                {item.priority && item.priority < 4 && (
+                  <Text style={[styles.metaText, { color: subtle }]}>· {PRIORITY[item.priority].label}</Text>
+                )}
+                {!!item.notes && <Ionicons name="document-text-outline" size={11} color={subtle} />}
+              </View>
+              {showNotes && <Text style={[styles.notes, { color: subtle }]}>{item.notes}</Text>}
+            </AnimatedPressable>
+            {!isOwn && !item.is_done && (
+              <AnimatedPressable onPress={() => add([item])} disabled={busy || isAdded} hitSlop={8} haptic="light" style={styles.itemAdd}>
+                <Ionicons name={isAdded ? 'checkmark' : 'add'} size={16} color={colors.white} />
+              </AnimatedPressable>
+            )}
           </View>
-        </View>
-      ))}
-      {items.length > MAX_VISIBLE && (
+        );
+      })}
+
+      {items.length > COLLAPSED_COUNT && (
         <AnimatedPressable onPress={() => setExpanded((e) => !e)}>
-          <Text style={styles.more}>{expanded ? 'Show less' : `+${items.length - MAX_VISIBLE} more`}</Text>
+          <Text style={styles.more}>{expanded ? 'Show less' : `+${items.length - COLLAPSED_COUNT} more`}</Text>
         </AnimatedPressable>
       )}
-      {!isOwn && openItems.length > 0 && (
-        <AnimatedPressable onPress={add} disabled={busy || added} haptic="medium" style={[styles.addBtn, (busy || added) && { opacity: 0.6 }]}>
-          <Ionicons name={added ? 'checkmark' : 'add'} size={16} color={colors.white} />
-          <Text style={styles.addText}>{added ? 'Added to my to-dos' : busy ? 'Adding…' : `Add ${openItems.length > 1 ? 'all ' : ''}to my to-dos`}</Text>
+
+      {!isOwn && items.some((i) => !i.is_done) && (
+        <AnimatedPressable onPress={() => add(pending)} disabled={busy || allAdded} haptic="medium" style={[styles.addBtn, (busy || allAdded) && { opacity: 0.6 }]}>
+          <Ionicons name={allAdded ? 'checkmark' : 'add'} size={16} color={colors.white} />
+          <Text style={styles.addText}>
+            {allAdded ? 'Added to my to-dos' : busy ? 'Adding…' : `Add ${pending.length > 1 ? `all ${pending.length} ` : ''}to my to-dos`}
+          </Text>
         </AnimatedPressable>
       )}
     </View>
@@ -75,8 +110,8 @@ function SharedTodosCard({ meta, isOwn }) {
 
 const createStyles = (colors, isOwn) => StyleSheet.create({
   card: {
-    minWidth: 220,
-    maxWidth: 300,
+    minWidth: 240,
+    maxWidth: 320,
     marginTop: 2,
     marginBottom: 4,
     padding: spacing.sm,
@@ -85,12 +120,17 @@ const createStyles = (colors, isOwn) => StyleSheet.create({
     borderWidth: isOwn ? 0 : StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   heading: { flex: 1, fontSize: fontSize.sm, fontWeight: '800', color: isOwn ? colors.white : colors.gray[900] },
   count: { fontSize: 11, fontWeight: '700', color: isOwn ? 'rgba(255,255,255,0.8)' : colors.gray[400] },
-  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 4 },
+  owner: { fontSize: 11, marginBottom: 4 },
+  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 5 },
   itemTitle: { fontSize: fontSize.sm, color: isOwn ? colors.white : colors.gray[800] },
   itemDone: { textDecorationLine: 'line-through', opacity: 0.6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  metaText: { fontSize: 11 },
+  notes: { fontSize: 12, marginTop: 3 },
+  itemAdd: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand[600] },
   more: { fontSize: fontSize.xs, fontWeight: '700', color: isOwn ? colors.white : colors.brand[600], paddingVertical: 4 },
   addBtn: {
     flexDirection: 'row',
@@ -100,9 +140,9 @@ const createStyles = (colors, isOwn) => StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: 8,
     borderRadius: radius.md,
-    backgroundColor: '#dc4c3e',
+    backgroundColor: colors.brand[600],
   },
-  addText: { color: colors.white, fontWeight: '700', fontSize: fontSize.sm },
+  addText: { color: '#ffffff', fontWeight: '700', fontSize: fontSize.sm },
 });
 
 export default memo(SharedTodosCard);

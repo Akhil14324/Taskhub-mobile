@@ -128,8 +128,8 @@ const createStyles = (colors) => StyleSheet.create({
     gap: spacing.sm,
     borderRadius: 12,
   },
-  swipeLeft: { backgroundColor: '#058527', justifyContent: 'flex-start' },
-  swipeRight: { backgroundColor: '#dc4c3e', justifyContent: 'flex-end' },
+  swipeLeft: { backgroundColor: '#dc2626', justifyContent: 'flex-start' },
+  swipeRight: { backgroundColor: '#dc2626', justifyContent: 'flex-end' },
   swipeText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
   row: {
     flexDirection: 'row',

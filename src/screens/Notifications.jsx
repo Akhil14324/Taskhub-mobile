@@ -37,7 +37,7 @@ function getNotifIcons(colors) {
     approval_rejected: { icon: 'close-circle', color: colors.red[600], bg: colors.red[50] },
     overdue: { icon: 'alarm', color: colors.red[600], bg: colors.red[50] },
     mention: { icon: 'at', color: colors.brand[600], bg: colors.brand[50] },
-    todo_shared: { icon: 'list', color: '#dc4c3e', bg: colors.red[50] },
+    todo_shared: { icon: 'list', color: '#dc2626', bg: colors.red[50] },
     todo_reminder: { icon: 'alarm', color: colors.amber[600], bg: colors.amber[50] },
     todo_done: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
   };

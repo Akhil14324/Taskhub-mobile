@@ -65,7 +65,7 @@ function TaskCard({ task, currentUserId, onPress, onToggle }) {
         </View>
         {task.permissions?.can_approve && (
           <View style={styles.reviewBanner}>
-            <Ionicons name="shield-checkmark" size={13} color="#692ec2" />
+            <Ionicons name="shield-checkmark" size={13} color="#b91c1c" />
             <Text style={styles.reviewText}>Waiting for your review</Text>
           </View>
         )}
@@ -114,10 +114,10 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 5,
     borderRadius: radius.md,
-    backgroundColor: tint('#692ec2', 0.1),
+    backgroundColor: tint('#b91c1c', 0.1),
     alignSelf: 'flex-start',
   },
-  reviewText: { fontSize: 11, fontWeight: '700', color: '#692ec2' },
+  reviewText: { fontSize: 11, fontWeight: '700', color: '#b91c1c' },
 });
 
 export default memo(TaskCard);

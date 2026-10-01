@@ -11,14 +11,11 @@ import { formatDue, formatTime, daysFromToday, RECURRENCE_LABELS } from '../util
 // ---------------------------------------------------------------------------
 // Colour helpers
 // ---------------------------------------------------------------------------
-const NAMED = {
-  indigo: '#6366f1', red: '#ef4444', orange: '#f97316', amber: '#f59e0b', green: '#22c55e',
-  teal: '#14b8a6', blue: '#3b82f6', purple: '#a855f7', pink: '#ec4899', gray: '#94a3b8',
-};
-export const COLOR_NAMES = Object.keys(NAMED);
-
-export function accent(name) {
-  return NAMED[name] || NAMED.indigo;
+// One colour app: every list/business accent is the brand red. The name argument is kept so
+// stored colour names (e.g. 'purple', 'orange') still resolve without a data migration.
+const BRAND_RED = '#dc2626';
+export function accent() {
+  return BRAND_RED;
 }
 
 /** Translucent tint of a hex colour for backgrounds that work in both themes. */
@@ -30,15 +27,15 @@ export function tint(hex, alpha = 0.14) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Todoist-style priority colours.
+// Priorities are told apart by shade of red (darkest = most urgent); P4 is neutral.
 export const PRIORITY = {
-  1: { label: 'Priority 1', short: 'P1', color: '#dc4c3e' },
-  2: { label: 'Priority 2', short: 'P2', color: '#eb8909' },
-  3: { label: 'Priority 3', short: 'P3', color: '#246fe0' },
+  1: { label: 'Priority 1', short: 'P1', color: '#991b1b' },
+  2: { label: 'Priority 2', short: 'P2', color: '#dc2626' },
+  3: { label: 'Priority 3', short: 'P3', color: '#f87171' },
   4: { label: 'Priority 4', short: 'P4', color: '#94a3b8' },
 };
 
-const AVATAR_COLORS = ['#6366f1', '#ec4899', '#f97316', '#14b8a6', '#8b5cf6', '#0ea5e9', '#22c55e', '#ef4444', '#eab308'];
+const AVATAR_COLORS = ['#dc2626', '#b91c1c', '#991b1b', '#e11d48'];
 
 function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
@@ -125,7 +122,7 @@ export const Chip = memo(function Chip({ label, icon, color, active, onPress, on
       chipStyles.chip,
       small && chipStyles.small,
       {
-        backgroundColor: active ? tone : tint(tone.startsWith('#') ? tone : '#6366f1', 0.12),
+        backgroundColor: active ? tone : tint(tone.startsWith('#') ? tone : '#dc2626', 0.12),
         borderColor: active ? tone : 'transparent',
       },
       style,
@@ -160,16 +157,16 @@ const chipStyles = StyleSheet.create({
   labelSmall: { fontSize: 11 },
 });
 
-/** Due date chip: red when overdue, green for today, purple for tomorrow/this week. */
+/** Due date chip: darkest red when overdue, lighter reds for today / tomorrow, grey after. */
 export const DueChip = memo(function DueChip({ date, time, recurrence, done, compact }) {
   const colors = useColors();
   if (!date) return null;
   const diff = daysFromToday(date);
   const color = done ? colors.gray[400]
-    : diff < 0 ? '#dc4c3e'
-      : diff === 0 ? '#058527'
-        : diff === 1 ? '#ad6200'
-          : diff < 7 ? '#692ec2' : colors.gray[500];
+    : diff < 0 ? '#991b1b'
+      : diff === 0 ? '#dc2626'
+        : diff === 1 ? '#f87171'
+          : colors.gray[500];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
       <Ionicons name={recurrence ? 'repeat' : 'calendar-clear-outline'} size={compact ? 11 : 12} color={color} />
@@ -241,7 +238,7 @@ export function Fab({ onPress, icon = 'add', bottom = 24, color, label }) {
     enter.value = withDelay(150, withSpring(1, { damping: 12, stiffness: 180, mass: 0.7 }));
   }, [enter]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: enter.value }] }));
-  const bg = color || (theme === 'dark' ? '#e05a4f' : '#dc4c3e');
+  const bg = color || (theme === 'dark' ? '#dc2626' : '#dc2626');
   return (
     <Animated.View style={[{ position: 'absolute', right: spacing.xl, bottom }, style]}>
       <AnimatedPressable
@@ -320,7 +317,7 @@ export function EmptyHero({ icon = 'sparkles', title, message, color, action }) 
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl }}>
       <Animated.View style={[{
-        width: 88, height: 88, borderRadius: 44, backgroundColor: tint(tone.startsWith('#') ? tone : '#6366f1', 0.14),
+        width: 88, height: 88, borderRadius: 44, backgroundColor: tint(tone.startsWith('#') ? tone : '#dc2626', 0.14),
         alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
       }, iconStyle]}
       >

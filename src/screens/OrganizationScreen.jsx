@@ -14,13 +14,17 @@ import BottomSheet from '../components/BottomSheet';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import PersonSheet from '../components/org/PersonSheet';
 import PersonEditorSheet from '../components/org/PersonEditorSheet';
+import BusinessEditorSheet from '../components/org/BusinessEditorSheet';
+import OrgLegend from '../components/org/OrgLegend';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import { Avatar, Chip, IconButton, accent, tint } from '../components/kit';
 import useDirectory, { filterPeople, invalidateDirectory } from '../hooks/useDirectory';
 import { showToast } from '../utils/events';
+import { TIER_ICONS, TIER_SHADES, businessIcon, designationIcon } from '../utils/orgMeta';
 
-const TIER_ICONS = { 1: 'diamond', 2: 'shield', 3: 'star' };
-const TIER_COLORS = { 1: '#b45309', 2: '#7c3aed', 3: '#2563eb' };
+// Accountants and heads are always on show; everyone else sits in the expandable list.
+const KEY_DESIGNATIONS = ['head', 'accountant'];
+
 
 export default function OrganizationScreen() {
   const colors = useColors();
@@ -38,6 +42,7 @@ export default function OrganizationScreen() {
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(undefined); // undefined = closed, null = create, object = edit
   const [addMemberFor, setAddMemberFor] = useState(null);
+  const [bizEditor, setBizEditor] = useState(undefined); // undefined = closed, null = create, object = edit
   const [todoFor, setTodoFor] = useState(null);
   const [query, setQuery] = useState('');
 
@@ -124,7 +129,7 @@ export default function OrganizationScreen() {
         {portal && (
           <AnimatedPressable style={styles.addBtn} onPress={() => setEditing(null)} haptic="medium">
             <Ionicons name="person-add" size={16} color={colors.white} />
-            <Text style={styles.addBtnText}>Add</Text>
+            <Text style={styles.addBtnText}>Person</Text>
           </AnimatedPressable>
         )}
       </View>
@@ -159,17 +164,19 @@ export default function OrganizationScreen() {
           </View>
         ) : (
           <>
+            <OrgLegend structure={structure} />
+
             {/* Leadership chain */}
             {tiers.map((tier, i) => (
               <Animated.View key={tier.level} entering={FadeInDown.delay(i * 90).duration(320)} style={{ alignItems: 'center' }}>
                 {i > 0 && <View style={styles.connector} />}
-                <View style={[styles.tierBadge, { backgroundColor: tint(TIER_COLORS[tier.level], 0.12) }]}>
-                  <Ionicons name={TIER_ICONS[tier.level]} size={12} color={TIER_COLORS[tier.level]} />
-                  <Text style={[styles.tierLabel, { color: TIER_COLORS[tier.level] }]}>{tier.label}</Text>
+                <View style={[styles.tierBadge, { backgroundColor: tint(TIER_SHADES[tier.level], 0.12) }]}>
+                  <Ionicons name={TIER_ICONS[tier.level]} size={12} color={TIER_SHADES[tier.level]} />
+                  <Text style={[styles.tierLabel, { color: TIER_SHADES[tier.level] }]}>{tier.label}</Text>
                 </View>
                 <View style={styles.tierRow}>
                   {tier.people.map((p) => (
-                    <AnimatedPressable key={p.id} onPress={() => openPerson(p)} haptic="light" style={[styles.leaderCard, { borderColor: tint(TIER_COLORS[tier.level], 0.4) }]}>
+                    <AnimatedPressable key={p.id} onPress={() => openPerson(p)} haptic="light" style={[styles.leaderCard, { borderColor: tint(TIER_SHADES[tier.level], 0.4) }]}>
                       <Avatar name={p.name} uri={p.profile_picture} size={tier.level === 1 ? 56 : 46} online={onlineUsers.has(p.id)} />
                       <Text style={styles.leaderName} numberOfLines={1}>{p.name}</Text>
                       <Text style={styles.leaderTitle} numberOfLines={1}>{p.display_title}</Text>
@@ -184,20 +191,29 @@ export default function OrganizationScreen() {
             <View style={styles.branch} />
 
             {/* Businesses */}
-            <Text style={styles.sectionTitle}>Businesses</Text>
+            <View style={styles.sectionRow}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Businesses</Text>
+              {portal && (
+                <AnimatedPressable style={styles.addBizBtn} onPress={() => setBizEditor(null)} haptic="light">
+                  <Ionicons name="add" size={16} color={colors.brand[600]} />
+                  <Text style={styles.addBizText}>Business</Text>
+                </AnimatedPressable>
+              )}
+            </View>
             {structure.businesses.map((b, i) => {
               const open = !!expanded[b.id];
               const groups = structure.designations
-                .map((d) => ({ ...d, members: b.members.filter((m) => m.designation === d.key && d.key !== 'head') }))
+                .map((d) => ({ ...d, members: b.members.filter((m) => m.designation === d.key && !KEY_DESIGNATIONS.includes(d.key)) }))
                 .filter((g) => g.members.length);
               const iManage = portal || (user?.manages_business_ids || []).includes(b.id);
+              const keyPeople = b.members.filter((m) => KEY_DESIGNATIONS.includes(m.designation));
               return (
                 <Animated.View key={b.id} entering={FadeInDown.delay(200 + i * 70).duration(300)} layout={LinearTransition}>
-                  <View style={[styles.bizCard, { borderLeftColor: accent(b.color) }]}>
+                  <View style={styles.bizCard}>
                     <AnimatedPressable onPress={() => setExpanded((e) => ({ ...e, [b.id]: !open }))} haptic="light">
                       <View style={styles.bizHeader}>
-                        <View style={[styles.bizIcon, { backgroundColor: tint(accent(b.color), 0.14) }]}>
-                          <Ionicons name={b.type === 'restaurant' ? 'restaurant' : b.type === 'construction' ? 'construct' : b.type === 'mines' ? 'diamond' : b.type === 'it' ? 'laptop' : 'business'} size={20} color={accent(b.color)} />
+                        <View style={[styles.bizIcon, { backgroundColor: tint(accent(), 0.14) }]}>
+                          <Ionicons name={businessIcon(b.type)} size={20} color={accent()} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.bizName}>{b.name}</Text>
@@ -211,15 +227,18 @@ export default function OrganizationScreen() {
                       </View>
                     </AnimatedPressable>
 
-                    {/* Heads are always visible */}
+                    {/* Heads and accountants are always visible */}
                     <View style={styles.headsRow}>
                       {b.heads.length === 0 && <Text style={styles.muted}>No head assigned yet</Text>}
-                      {b.heads.map((h) => (
+                      {keyPeople.map((h) => (
                         <AnimatedPressable key={h.id} style={styles.headChip} onPress={() => openPerson(h)} haptic="light">
                           <Avatar name={h.name} uri={h.profile_picture} size={26} online={onlineUsers.has(h.id)} />
                           <View>
                             <Text style={styles.headName} numberOfLines={1}>{h.name}</Text>
-                            <Text style={styles.headRole}>{h.membership_title || 'Head'}</Text>
+                            <View style={styles.roleLine}>
+                              <Ionicons name={designationIcon(h.designation)} size={10} color={colors.gray[500]} />
+                              <Text style={styles.headRole}>{h.membership_title || h.designation_label}</Text>
+                            </View>
                           </View>
                         </AnimatedPressable>
                       ))}
@@ -229,7 +248,10 @@ export default function OrganizationScreen() {
                       <Animated.View entering={FadeIn.duration(200)}>
                         {groups.map((g) => (
                           <View key={g.key} style={{ marginTop: spacing.md }}>
-                            <Text style={styles.groupLabel}>{g.label}s · {g.members.length}</Text>
+                            <View style={styles.roleLine}>
+                              <Ionicons name={designationIcon(g.key)} size={12} color={colors.gray[500]} />
+                              <Text style={styles.groupLabel}>{g.label}s · {g.members.length}</Text>
+                            </View>
                             <View style={styles.memberGrid}>
                               {g.members.map((m) => (
                                 <AnimatedPressable key={m.id} style={styles.member} onPress={() => openPerson(m)} haptic="light">
@@ -243,8 +265,9 @@ export default function OrganizationScreen() {
                         ))}
                         {groups.length === 0 && <Text style={[styles.muted, { marginTop: spacing.md }]}>No team members yet.</Text>}
                         <View style={styles.bizActions}>
-                          <Chip small icon="clipboard" label="Tasks" color={accent(b.color)} onPress={() => navigation.navigate('Main', { screen: 'Tasks', params: { business_id: b.id } })} />
-                          {iManage && <Chip small icon="person-add" label="Add member" color={accent(b.color)} onPress={() => setAddMemberFor(b)} />}
+                          <Chip small icon="clipboard" label="Tasks" onPress={() => navigation.navigate('Main', { screen: 'Tasks', params: { business_id: b.id } })} />
+                          {iManage && <Chip small icon="person-add" label="Add member" onPress={() => setAddMemberFor(b)} />}
+                          {portal && <Chip small icon="create-outline" label="Edit" onPress={() => setBizEditor(b)} />}
                         </View>
                       </Animated.View>
                     )}
@@ -288,6 +311,12 @@ export default function OrganizationScreen() {
         businesses={structure.businesses}
         catalog={structure}
         myLevel={structure.me?.level ?? 99}
+        onSaved={afterChange}
+      />
+      <BusinessEditorSheet
+        visible={bizEditor !== undefined}
+        business={bizEditor || null}
+        onClose={() => setBizEditor(undefined)}
         onSaved={afterChange}
       />
       <AddMemberSheet
@@ -380,7 +409,7 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
               <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[500], marginTop: spacing.lg, marginBottom: spacing.sm }}>POSITION</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {allowed.map((d) => (
-                  <Chip key={d.key} label={d.label} color={accent(business.color)} active={designation === d.key} onPress={() => setDesignation(d.key)} />
+                  <Chip key={d.key} icon={designationIcon(d.key)} label={d.label} active={designation === d.key} onPress={() => setDesignation(d.key)} />
                 ))}
               </View>
               <AnimatedPressable
@@ -444,6 +473,10 @@ const createStyles = (colors) => StyleSheet.create({
   leaderTitle: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 1 },
   youTag: { fontSize: 10, fontWeight: '800', color: colors.brand[600], marginTop: 3 },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900], marginBottom: spacing.sm },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  addBizBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full, backgroundColor: colors.brand[50] },
+  addBizText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[600] },
+  roleLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   bizCard: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
@@ -451,7 +484,6 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
-    borderLeftWidth: 4,
   },
   bizHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   bizIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

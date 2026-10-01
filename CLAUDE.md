@@ -1,0 +1,39 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+React (react-native-web via Expo) client for TaskHub (JavaScript + JSX; no TypeScript, linter or tests). The backend is a separate repo (`vgrand-taskhub-backend`, sibling folder, Node/Express + Postgres + Socket.IO); an API or socket contract change usually needs edits in both.
+
+## Scope: website + PWA only
+
+**There is no Android app and no iOS app, and none is planned.** The product is the website / installable PWA, nothing else. Expo is used only as the web bundler (Metro + `expo export -p web`).
+
+- Do not build, fix, test or add anything for native: no `expo run:*`, `expo prebuild`, EAS builds/submits, `expo-dev-client` dev builds, Gradle/Xcode/fastlane, store submission, or native CI. The `android/`, `fastlane/`, `eas.json`, `google-services.json`, native CI workflow and `CI_BUILD_SETUP.md` were removed from this repo; don't recreate them.
+- Verify against web only. When a task would touch native-only behaviour (Expo push, `expo-secure-store`, haptics, native permissions in `app.json`), ignore the native side and make the web path correct.
+- iOS still matters as a *browser*: the PWA is installed on iPhones via Safari, so keep iOS-Safari quirks (keyboard inset, safe areas, push permission rules) working.
+
+## Commands
+
+- `npm install`, then `npm run web` (`expo start --web`) for day-to-day work.
+- `npm run build:web` (`expo export -p web`) builds the PWA into `dist/`. With no linter or tests, this is the quickest correctness check (it fails on syntax/import errors).
+- Deploy: the Vercel project `vgrand-task-hub` auto-builds `main` using `vercel.json` (`npm run build:web` → `dist`, SPA rewrite to `index.html`). Add the hosting origin to the backend's `CLIENT_URL` (comma-separated CORS/Socket.IO allowlist).
+
+## Environment
+
+- Only `EXPO_PUBLIC_*` vars belong in `.env`, and they are inlined at build time, so a Vercel/EAS rebuild is needed after changing any. On Vercel set them on the `vgrand-task-hub` project (the `VITE_*` vars left there are unused).
+- `src/config/index.js` reads `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SOCKET_URL`, `EXPO_PUBLIC_FIREBASE_*` and `EXPO_PUBLIC_GOOGLE_TRANSLATE_API_KEY`. There is no production default: a missing `EXPO_PUBLIC_API_URL` falls back to `http://localhost:5000/api` with a console warning. (The comment in `.env.example` claiming a Render default is stale; the backend now runs on Railway.)
+
+## Architecture
+
+- Entry: `index.js` → `src/App.jsx`: `ThemeProvider` › `AuthProvider` › `ChatProvider` › `TodoProvider` › `NotificationProvider` › `LanguageProvider` › `ErrorBoundary` around `src/navigation/AppNavigator.jsx`, plus global `ToastHost` and `DialogHost`. Tabs: Home, To-do, Tasks, Chat, More; every other screen is on the native stack. Users with `must_change_password` only see `ChangePassword`. `navigationRef.js` exposes `openNotificationTarget(data)` for deep links and push taps.
+- **API client** (`src/api/client.js`) is the single axios instance: attaches the JWT, clears credentials on 401, silently retries GETs twice on network errors/timeouts/502-504, and shows a throttled "Connection problem" toast for failed user-initiated requests. It never navigates to an error page. Pass `__skipOops: true` in the request config for background calls to suppress the toast. `ErrorBoundary` self-resets after 250ms (up to 3 times in 10s) before showing its manual "Try Again" fallback. The `Oops` cat screen is still registered but nothing navigates to it any more.
+- **Realtime:** `src/context/ChatContext.jsx` owns the Socket.IO connection and exposes `subscribe(event, handler)` for `todo:changed`, `task:changed` and `notification:new`. `TodoContext` (optimistic to-dos with undo) and `NotificationContext` (badges, in-app banners, push permission) build on it. The socket event contract and chat REST endpoints are documented in the backend README; keep it and `ChatContext.jsx` in sync.
+- **Push:** the live path is `notifications.web.js` → `webPush.web.js` (Firebase Messaging, web/PWA); the Expo-based `src/services/notifications.js` is native-only legacy. `public/sw.js` is the service worker (network-first shell cache; skips `/api` and `/socket.io`; handles `push` / `notificationclick`; cache name `taskhub-shell-vN`). Keep Firebase imports in `*.web.js` files so native bundles don't pull them in.
+- **Platform splits** use the `.web.js` suffix, and Metro resolves the web file on web: `src/utils/secureStorage.js` re-exports `expo-secure-store` (native legacy), while `secureStorage.web.js` uses `localStorage`. Import `secureStorage` rather than `expo-secure-store` directly, and put any new platform-specific behaviour in the `.web.js` file.
+- **Web UX quirks:** `Alert.alert` is routed to the themed `DialogHost` on web (react-native-web's is a no-op), so prefer `showToast` / `showDialog` / `confirmDialog` from `src/utils/events.js` in new code. Bottom sheets that contain inputs use `<BottomSheet avoidKeyboard>` (iOS PWA keyboard inset via `useKeyboardInset`). Pushed stack screens need their own back button (`BackTitle` / `IconButton`) because the installed PWA has no browser back.
+- **Permissions come from the server:** `task.permissions` flags (`can_edit`, `can_approve`, `can_request_delete`, …) decide which actions the UI shows; don't re-derive them client-side. Roles are `user` / `admin` / `super_admin`. People and business management live only in `OrganizationScreen` (the old Businesses / Users / User Passwords screens are gone).
+- **Shared data:** `src/hooks/useDirectory.js` is the 2-minute-cached org directory (`/org/directory`) used by @mention and person pickers; reuse it instead of fetching users per screen. Shared UI primitives live in `src/components/` (`kit.jsx` has Avatar, Chip, DueChip, TodoCheckbox, Fab, ProgressRing and colour/priority helpers).
+- **One colour:** the UI is red only. Every named hue in `src/theme/theme.js` resolves to the same red scale and `accent()` always returns the brand red; distinguish things with icons, labels and shades of red, not new colours. Org icons live in `src/utils/orgMeta.js`.
+- **Dates** travel as `'YYYY-MM-DD'` strings; use `src/utils/dates.js` and never `new Date('YYYY-MM-DD')` (timezone shifts). Natural-language quick-add parsing is in `src/utils/quickAdd.js`.
+- **i18n** is English/Telugu: static strings in `src/i18n/translations.js` (Telugu is only maintained for the original chat/login/profile screens; the owner doesn't want Telugu work on new screens, so new strings stay English-only), dynamic text through `translateService.js` (Google Translate). Light/dark colours come from `src/theme/theme.js` via `ThemeContext`.
+- `babel.config.js` requires `react-native-worklets/plugin` (Reanimated 4); keep it last in `plugins`.

@@ -132,7 +132,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
         <View style={styles.wrap}>
           <Chip label="None" active={!form.org_level} onPress={() => set({ org_level: null })} />
           {tiers.map((t) => (
-            <Chip key={t.level} icon="star" color="#a855f7" label={t.label} active={form.org_level === t.level} onPress={() => set({ org_level: t.level })} />
+            <Chip key={t.level} icon="star" color="#b91c1c" label={t.label} active={form.org_level === t.level} onPress={() => set({ org_level: t.level })} />
           ))}
         </View>
 

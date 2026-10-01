@@ -22,9 +22,23 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('[ErrorBoundary]', error, errorInfo);
+    // Most render errors are one-off (stale data mid-update, a screen unmounting), so
+    // recover on our own instead of making the user tap. Gives up after a few quick
+    // repeats so a genuine crash loop still shows the fallback.
+    const now = Date.now();
+    this.recent = (this.recent || []).filter((t) => now - t < 10000);
+    this.recent.push(now);
+    if (this.recent.length <= 3) {
+      this.resetTimer = setTimeout(this.handleReset, 250);
+    }
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this.resetTimer);
   }
 
   handleReset = () => {
+    clearTimeout(this.resetTimer);
     this.setState({ hasError: false, error: null });
   };
 
@@ -74,7 +88,7 @@ const styles = StyleSheet.create({
   button: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#4f46e5',
+    backgroundColor: '#dc2626',
     borderRadius: 8,
   },
   buttonText: {

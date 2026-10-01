@@ -16,7 +16,7 @@ import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoItem from '../components/todos/TodoItem';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
-import { Chip, Fab, IconButton, SectionHeader, EmptyHero, ProgressRing, accent, COLOR_NAMES } from '../components/kit';
+import { Chip, Fab, IconButton, SectionHeader, EmptyHero, ProgressRing, accent } from '../components/kit';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
 
@@ -164,8 +164,8 @@ export default function TodosScreen() {
     if (search) return { icon: 'search', title: 'Nothing found', message: 'Try another word.' };
     if (view === 'today') {
       return doneToday.length
-        ? { icon: 'trophy', title: 'You’re all done for today! 🎉', message: `${doneToday.length} completed. Enjoy the rest of your day.`, color: '#058527' }
-        : { icon: 'sunny', title: 'A fresh day', message: 'Add what you want to get done today. Try “Call supplier 4pm p1”.', color: '#ad6200' };
+        ? { icon: 'trophy', title: 'You’re all done for today! 🎉', message: `${doneToday.length} completed. Enjoy the rest of your day.`, color: '#dc2626' }
+        : { icon: 'sunny', title: 'A fresh day', message: 'Add what you want to get done today. Try “Call supplier 4pm p1”.', color: '#b91c1c' };
     }
     if (view === 'shared') return { icon: 'people', title: 'Nothing shared yet', message: 'Type @name while adding a to-do and it lands in their list too.' };
     if (view === 'upcoming') return { icon: 'calendar', title: 'Your schedule is clear', message: 'Plan ahead — add a to-do with a date.' };
@@ -187,7 +187,7 @@ export default function TodosScreen() {
           </Text>
         </View>
         {view === 'today' && totalToday > 0 && (
-          <ProgressRing percent={todayPercent} size={40} stroke={4} color="#058527">
+          <ProgressRing percent={todayPercent} size={40} stroke={4} color="#dc2626">
             <Text style={styles.ringText}>{todayPercent}%</Text>
           </ProgressRing>
         )}
@@ -218,10 +218,10 @@ export default function TodosScreen() {
 
       {/* Views */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsWrap}>
-        <ViewTab label="Today" icon="today" count={counts.today} active={view === 'today'} color="#058527" onPress={() => setView('today')} />
-        <ViewTab label="Upcoming" icon="calendar" active={view === 'upcoming'} color="#692ec2" onPress={() => setView('upcoming')} />
-        <ViewTab label="Inbox" icon="file-tray" count={counts.inbox} active={view === 'inbox'} color="#246fe0" onPress={() => setView('inbox')} />
-        <ViewTab label="Shared" icon="people" count={counts.shared} active={view === 'shared'} color="#eb8909" onPress={() => setView('shared')} />
+        <ViewTab label="Today" icon="today" count={counts.today} active={view === 'today'} color="#dc2626" onPress={() => setView('today')} />
+        <ViewTab label="Upcoming" icon="calendar" active={view === 'upcoming'} color="#b91c1c" onPress={() => setView('upcoming')} />
+        <ViewTab label="Inbox" icon="file-tray" count={counts.inbox} active={view === 'inbox'} color="#dc2626" onPress={() => setView('inbox')} />
+        <ViewTab label="Shared" icon="people" count={counts.shared} active={view === 'shared'} color="#b91c1c" onPress={() => setView('shared')} />
         {lists.map((l) => (
           <ViewTab
             key={l.id}
@@ -232,7 +232,7 @@ export default function TodosScreen() {
             onPress={() => setView(`list:${l.id}`)}
           />
         ))}
-        <Chip icon="add" label="List" color={colors.gray[500]} onPress={() => setListEditor({ name: '', color: 'indigo', emoji: '📋' })} />
+        <Chip icon="add" label="List" color={colors.gray[500]} onPress={() => setListEditor({ name: '', color: 'red', emoji: '📋' })} />
       </ScrollView>
 
       {loading ? (
@@ -251,7 +251,7 @@ export default function TodosScreen() {
                 <SectionHeader
                   title={section.title}
                   count={section.items.length || undefined}
-                  color={section.overdue ? '#dc4c3e' : undefined}
+                  color={section.overdue ? '#dc2626' : undefined}
                   right={section.overdue ? (
                     <AnimatedPressable onPress={rescheduleOverdue} haptic="light">
                       <Text style={styles.reschedule}>Reschedule to today</Text>
@@ -398,19 +398,6 @@ function ListEditor({ value, onClose, onSave, onDelete }) {
             </AnimatedPressable>
           ))}
         </View>
-        <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[500], marginTop: spacing.lg, marginBottom: spacing.sm }}>COLOUR</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-          {COLOR_NAMES.map((c) => (
-            <AnimatedPressable
-              key={c}
-              onPress={() => setDraft((d) => ({ ...d, color: c }))}
-              style={{
-                width: 30, height: 30, borderRadius: 15, backgroundColor: accent(c),
-                borderWidth: draft.color === c ? 3 : 0, borderColor: colors.gray[900],
-              }}
-            />
-          ))}
-        </View>
         <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl, marginBottom: spacing.md }}>
           {draft.id && (
             <AnimatedPressable
@@ -465,7 +452,7 @@ const createStyles = (colors) => StyleSheet.create({
   tabsWrap: { flexGrow: 0 },
   tabs: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center' },
   content: { paddingHorizontal: spacing.lg },
-  reschedule: { fontSize: fontSize.sm, fontWeight: '700', color: '#dc4c3e' },
+  reschedule: { fontSize: fontSize.sm, fontWeight: '700', color: '#dc2626' },
   freeDay: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: spacing.sm, paddingLeft: spacing.xs },
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },
   doneToggleText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[500] },

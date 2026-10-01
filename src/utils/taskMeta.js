@@ -1,10 +1,10 @@
 // Display metadata for task statuses (shared by list, detail and home screens).
 export const TASK_STATUS = {
   pending: { label: 'To do', icon: 'ellipse-outline', color: '#64748b' },
-  in_progress: { label: 'In progress', icon: 'play-circle', color: '#246fe0' },
-  in_review: { label: 'In review', icon: 'shield-checkmark', color: '#692ec2' },
-  completed: { label: 'Done', icon: 'checkmark-circle', color: '#058527' },
-  on_hold: { label: 'On hold', icon: 'pause-circle', color: '#eb8909' },
+  in_progress: { label: 'In progress', icon: 'play-circle', color: '#dc2626' },
+  in_review: { label: 'In review', icon: 'shield-checkmark', color: '#991b1b' },
+  completed: { label: 'Done', icon: 'checkmark-circle', color: '#dc2626' },
+  on_hold: { label: 'On hold', icon: 'pause-circle', color: '#94a3b8' },
 };
 
 export const TASK_FILTERS = [

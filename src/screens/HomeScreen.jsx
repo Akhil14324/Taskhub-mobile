@@ -135,9 +135,9 @@ export default function HomeScreen() {
         {approvalCount > 0 && (
           <AnimatedPressable onPress={() => navigation.navigate('Approvals')} haptic="light">
             <Animated.View entering={FadeInDown.duration(300)} style={[styles.card, styles.approvalCard]}>
-              <Ionicons name="shield-checkmark" size={22} color="#692ec2" />
+              <Ionicons name="shield-checkmark" size={22} color="#b91c1c" />
               <Text style={styles.approvalText}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your approval</Text>
-              <Ionicons name="chevron-forward" size={18} color="#692ec2" />
+              <Ionicons name="chevron-forward" size={18} color="#b91c1c" />
             </Animated.View>
           </AnimatedPressable>
         )}
@@ -145,7 +145,7 @@ export default function HomeScreen() {
         {/* Today */}
         <Animated.View entering={FadeInDown.delay(60).duration(320)} style={styles.card}>
           <View style={styles.todayHeader}>
-            <ProgressRing percent={percent} size={64} stroke={6} color="#058527">
+            <ProgressRing percent={percent} size={64} stroke={6} color="#dc2626">
               <Text style={styles.ringValue}>{doneToday.length}/{totalToday || 0}</Text>
             </ProgressRing>
             <View style={{ flex: 1 }}>
@@ -201,17 +201,17 @@ export default function HomeScreen() {
 
         {/* Work */}
         <Animated.View entering={FadeInDown.delay(180).duration(320)} style={styles.statsRow}>
-          <Stat icon="person" label="My open tasks" value={summary?.mine_open ?? '–'} color="#246fe0" onPress={() => navigation.navigate('Tasks')} />
-          <Stat icon="alarm" label="Overdue" value={summary?.overdue ?? '–'} color="#dc4c3e" onPress={() => navigation.navigate('Tasks')} />
-          <Stat icon="arrow-redo" label="I assigned" value={summary?.delegated_open ?? '–'} color="#692ec2" onPress={() => navigation.navigate('Tasks')} />
+          <Stat icon="person" label="My open tasks" value={summary?.mine_open ?? '–'} color="#dc2626" onPress={() => navigation.navigate('Tasks')} />
+          <Stat icon="alarm" label="Overdue" value={summary?.overdue ?? '–'} color="#dc2626" onPress={() => navigation.navigate('Tasks')} />
+          <Stat icon="arrow-redo" label="I assigned" value={summary?.delegated_open ?? '–'} color="#b91c1c" onPress={() => navigation.navigate('Tasks')} />
         </Animated.View>
 
         {/* Quick actions */}
         <Animated.View entering={FadeInDown.delay(240).duration(320)} style={styles.quickGrid}>
-          <Quick icon="checkbox-outline" label="Add to-do" color="#dc4c3e" onPress={() => setAddOpen(true)} />
-          <Quick icon="clipboard-outline" label="New task" color="#246fe0" onPress={() => navigation.navigate('Tasks', { create: true })} />
-          <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} color="#058527" onPress={() => navigation.navigate('ChatList')} />
-          <Quick icon="git-network-outline" label="Organisation" color="#b45309" onPress={() => navigation.navigate('Organization')} />
+          <Quick icon="checkbox-outline" label="Add to-do" color="#dc2626" onPress={() => setAddOpen(true)} />
+          <Quick icon="clipboard-outline" label="New task" color="#dc2626" onPress={() => navigation.navigate('Tasks', { create: true })} />
+          <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} color="#dc2626" onPress={() => navigation.navigate('ChatList')} />
+          <Quick icon="git-network-outline" label="Organisation" color="#b91c1c" onPress={() => navigation.navigate('Organization')} />
         </Animated.View>
 
         {/* Businesses at a glance (leaders / managers) */}
@@ -267,7 +267,7 @@ function Bar({ value, max, index, isToday, label }) {
     <View style={{ flex: 1, alignItems: 'center' }}>
       <Text style={{ fontSize: 10, color: colors.gray[400], marginBottom: 3 }}>{value || ''}</Text>
       <View style={{ height: 70, width: 16, justifyContent: 'flex-end' }}>
-        <Animated.View style={[{ width: 16, borderRadius: 6, backgroundColor: isToday ? '#058527' : tint('#058527', 0.35) }, style]} />
+        <Animated.View style={[{ width: 16, borderRadius: 6, backgroundColor: isToday ? '#dc2626' : tint('#dc2626', 0.35) }, style]} />
       </View>
       <Text style={{ fontSize: 11, fontWeight: isToday ? '800' : '500', color: isToday ? colors.gray[900] : colors.gray[400], marginTop: 4 }}>{label}</Text>
     </View>
@@ -345,15 +345,15 @@ const createStyles = (colors) => StyleSheet.create({
   pushBtnText: { color: colors.brand[600], fontWeight: '800', fontSize: fontSize.sm },
   infoCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.amber[50] },
   infoText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[700], lineHeight: 19 },
-  approvalCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: tint('#692ec2', 0.08), borderColor: tint('#692ec2', 0.3) },
-  approvalText: { flex: 1, fontSize: fontSize.base, fontWeight: '700', color: '#692ec2' },
+  approvalCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: tint('#b91c1c', 0.08), borderColor: tint('#b91c1c', 0.3) },
+  approvalText: { flex: 1, fontSize: fontSize.base, fontWeight: '700', color: '#b91c1c' },
   todayHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.sm },
   ringValue: { fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[800] },
   cardTitle: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900] },
   cardSub: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
   streak: { alignSelf: 'flex-start', marginTop: 6, backgroundColor: colors.amber[50], paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
   streakText: { fontSize: 11, fontWeight: '800', color: colors.amber[700] },
-  addTodoBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#dc4c3e', alignItems: 'center', justifyContent: 'center' },
+  addTodoBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center' },
   todoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[100] },
   todoTitle: { fontSize: fontSize.base, color: colors.gray[900] },
   more: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: 4 },

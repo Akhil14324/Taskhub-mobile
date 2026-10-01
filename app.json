@@ -101,7 +101,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#4f46e5"
+        "backgroundColor": "#dc2626"
       }
     },
     "web": {
@@ -109,8 +109,8 @@
       "output": "single",
       "name": "TaskHub",
       "shortName": "TaskHub",
-      "themeColor": "#4f46e5",
-      "backgroundColor": "#4f46e5",
+      "themeColor": "#dc2626",
+      "backgroundColor": "#dc2626",
       "favicon": "./assets/icon.png"
     },
     "extra": {
@@ -142,7 +142,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
-          "backgroundColor": "#4f46e5",
+          "backgroundColor": "#dc2626",
           "resizeMode": "contain"
         }
       ],

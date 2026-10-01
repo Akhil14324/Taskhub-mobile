@@ -3,7 +3,7 @@
 // - Receives Firebase Cloud Messaging web pushes (data-only messages sent by the backend)
 //   and shows them as system notifications, or hands them to the open app.
 // API, socket, and upload traffic always goes straight to the network.
-const CACHE = 'taskhub-shell-v2';
+const CACHE = 'taskhub-shell-v3';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])).then(() => self.skipWaiting()));

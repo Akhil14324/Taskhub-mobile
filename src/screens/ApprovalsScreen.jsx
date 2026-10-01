@@ -76,7 +76,7 @@ export default function ApprovalsScreen() {
           refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
         >
           {reviews.length === 0 && requests.length === 0 && (
-            <EmptyHero icon="shield-checkmark" color="#058527" title="Nothing waiting on you" message="Finished work that needs your sign-off and deletion requests from your team appear here." />
+            <EmptyHero icon="shield-checkmark" color="#dc2626" title="Nothing waiting on you" message="Finished work that needs your sign-off and deletion requests from your team appear here." />
           )}
 
           {reviews.length > 0 && <SectionHeader title="Finished work to review" count={reviews.length} />}
@@ -103,14 +103,14 @@ export default function ApprovalsScreen() {
                   <DecisionButton
                     label="Request changes"
                     icon="arrow-undo"
-                    color="#eb8909"
+                    color="#b91c1c"
                     loading={busy === `rej${t.id}`}
                     onPress={() => navigation.navigate('TaskDetail', { taskId: t.id })}
                   />
                   <DecisionButton
                     label="Approve"
                     icon="checkmark-done"
-                    color="#058527"
+                    color="#dc2626"
                     solid
                     loading={busy === `app${t.id}`}
                     onPress={() => act(`app${t.id}`, () => api.post(`/tasks/${t.id}/approve`), 'Approved 👍')}
@@ -125,8 +125,8 @@ export default function ApprovalsScreen() {
             <Animated.View key={`a${a.id}`} layout={LinearTransition} entering={FadeIn} exiting={FadeOut}>
               <View style={styles.card}>
                 <View style={styles.cardTop}>
-                  <View style={[styles.kindIcon, { backgroundColor: tint('#dc4c3e', 0.12) }]}>
-                    <Ionicons name="trash-bin-outline" size={18} color="#dc4c3e" />
+                  <View style={[styles.kindIcon, { backgroundColor: tint('#dc2626', 0.12) }]}>
+                    <Ionicons name="trash-bin-outline" size={18} color="#dc2626" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardTitle} numberOfLines={2}>Delete “{a.task_title}”</Text>
@@ -145,7 +145,7 @@ export default function ApprovalsScreen() {
                   <DecisionButton
                     label="Approve delete"
                     icon="trash"
-                    color="#dc4c3e"
+                    color="#dc2626"
                     solid
                     loading={busy === `ok${a.id}`}
                     onPress={() => act(`ok${a.id}`, () => api.post(`/approvals/${a.id}/decide`, { decision: 'approve' }), 'Task deleted')}
@@ -157,7 +157,7 @@ export default function ApprovalsScreen() {
 
           {mine.length > 0 && <SectionHeader title="Your requests" count={mine.length} />}
           {mine.map((a) => {
-            const tone = a.status === 'approved' ? '#058527' : a.status === 'rejected' ? '#dc4c3e' : a.status === 'cancelled' ? colors.gray[400] : '#692ec2';
+            const tone = a.status === 'approved' ? '#dc2626' : a.status === 'rejected' ? '#dc2626' : a.status === 'cancelled' ? colors.gray[400] : '#b91c1c';
             return (
               <View key={`m${a.id}`} style={styles.mineRow}>
                 <View style={[styles.statusDot, { backgroundColor: tone }]} />

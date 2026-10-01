@@ -137,13 +137,13 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             <Chip
               small
               icon="calendar"
-              color="#058527"
+              color="#dc2626"
               label={`${formatDue(dueDate)}${dueTime ? ` ${formatTime(dueTime)}` : ''}`}
               onRemove={() => setOverride((o) => ({ ...o, due_date: false, due_time: false }))}
             />
           )}
           {recurrence && (
-            <Chip small icon="repeat" color="#692ec2" label={RECURRENCE_LABELS[recurrence]} onRemove={() => setOverride((o) => ({ ...o, recurrence: false }))} />
+            <Chip small icon="repeat" color="#b91c1c" label={RECURRENCE_LABELS[recurrence]} onRemove={() => setOverride((o) => ({ ...o, recurrence: false }))} />
           )}
           {priority < 4 && (
             <Chip small icon="flag" color={PRIORITY[priority].color} label={PRIORITY[priority].short} onRemove={() => setOverride((o) => ({ ...o, priority: 4 }))} />
@@ -192,10 +192,10 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
 
         <View style={styles.toolbar}>
           <View style={styles.tools}>
-            <ToolButton icon="calendar-outline" active={!!dueDate} color="#058527" onPress={() => setDateOpen(true)} />
+            <ToolButton icon="calendar-outline" active={!!dueDate} color="#dc2626" onPress={() => setDateOpen(true)} />
             <ToolButton icon="flag-outline" active={priority < 4} color={PRIORITY[priority]?.color} onPress={() => setMenu(menu === 'priority' ? null : 'priority')} />
             <ToolButton icon="pricetag-outline" active={!!list} color={list ? accent(list.color) : undefined} onPress={() => setMenu(menu === 'list' ? null : 'list')} />
-            <ToolButton icon="repeat" active={!!recurrence} color="#692ec2" onPress={cycleRecurrence} />
+            <ToolButton icon="repeat" active={!!recurrence} color="#b91c1c" onPress={cycleRecurrence} />
             <ToolButton
               icon="at"
               active={mentionedPeople.length > 0}
@@ -269,7 +269,7 @@ const createStyles = (colors) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#dc4c3e',
+    backgroundColor: '#dc2626',
     alignItems: 'center',
     justifyContent: 'center',
   },

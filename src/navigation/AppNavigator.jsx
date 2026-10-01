@@ -36,9 +36,6 @@ import OrganizationScreen from '../screens/OrganizationScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import TasksScreen from '../screens/Tasks';
 import NotificationsScreen from '../screens/Notifications';
-import AdminBusinessesScreen from '../screens/AdminBusinesses';
-import AdminUsersScreen from '../screens/AdminUsers';
-import SuperAdminUsersScreen from '../screens/SuperAdminUsers';
 import ProfileScreen from '../screens/Profile';
 import ChatListScreen from '../screens/ChatListScreen';
 import ChatThreadScreen from '../screens/ChatThreadScreen';
@@ -124,8 +121,6 @@ function MainTabs() {
   const navigation = useNavigation();
   const [moreVisible, setMoreVisible] = useState(false);
 
-  const isSuperAdmin = user?.role === 'super_admin';
-  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
   const today = todayYmd();
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today).length;
 
@@ -134,15 +129,6 @@ function MainTabs() {
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { label: t('profile'), icon: 'person-outline', route: 'Profile' },
-    ...(isAdmin
-      ? [
-        { label: t('businesses'), icon: 'business-outline', route: 'Businesses' },
-        { label: t('users'), icon: 'people-outline', route: 'Users' },
-      ]
-      : []),
-    ...(isSuperAdmin
-      ? [{ label: t('userPasswords'), icon: 'key-outline', route: 'UserPasswords' }]
-      : []),
     { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
   ];
 
@@ -298,7 +284,7 @@ const tabStyles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#dc2626',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -365,9 +351,6 @@ export default function AppNavigator() {
             <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
             <Stack.Screen name="Approvals" component={ApprovalsScreen} />
             <Stack.Screen name="Organization" component={OrganizationScreen} />
-            <Stack.Screen name="Businesses" component={AdminBusinessesScreen} />
-            <Stack.Screen name="Users" component={AdminUsersScreen} />
-            <Stack.Screen name="UserPasswords" component={SuperAdminUsersScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
           </>

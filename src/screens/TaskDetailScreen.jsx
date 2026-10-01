@@ -13,6 +13,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import BottomSheet from '../components/BottomSheet';
 import MentionSuggestions from '../components/MentionSuggestions';
 import TaskFormSheet from '../components/tasks/TaskFormSheet';
+import ShareToChatSheet from '../components/ShareToChatSheet';
 import { Avatar, DueChip, PRIORITY, IconButton, accent, tint } from '../components/kit';
 import useDirectory, { filterPeople } from '../hooks/useDirectory';
 import useKeyboardInset from '../hooks/useKeyboardInset';
@@ -40,6 +41,7 @@ export default function TaskDetailScreen() {
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [prompt, setPrompt] = useState(null); // { kind: 'reject' | 'warn' | 'request-delete', text }
   const scrollRef = useRef(null);
 
@@ -150,16 +152,16 @@ export default function TaskDetailScreen() {
 
   const actions = [];
   if (p.can_approve) {
-    actions.push({ key: 'approve', label: 'Approve', icon: 'checkmark-done', color: '#058527', solid: true, onPress: () => run('approve', () => api.post(`/tasks/${taskId}/approve`), () => 'Approved 👍') });
-    actions.push({ key: 'reject', label: 'Request changes', icon: 'arrow-undo', color: '#eb8909', onPress: () => setPrompt({ kind: 'reject', text: '' }) });
+    actions.push({ key: 'approve', label: 'Approve', icon: 'checkmark-done', color: '#dc2626', solid: true, onPress: () => run('approve', () => api.post(`/tasks/${taskId}/approve`), () => 'Approved 👍') });
+    actions.push({ key: 'reject', label: 'Request changes', icon: 'arrow-undo', color: '#b91c1c', onPress: () => setPrompt({ kind: 'reject', text: '' }) });
   }
   if (p.can_change_status && !done && task.status !== 'in_review') {
-    if (task.status === 'pending') actions.push({ key: 'in_progress', label: 'Start', icon: 'play', color: '#246fe0', onPress: () => setStatus('in_progress') });
+    if (task.status === 'pending') actions.push({ key: 'in_progress', label: 'Start', icon: 'play', color: '#dc2626', onPress: () => setStatus('in_progress') });
     actions.push({
       key: 'completed',
       label: task.requires_approval && !p.can_edit ? 'Done — send for review' : 'Mark done',
       icon: 'checkmark-circle',
-      color: '#058527',
+      color: '#dc2626',
       solid: !p.can_approve,
       onPress: () => setStatus('completed'),
     });
@@ -169,8 +171,8 @@ export default function TaskDetailScreen() {
   }
   if (p.can_hold && !done && task.status !== 'in_review') {
     actions.push(task.status === 'on_hold'
-      ? { key: 'resume', label: 'Resume', icon: 'play-circle', color: '#246fe0', onPress: () => setStatus('pending') }
-      : { key: 'on_hold', label: 'Hold', icon: 'pause-circle', color: '#eb8909', onPress: () => setStatus('on_hold') });
+      ? { key: 'resume', label: 'Resume', icon: 'play-circle', color: '#dc2626', onPress: () => setStatus('pending') }
+      : { key: 'on_hold', label: 'Hold', icon: 'pause-circle', color: '#b91c1c', onPress: () => setStatus('on_hold') });
   }
   if (p.can_warn) actions.push({ key: 'warn', label: 'Warn', icon: 'warning', color: colors.red[600], onPress: () => setPrompt({ kind: 'warn', text: '' }) });
   if (p.can_edit) actions.push({ key: 'edit', label: 'Edit', icon: 'create', color: colors.brand[600], onPress: () => setEditOpen(true) });
@@ -186,6 +188,7 @@ export default function TaskDetailScreen() {
           <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
         </View>
         <View style={{ flex: 1 }} />
+        <IconButton icon="share-social-outline" onPress={() => setShareOpen(true)} />
         {task.priority < 4 && (
           <View style={[styles.statusPill, { backgroundColor: tint(PRIORITY[task.priority].color, 0.14) }]}>
             <Ionicons name="flag" size={13} color={PRIORITY[task.priority].color} />
@@ -235,9 +238,9 @@ export default function TaskDetailScreen() {
           {!!task.description && <Text style={styles.description}>{task.description}</Text>}
 
           {task.status === 'in_review' && !p.can_approve && (
-            <View style={[styles.banner, { backgroundColor: tint('#692ec2', 0.1) }]}>
-              <Ionicons name="hourglass-outline" size={18} color="#692ec2" />
-              <Text style={[styles.bannerText, { color: '#692ec2' }]}>
+            <View style={[styles.banner, { backgroundColor: tint('#b91c1c', 0.1) }]}>
+              <Ionicons name="hourglass-outline" size={18} color="#b91c1c" />
+              <Text style={[styles.bannerText, { color: '#b91c1c' }]}>
                 Waiting for {task.created_by === user?.id ? 'someone senior' : task.created_by_name?.split(' ')[0]} to review.
               </Text>
             </View>
@@ -326,6 +329,14 @@ export default function TaskDetailScreen() {
           </AnimatedPressable>
         </View>
       </View>
+
+      <ShareToChatSheet
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        heading="Share task"
+        subheading={task.title}
+        onSend={({ conversationIds, note }) => api.post('/tasks/share', { conversation_ids: conversationIds, task_ids: [task.id], note })}
+      />
 
       <TaskFormSheet visible={editOpen} onClose={() => setEditOpen(false)} task={task} onSaved={(t) => { setTask(t); load(); }} />
 

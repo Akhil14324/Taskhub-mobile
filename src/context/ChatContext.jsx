@@ -12,6 +12,7 @@ const ChatContext = createContext(null);
 const RELAYED_EVENTS = ['todo:changed', 'task:changed', 'notification:new'];
 
 function previewFromMeta(meta) {
+  if (meta?.kind === 'task') return `🗂️ Task: ${meta.task?.title || ''}`;
   if (meta?.kind !== 'todos') return null;
   const count = meta.items?.length || 0;
   return count === 1 ? `📋 To-do: ${meta.items[0].title}` : `📋 Shared ${count} to-dos`;

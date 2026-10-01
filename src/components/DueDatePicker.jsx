@@ -44,10 +44,10 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
   };
 
   const quick = [
-    { label: 'Today', icon: 'today-outline', color: '#058527', value: todayYmd() },
-    { label: 'Tomorrow', icon: 'sunny-outline', color: '#ad6200', value: addDays(todayYmd(), 1) },
-    { label: 'This weekend', icon: 'cafe-outline', color: '#246fe0', value: nextSaturday() },
-    { label: 'Next week', icon: 'arrow-forward-circle-outline', color: '#692ec2', value: nextMonday() },
+    { label: 'Today', icon: 'today-outline', color: '#dc2626', value: todayYmd() },
+    { label: 'Tomorrow', icon: 'sunny-outline', color: '#b91c1c', value: addDays(todayYmd(), 1) },
+    { label: 'This weekend', icon: 'cafe-outline', color: '#dc2626', value: nextSaturday() },
+    { label: 'Next week', icon: 'arrow-forward-circle-outline', color: '#b91c1c', value: nextMonday() },
     { label: 'No date', icon: 'close-circle-outline', color: colors.gray[500], value: null },
   ];
 
@@ -167,12 +167,12 @@ const createStyles = (colors) => StyleSheet.create({
   weekday: { width: `${100 / 7}%`, textAlign: 'center', fontSize: fontSize.xs, color: colors.gray[400], fontWeight: '600', paddingVertical: 4 },
   cell: { width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 3 },
   day: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  daySelected: { backgroundColor: '#dc4c3e' },
-  dayToday: { borderWidth: 1.5, borderColor: '#dc4c3e' },
+  daySelected: { backgroundColor: '#dc2626' },
+  dayToday: { borderWidth: 1.5, borderColor: '#dc2626' },
   dayText: { fontSize: fontSize.base, color: colors.gray[800] },
   dayPast: { color: colors.gray[400] },
   dayTextSelected: { color: '#fff', fontWeight: '700' },
-  dayTextToday: { color: '#dc4c3e', fontWeight: '700' },
+  dayTextToday: { color: '#dc2626', fontWeight: '700' },
   timeTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[600], marginTop: spacing.lg, paddingHorizontal: spacing.sm },
   timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.sm },
   timeChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.gray[100] },
