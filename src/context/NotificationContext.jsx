@@ -28,6 +28,12 @@ const TYPE_ICONS = {
   todo_shared: 'list',
   todo_reminder: 'alarm',
   todo_done: 'checkmark-circle',
+  todo_comment: 'chatbubble-ellipses',
+  todo_assigned: 'person-add',
+  todo_blocked: 'hand-left',
+  todo_unblocked: 'checkmark-done',
+  todo_update: 'document-text',
+  todo_question: 'help-circle',
   chat: 'chatbubble',
 };
 

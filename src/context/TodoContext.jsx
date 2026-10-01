@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast } from '../utils/events';
 import { formatDue } from '../utils/dates';
+import { labelsFrom } from '../utils/todoMeta';
 
 const TodoContext = createContext(null);
 const DELETE_UNDO_MS = 4000;
@@ -27,6 +28,8 @@ export function TodoProvider({ children }) {
   const { subscribe } = useChat();
   const [todos, setTodos] = useState([]);
   const [lists, setLists] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [filters, setFilters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState(null);
   const pendingDeletes = useRef(new Map());
@@ -38,6 +41,8 @@ export function TodoProvider({ children }) {
       const hidden = pendingDeletes.current;
       setTodos(sortTodos((res.data.todos || []).filter((t) => !hidden.has(t.id))));
       setLists(res.data.lists || []);
+      setSections(res.data.sections || []);
+      setFilters(res.data.filters || []);
     } catch (err) {
       console.warn('[todos] fetch failed:', err.message);
     } finally {
@@ -58,6 +63,8 @@ export function TodoProvider({ children }) {
     if (!user) {
       setTodos([]);
       setLists([]);
+      setSections([]);
+      setFilters([]);
       setInsights(null);
       setLoading(true);
       return;
@@ -83,20 +90,26 @@ export function TodoProvider({ children }) {
     setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== todo.id), todo]));
   }, []);
 
-  const createTodo = useCallback(async (payload) => {
+  const createTodo = useCallback(async (payload, { silent = false } = {}) => {
     const res = await api.post('/todos', payload);
     upsert(res.data.todo);
-    const due = res.data.todo.due_date ? ` · ${formatDue(res.data.todo.due_date)}` : '';
-    const shared = (res.data.todo.members || []).length > 1 ? ' · shared' : '';
-    showToast({ message: `Added${due}${shared}`, tone: 'success', icon: 'checkmark-circle' });
+    // A new sub-task changes its parent's counts.
+    if (res.data.todo.parent_id) fetchTodos();
+    if (!silent) {
+      const due = res.data.todo.due_date ? ` · ${formatDue(res.data.todo.due_date)}` : '';
+      const shared = (res.data.todo.members || []).length > 1 ? ' · shared' : '';
+      showToast({ message: `Added${due}${shared}`, tone: 'success', icon: 'checkmark-circle' });
+    }
     return res.data.todo;
-  }, [upsert]);
+  }, [upsert, fetchTodos]);
 
   const updateTodo = useCallback(async (id, patch) => {
     setTodos((prev) => sortTodos(prev.map((t) => (t.id === id ? { ...t, ...patch } : t))));
     try {
       const res = await api.put(`/todos/${id}`, patch);
       upsert(res.data.todo);
+      // Moving between lists / sections or nesting also moves sub-tasks.
+      if ('list_id' in patch || 'section_id' in patch || 'parent_id' in patch) fetchTodos();
       return res.data.todo;
     } catch (err) {
       fetchTodos();
@@ -105,15 +118,22 @@ export function TodoProvider({ children }) {
   }, [upsert, fetchTodos]);
 
   const toggleTodo = useCallback(async (todo, { silent = false } = {}) => {
-    // Optimistic: flip immediately so the check animation feels instant.
-    setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, is_done: !todo.is_done, _justToggled: Date.now() } : t)));
+    // Optimistic: flip immediately so the check animation feels instant. Ticking a parent
+    // ticks its sub-tasks; reopening a sub-task reopens a finished parent.
+    const completing = !todo.is_done;
+    setTodos((prev) => prev.map((t) => {
+      if (t.id === todo.id) return { ...t, is_done: completing, _justToggled: Date.now() };
+      if (completing && !todo.recurrence && t.parent_id === todo.id) return { ...t, is_done: true };
+      if (!completing && todo.parent_id && t.id === todo.parent_id) return { ...t, is_done: false };
+      return t;
+    }));
     try {
       const res = await api.post(`/todos/${todo.id}/toggle`);
       const updated = res.data.todo;
       // Let the strike-through play before the item re-sorts.
       setTimeout(() => upsert(updated), 450);
       fetchInsights();
-      if (!silent && !todo.is_done) {
+      if (!silent && completing) {
         showToast({
           message: res.data.rolled_to ? `Done · next on ${formatDue(res.data.rolled_to)}` : 'Completed',
           tone: 'success',
@@ -124,18 +144,18 @@ export function TodoProvider({ children }) {
       }
       return updated;
     } catch (err) {
-      setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, is_done: todo.is_done } : t)));
+      fetchTodos();
       showToast({ message: err.response?.data?.error || 'Could not update the to-do', tone: 'error' });
       return null;
     }
-  }, [upsert, fetchInsights]);
+  }, [upsert, fetchInsights, fetchTodos]);
   const toggleTodoRef = useRef(toggleTodo);
   useEffect(() => { toggleTodoRef.current = toggleTodo; }, [toggleTodo]);
 
   /** Delete with a short undo window, like Todoist. */
   const deleteTodo = useCallback((todo) => {
     const isCreator = todo.created_by === user?.id;
-    setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+    setTodos((prev) => prev.filter((t) => t.id !== todo.id && t.parent_id !== todo.id));
     const timer = setTimeout(async () => {
       pendingDeletes.current.delete(todo.id);
       try {
@@ -153,16 +173,54 @@ export function TodoProvider({ children }) {
       onAction: () => {
         clearTimeout(pendingDeletes.current.get(todo.id));
         pendingDeletes.current.delete(todo.id);
-        upsert(todo);
+        fetchTodos();
       },
     });
-  }, [user?.id, upsert, fetchTodos]);
+  }, [user?.id, fetchTodos]);
+
+  /** Delete several at once (bulk select): no per-item undo, one refresh at the end. */
+  const deleteTodos = useCallback(async (list) => {
+    const ids = new Set(list.map((t) => t.id));
+    setTodos((prev) => prev.filter((t) => !ids.has(t.id) && !ids.has(t.parent_id)));
+    await Promise.all(list.map((t) => api.delete(`/todos/${t.id}`).catch(() => null)));
+    showToast({ message: `Deleted ${list.length}`, icon: 'trash' });
+    fetchTodos();
+  }, [fetchTodos]);
+
+  const duplicateTodo = useCallback(async (todo, { silent = false } = {}) => {
+    const res = await api.post(`/todos/${todo.id}/duplicate`);
+    await fetchTodos();
+    if (!silent) showToast({ message: 'Duplicated', tone: 'success', icon: 'copy' });
+    return res.data.todo;
+  }, [fetchTodos]);
+
+  /** Add to-dos fetched separately (older completions) so they can be opened like the rest. */
+  const mergeTodos = useCallback((items) => {
+    if (!items?.length) return;
+    setTodos((prev) => {
+      const known = new Set(prev.map((t) => t.id));
+      const fresh = items.filter((t) => !known.has(t.id));
+      return fresh.length ? sortTodos([...prev, ...fresh]) : prev;
+    });
+  }, []);
 
   const removeMember = useCallback(async (todoId, userId) => {
     const res = await api.delete(`/todos/${todoId}/members/${userId}`);
     upsert(res.data.todo);
   }, [upsert]);
 
+  // Manual order (drag & drop): keep the new order locally, then tell the server.
+  const reorderTodos = useCallback(async (ids) => {
+    const order = new Map(ids.map((id, i) => [id, i + 1]));
+    setTodos((prev) => prev.map((t) => (order.has(t.id) ? { ...t, sort_order: order.get(t.id) } : t)));
+    try {
+      await api.post('/todos/reorder', { ids });
+    } catch {
+      fetchTodos();
+    }
+  }, [fetchTodos]);
+
+  // ---- lists ---------------------------------------------------------------
   const createList = useCallback(async (payload) => {
     const res = await api.post('/todos/lists', payload);
     setLists((prev) => [...prev, res.data.list]);
@@ -178,8 +236,75 @@ export function TodoProvider({ children }) {
   const deleteList = useCallback(async (id) => {
     await api.delete(`/todos/lists/${id}`);
     setLists((prev) => prev.filter((l) => l.id !== id));
-    setTodos((prev) => prev.map((t) => (t.list_id === id ? { ...t, list_id: null } : t)));
+    setSections((prev) => prev.filter((s) => s.list_id !== id));
+    setTodos((prev) => prev.map((t) => (t.list_id === id ? { ...t, list_id: null, section_id: null } : t)));
   }, []);
+
+  // ---- sections ------------------------------------------------------------
+  const createSection = useCallback(async (listId, name) => {
+    const res = await api.post(`/todos/lists/${listId}/sections`, { name });
+    setSections((prev) => [...prev, res.data.section]);
+    return res.data.section;
+  }, []);
+
+  const renameSection = useCallback(async (id, name) => {
+    const res = await api.put(`/todos/sections/${id}`, { name });
+    setSections((prev) => prev.map((s) => (s.id === id ? res.data.section : s)));
+    return res.data.section;
+  }, []);
+
+  const deleteSection = useCallback(async (id) => {
+    await api.delete(`/todos/sections/${id}`);
+    setSections((prev) => prev.filter((s) => s.id !== id));
+    setTodos((prev) => prev.map((t) => (t.section_id === id ? { ...t, section_id: null } : t)));
+  }, []);
+
+  // ---- saved filters -------------------------------------------------------
+  const saveFilter = useCallback(async ({ id, name, config }) => {
+    const res = id
+      ? await api.put(`/todos/filters/${id}`, { name, config })
+      : await api.post('/todos/filters', { name, config });
+    const saved = res.data.filter;
+    setFilters((prev) => (id ? prev.map((f) => (f.id === id ? saved : f)) : [...prev, saved]));
+    return saved;
+  }, []);
+
+  const deleteFilter = useCallback(async (id) => {
+    await api.delete(`/todos/filters/${id}`);
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  // ---- comments ------------------------------------------------------------
+  const fetchComments = useCallback(async (todoId) => {
+    const res = await api.get(`/todos/${todoId}/comments`, { __skipOops: true });
+    return res.data.comments || [];
+  }, []);
+
+  const addComment = useCallback(async (todoId, body, mentionIds = []) => {
+    const res = await api.post(`/todos/${todoId}/comments`, { body, mention_ids: mentionIds });
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, comment_count: (t.comment_count || 0) + 1 } : t)));
+    return res.data.comment;
+  }, []);
+
+  const deleteComment = useCallback(async (todoId, commentId) => {
+    await api.delete(`/todos/comments/${commentId}`);
+    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, comment_count: Math.max(0, (t.comment_count || 1) - 1) } : t)));
+  }, []);
+
+  // ---- history & goal ------------------------------------------------------
+  const fetchCompleted = useCallback(async (before) => {
+    const res = await api.get('/todos/completed', { params: before ? { before } : {}, __skipOops: true });
+    return res.data;
+  }, []);
+
+  const setDailyGoal = useCallback(async (goal) => {
+    setInsights((prev) => (prev ? { ...prev, goal } : prev));
+    try {
+      await api.put('/todos/goal', { goal });
+    } catch {
+      fetchInsights();
+    }
+  }, [fetchInsights]);
 
   const shareTodos = useCallback(async ({ conversationIds, todoIds, title, note }) => {
     const res = await api.post('/todos/share', {
@@ -197,9 +322,56 @@ export function TodoProvider({ children }) {
     return res.data.created;
   }, [fetchTodos]);
 
+  // ---- timeline: status, owner, blockers, updates ---------------------------
+  const fetchTimeline = useCallback(async (todoId) => {
+    const res = await api.get(`/todos/${todoId}/timeline`, { __skipOops: true });
+    return res.data;
+  }, []);
+
+  const setTodoStatus = useCallback(async (todo, status) => {
+    setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, status } : t)));
+    try {
+      const res = await api.post(`/todos/${todo.id}/status`, { status });
+      upsert(res.data.todo);
+      return res.data.todo;
+    } catch (err) {
+      fetchTodos();
+      throw err;
+    }
+  }, [upsert, fetchTodos]);
+
+  const assignTodoTo = useCallback(async (todoId, userId) => {
+    const res = await api.post(`/todos/${todoId}/assign`, { user_id: userId });
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const raiseBlocker = useCallback(async (todoId, payload) => {
+    const res = await api.post(`/todos/${todoId}/blockers`, payload);
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const resolveBlocker = useCallback(async (blockerId, note) => {
+    const res = await api.post(`/todos/blockers/${blockerId}/resolve`, { note });
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const postUpdate = useCallback(async (todoId, note, progress) => {
+    const res = await api.post(`/todos/${todoId}/updates`, { note, progress });
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const labels = useMemo(() => labelsFrom(todos), [todos]);
+
   const value = useMemo(() => ({
     todos,
     lists,
+    sections,
+    filters,
+    labels,
     loading,
     insights,
     fetchTodos,
@@ -208,14 +380,37 @@ export function TodoProvider({ children }) {
     updateTodo,
     toggleTodo,
     deleteTodo,
+    deleteTodos,
+    duplicateTodo,
+    mergeTodos,
     removeMember,
+    reorderTodos,
     createList,
     updateList,
     deleteList,
+    createSection,
+    renameSection,
+    deleteSection,
+    saveFilter,
+    deleteFilter,
+    fetchComments,
+    addComment,
+    deleteComment,
+    fetchCompleted,
+    setDailyGoal,
+    fetchTimeline,
+    setTodoStatus,
+    assignTodoTo,
+    raiseBlocker,
+    resolveBlocker,
+    postUpdate,
     shareTodos,
     importTodos,
-  }), [todos, lists, loading, insights, fetchTodos, fetchInsights, createTodo, updateTodo, toggleTodo, deleteTodo,
-    removeMember, createList, updateList, deleteList, shareTodos, importTodos]);
+  }), [todos, lists, sections, filters, labels, loading, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
+    toggleTodo, deleteTodo, deleteTodos, duplicateTodo, mergeTodos, removeMember, reorderTodos, createList, updateList, deleteList,
+    createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
+    fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,
+    shareTodos, importTodos]);
 
   return <TodoContext.Provider value={value}>{children}</TodoContext.Provider>;
 }

@@ -96,8 +96,39 @@ const RULES = [
  * `tokens` describes what was recognised, for the chips under the input.
  */
 export function parseQuickAdd(input, lists = []) {
-  const result = { due_date: null, due_time: null, priority: null, recurrence: null, list: null, mentions: [], tokens: [] };
+  const result = {
+    due_date: null, due_time: null, priority: null, recurrence: null, list: null, mentions: [], tokens: [],
+    deadline_date: null, duration_minutes: null, labels: [],
+  };
   let text = ` ${input || ''} `;
+
+  // {deadline}: a hard deadline, separate from the due date — "Send report {15 oct}"
+  const deadlineMatch = text.match(/\{([^}]{1,40})\}/);
+  if (deadlineMatch) {
+    const inner = parseQuickAdd(deadlineMatch[1]);
+    if (inner.due_date) {
+      result.deadline_date = inner.due_date;
+      text = text.replace(deadlineMatch[0], ' ');
+    }
+  }
+
+  // "for 2h" / "for 30 min": a time estimate
+  const durationMatch = text.match(/\bfor (\d{1,3}(?:\.\d)?) ?(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/i);
+  if (durationMatch) {
+    const amount = Number(durationMatch[1]);
+    const minutes = Math.round(/^h/i.test(durationMatch[2]) ? amount * 60 : amount);
+    if (minutes >= 1 && minutes <= 14400) {
+      result.duration_minutes = minutes;
+      text = text.replace(durationMatch[0], ' ');
+    }
+  }
+
+  // +label (the @ sign is taken by people)
+  for (const m of text.matchAll(/(^|\s)\+([A-Za-z0-9_-]{1,30})(?=\s|$)/g)) {
+    const label = m[2].toLowerCase();
+    if (!result.labels.includes(label)) result.labels.push(label);
+  }
+  text = text.replace(/(^|\s)\+[A-Za-z0-9_-]{1,30}(?=\s|$)/g, ' ');
 
   // #List (longest matching list name wins so "#Home Office" works)
   const hashIndex = text.indexOf('#');
@@ -139,7 +170,26 @@ export function parseQuickAdd(input, lists = []) {
   if (result.due_time) result.tokens.push({ kind: 'time', value: result.due_time });
   if (result.priority) result.tokens.push({ kind: 'priority', value: result.priority });
   if (result.recurrence) result.tokens.push({ kind: 'recurrence', value: result.recurrence });
+  if (result.deadline_date) result.tokens.push({ kind: 'deadline', value: result.deadline_date });
+  if (result.duration_minutes) result.tokens.push({ kind: 'duration', value: result.duration_minutes });
+  result.labels.forEach((label) => result.tokens.push({ kind: 'label', value: label }));
   return result;
+}
+
+/** The +label being typed at the end of the text, if any (for autocomplete). */
+export function activeLabelQuery(text) {
+  const m = String(text || '').match(/(^|\s)\+([A-Za-z0-9_-]{0,30})$/);
+  return m ? m[2].toLowerCase() : null;
+}
+
+/** Replace the +label being typed with the chosen label. */
+export function completeLabel(text, label) {
+  return String(text || '').replace(/(^|\s)\+([A-Za-z0-9_-]{0,30})$/, `$1+${label} `);
+}
+
+/** Remove a +label token from the text. */
+export function removeLabelToken(text, label) {
+  return String(text || '').replace(new RegExp(`(^|\\s)\\+${label}(?=\\s|$)`, 'i'), '$1').replace(/\s{2,}/g, ' ');
 }
 
 /** The @query being typed at the end of the text, if any (for autocomplete). */

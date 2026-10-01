@@ -211,6 +211,9 @@ export default function HomeScreen() {
           <Quick icon="checkbox-outline" label="Add to-do" color="#dc2626" onPress={() => setAddOpen(true)} />
           <Quick icon="clipboard-outline" label="New task" color="#dc2626" onPress={() => navigation.navigate('Tasks', { create: true })} />
           <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} color="#dc2626" onPress={() => navigation.navigate('ChatList')} />
+          {user?.can_monitor && (
+            <Quick icon="speedometer-outline" label="Team monitor" color="#b91c1c" onPress={() => navigation.navigate('TeamMonitor')} />
+          )}
           <Quick icon="git-network-outline" label="Organisation" color="#b91c1c" onPress={() => navigation.navigate('Organization')} />
         </Animated.View>
 

@@ -40,6 +40,12 @@ function getNotifIcons(colors) {
     todo_shared: { icon: 'list', color: '#dc2626', bg: colors.red[50] },
     todo_reminder: { icon: 'alarm', color: colors.amber[600], bg: colors.amber[50] },
     todo_done: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
+    todo_comment: { icon: 'chatbubble-ellipses', color: '#dc2626', bg: colors.red[50] },
+    todo_assigned: { icon: 'person-add', color: '#dc2626', bg: colors.red[50] },
+    todo_blocked: { icon: 'hand-left', color: '#dc2626', bg: colors.red[50] },
+    todo_unblocked: { icon: 'checkmark-done', color: '#dc2626', bg: colors.red[50] },
+    todo_update: { icon: 'document-text', color: '#dc2626', bg: colors.red[50] },
+    todo_question: { icon: 'help-circle', color: '#dc2626', bg: colors.red[50] },
   };
 }
 

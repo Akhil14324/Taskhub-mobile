@@ -33,6 +33,8 @@ import TodosScreen from '../screens/TodosScreen';
 import TaskDetailScreen from '../screens/TaskDetailScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
+import TeamMonitorScreen from '../screens/TeamMonitorScreen';
+import PersonMonitorScreen from '../screens/PersonMonitorScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import TasksScreen from '../screens/Tasks';
 import NotificationsScreen from '../screens/Notifications';
@@ -127,6 +129,7 @@ function MainTabs() {
   const moreItems = [
     { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
+    ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { label: t('profile'), icon: 'person-outline', route: 'Profile' },
     { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
@@ -351,6 +354,8 @@ export default function AppNavigator() {
             <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
             <Stack.Screen name="Approvals" component={ApprovalsScreen} />
             <Stack.Screen name="Organization" component={OrganizationScreen} />
+            <Stack.Screen name="TeamMonitor" component={TeamMonitorScreen} />
+            <Stack.Screen name="PersonMonitor" component={PersonMonitorScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
           </>
