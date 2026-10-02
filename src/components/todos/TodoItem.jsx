@@ -17,7 +17,7 @@ import { spacing, fontSize } from '../../theme/theme';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { HealthPill } from './TimeHealth';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
-import { formatDuration } from '../../utils/todoMeta';
+import { formatDuration, deadlineState } from '../../utils/todoMeta';
 import { todoHealth, todoMetrics, formatSecondsShort, HEALTH, STATUS } from '../../utils/timeline';
 
 const SWIPE_TRIGGER = 90;
@@ -84,8 +84,8 @@ function TodoItem({
   const others = (todo.members || []).filter((m) => m.id !== currentUserId);
   const fromSomeoneElse = !todo.business_id && todo.created_by !== currentUserId;
   const labels = todo.labels || [];
-  const deadlineDiff = todo.deadline_date ? daysFromToday(todo.deadline_date) : null;
-  const deadlineColor = todo.is_done ? colors.gray[400] : deadlineDiff < 0 ? '#991b1b' : deadlineDiff <= 1 ? '#dc2626' : colors.gray[500];
+  const near = deadlineState(todo);
+  const deadlineColor = todo.is_done ? colors.gray[400] : near ? near.color : colors.gray[500];
   const hasSubtasks = progress && progress.total > 0;
   const tag = stateTag(todo);
 
@@ -163,11 +163,19 @@ function TodoItem({
             {!!doneLine && <Text style={styles.doneLine}>{doneLine}</Text>}
             <View style={styles.metaRow}>
               <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
+              {!todo.due_date && !todo.deadline_date && !todo.is_done && (
+                <View style={styles.metaItem}>
+                  <Ionicons name="hourglass-outline" size={12} color={colors.gray[500]} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    No deadline · open {formatSecondsShort(Math.max(0, ((now || Date.now()) - new Date(todo.created_at).getTime()) / 1000))}
+                  </Text>
+                </View>
+              )}
               {!!todo.deadline_date && (
                 <View style={styles.metaItem}>
                   <Ionicons name="alert-circle-outline" size={12} color={deadlineColor} />
-                  <Text style={[styles.metaText, { color: deadlineColor, fontWeight: '600' }]} numberOfLines={1}>
-                    Deadline {formatDue(todo.deadline_date)}
+                  <Text style={[styles.metaText, { color: deadlineColor, fontWeight: near ? '800' : '600' }]} numberOfLines={1}>
+                    {near ? near.label : `Deadline ${formatDue(todo.deadline_date)}`}
                   </Text>
                 </View>
               )}

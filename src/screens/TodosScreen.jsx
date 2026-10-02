@@ -21,6 +21,7 @@ import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailS
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
+import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import BulkBar from '../components/todos/BulkBar';
 import WorkSidebar from '../components/todos/WorkSidebar';
@@ -30,6 +31,7 @@ import { PickerSheet, NameSheet } from '../components/todos/Pickers';
 import { Chip, Fab, IconButton, EmptyHero, ProgressRing, ListGlyph, LIST_ICONS, PRIORITY } from '../components/kit';
 import useWebReorder, { makeDraggable } from '../hooks/useWebReorder';
 import useShortcuts from '../hooks/useShortcuts';
+import * as SecureStore from '../utils/secureStorage';
 import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd } from '../utils/dates';
 import {
@@ -52,6 +54,9 @@ const byBoardPos = (items) => [...items].sort((a, b) => {
   const bp = b.board_pos ?? 1e9;
   return ap - bp;
 });
+
+const LAYOUT_KEY = 'todos.layout';
+const LAYOUTS = ['list', 'board', 'calendar', 'timeline'];
 
 export default function TodosScreen() {
   const colors = useColors();
@@ -88,7 +93,16 @@ export default function TodosScreen() {
   const [focusId, setFocusId] = useState(null);
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
-  const [layout, setLayout] = useState('list'); // list | board | timeline
+  const [layout, setLayout] = useState('list'); // list | board | calendar | timeline
+  // The person's own choice, remembered on this device. A view that cannot show it falls back to the
+  // list for now without forgetting the choice.
+  useEffect(() => {
+    SecureStore.getItemAsync(LAYOUT_KEY).then((v) => { if (LAYOUTS.includes(v)) setLayout(v); }).catch(() => {});
+  }, []);
+  const chooseLayout = useCallback((key) => {
+    setLayout(key);
+    SecureStore.setItemAsync(LAYOUT_KEY, key).catch(() => {});
+  }, []);
   const [boardGroup, setBoardGroup] = useState('status');
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [selectMode, setSelectMode] = useState(false);
@@ -173,6 +187,10 @@ export default function TodosScreen() {
     () => (currentList ? allSections.filter((s) => s.list_id === currentList.id) : []),
     [allSections, currentList]
   );
+  const inboxSections = useMemo(() => allSections.filter((s) => !s.list_id), [allSections]);
+  // Sections of the place being shown: a list's own, or the Inbox's.
+  const placeSections = view === 'inbox' ? inboxSections : listSections;
+  const sectioned = !!currentList || view === 'inbox';
   const filterKey = view.startsWith('filter:') ? view.slice(7) : null;
   const activeFilter = filterKey
     ? (BUILTIN_FILTERS.find((b) => b.id === filterKey) || filters.find((f) => String(f.id) === filterKey) || null)
@@ -180,10 +198,14 @@ export default function TodosScreen() {
   const labelName = view.startsWith('label:') ? view.slice(6) : null;
 
   // Layouts a view can be shown in.
-  const canBoard = !!business || !!currentList;
+  const canBoard = view !== 'done';
+  const canCalendar = view !== 'done';
   const canTimeline = !!business || view === 'today' || view === 'upcoming' || !!currentList;
-  const effectiveLayout = layout === 'board' && canBoard ? 'board' : layout === 'timeline' && canTimeline ? 'timeline' : 'list';
+  const effectiveLayout = layout === 'board' && canBoard ? 'board'
+    : layout === 'calendar' && canCalendar ? 'calendar'
+      : layout === 'timeline' && canTimeline ? 'timeline' : 'list';
   const onBoard = effectiveLayout === 'board' && !search;
+  const onCalendar = effectiveLayout === 'calendar' && !search;
   const onTimeline = effectiveLayout === 'timeline';
 
   const viewTitle = business ? business.name
@@ -306,7 +328,15 @@ export default function TodosScreen() {
       if (later.length) sectionsOut.push({ key: 'later', title: 'Later', items: later });
     } else if (view === 'inbox') {
       manualOrder = true;
-      sectionsOut.push({ key: 'inbox', title: null, items: manualSort(openPersonal.filter((t) => !t.list_id && match(t))) });
+      const inInbox = openPersonal.filter((t) => !t.list_id && match(t));
+      if (inboxSections.length === 0) {
+        sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inInbox) });
+      } else {
+        sectionsOut.push({ key: 'nosec', title: null, items: manualSort(inInbox.filter((t) => !t.section_id)) });
+        inboxSections.forEach((sec) => {
+          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
+        });
+      }
       done = personal.filter((t) => t.is_done && !t.list_id);
     } else if (view === 'shared') {
       const shared = openPersonal.filter((t) => (t.members || []).length > 1 && match(t));
@@ -336,7 +366,7 @@ export default function TodosScreen() {
     }
     const ids = sectionsOut.flatMap((s) => s.items.filter((t) => !t.parent_id || !s.items.some((p) => p.id === t.parent_id)).map((t) => t.id));
     return { sections: sectionsOut, doneItems: done, visibleIds: ids, manual: manualOrder && !q };
-  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, activeFilter, labelName, search, meId, business, bizId]);
+  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, activeFilter, labelName, search, meId, business, bizId]);
 
   const todayItems = useMemo(() => mine.filter((t) => t.due_date === today), [mine, today]);
   const todayDone = todayItems.filter((t) => t.is_done).length;
@@ -481,15 +511,35 @@ export default function TodosScreen() {
   // ---- board ---------------------------------------------------------------
   const boardColumns = useMemo(() => {
     if (!onBoard) return [];
-    if (currentList) {
-      const items = personal.filter((t) => t.list_id === currentList.id && !t.parent_id);
+    if (sectioned) {
+      const items = personal.filter((t) => (currentList ? t.list_id === currentList.id : !t.list_id) && !t.parent_id);
       const colItems = (sectionId) => byBoardPos(openFirst(items.filter((t) => (t.section_id || null) === sectionId)));
       const cols = [];
-      if (listSections.length === 0 || items.some((t) => !t.section_id)) {
-        cols.push({ key: 'none', title: listSections.length ? 'No section' : currentList.name, items: colItems(null) });
+      if (placeSections.length === 0 || items.some((t) => !t.section_id)) {
+        cols.push({ key: 'none', title: placeSections.length ? 'No section' : (currentList ? currentList.name : 'Inbox'), items: colItems(null) });
       }
-      listSections.forEach((s) => cols.push({ key: `s${s.id}`, title: s.name, section: s, items: colItems(s.id) }));
+      placeSections.forEach((s) => cols.push({ key: `s${s.id}`, title: s.name, section: s, items: colItems(s.id) }));
       return cols;
+    }
+    if (!business) {
+      // Today, Upcoming, filters and labels: the same work laid out by where it stands.
+      const pool = (view === 'shared' ? openPersonal.filter((t) => (t.members || []).length > 1)
+        : activeFilter ? applyFilter(open, activeFilter.config, { userId: meId, today })
+          : labelName ? open.filter((t) => (t.labels || []).includes(labelName))
+            : view === 'today' ? mine.filter((t) => !t.is_done && t.due_date && t.due_date <= today)
+              : view === 'upcoming' ? open.filter((t) => t.due_date && t.due_date > today)
+                : open).filter((t) => !t.parent_id);
+      const recent = addDays(today, -14);
+      const doneAll = mine.filter((t) => t.is_done && !t.parent_id && (!t.done_at || toYmd(new Date(t.done_at)) >= recent));
+      const doneRecent = view === 'today' ? doneAll.filter((t) => t.due_date === today)
+        : labelName ? doneAll.filter((t) => (t.labels || []).includes(labelName))
+          : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1) : [];
+      return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
+        key: st,
+        title: STATUS[st].label,
+        icon: STATUS[st].icon,
+        items: byBoardPos(st === 'done' ? doneRecent : pool.filter((t) => (t.status || 'todo') === st)),
+      }));
     }
     // Business board.
     const items = todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
@@ -515,7 +565,20 @@ export default function TodosScreen() {
         ? t.is_done && (!t.done_at || toYmd(new Date(t.done_at)) >= recentDone)
         : !t.is_done && t.status === s))),
     }));
-  }, [onBoard, currentList, listSections, personal, todos, bizId, boardGroup, meId, today]);
+  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today]);
+
+  // ---- calendar ------------------------------------------------------------
+  const calendarItems = useMemo(() => {
+    if (!onCalendar) return [];
+    if (business) return todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
+    const notNested = (t) => !t.parent_id;
+    if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
+    if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
+    if (view === 'shared') return personal.filter((t) => (t.members || []).length > 1 && notNested(t));
+    if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
+    if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
+    return mine.filter(notNested);
+  }, [onCalendar, business, bizId, todos, personal, mine, open, currentList, view, activeFilter, labelName, meId, today]);
 
   const colByKey = useMemo(() => new Map(boardColumns.map((c) => [String(c.key), c])), [boardColumns]);
 
@@ -524,12 +587,12 @@ export default function TodosScreen() {
     const t = todos.find((x) => x.id === todoId);
     if (!t) return;
     try {
-      if (currentList) {
+      if (sectioned) {
         await updateTodo(t.id, { section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
-      } else if (boardGroup === 'assignee') {
+      } else if (business && boardGroup === 'assignee') {
         if (colKey === 'open') await updateTodo(t.id, { assigned_user_id: null });
         else await assignTodoTo(t.id, Number(String(colKey).slice(1)));
-      } else if (boardGroup === 'priority') {
+      } else if (business && boardGroup === 'priority') {
         await updateTodo(t.id, { priority: Number(String(colKey).slice(1)) });
       } else if (colKey === 'done') {
         if (!t.is_done) await toggleTodo(t);
@@ -545,7 +608,7 @@ export default function TodosScreen() {
       showToast({ message: err.response?.data?.error || 'You cannot move that', tone: 'error' });
       fetchTodos();
     }
-  }, [todos, currentList, boardGroup, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos]);
+  }, [todos, sectioned, business, boardGroup, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos]);
 
   const onBoardDrop = useCallback(async (todoId, colKey, ids) => {
     await applyBoardMove(todoId, colKey);
@@ -564,7 +627,7 @@ export default function TodosScreen() {
     if (openTodoId && wide) setOpenTodoId(next);
   };
   const focused = todos.find((t) => t.id === focusId);
-  const setLayoutKey = (key, ok) => { if (ok) setLayout(key); };
+  const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
 
   useShortcuts({
     q: () => setAddOpen(true),
@@ -594,6 +657,7 @@ export default function TodosScreen() {
     },
     'v l': () => setLayoutKey('list', true),
     'v b': () => setLayoutKey('board', canBoard),
+    'v c': () => setLayoutKey('calendar', canCalendar),
     'v t': () => setLayoutKey('timeline', canTimeline),
   }, desktop);
 
@@ -602,17 +666,15 @@ export default function TodosScreen() {
     { key: 'select', label: 'Select to-dos', icon: 'checkbox-outline' },
     { key: 'productivity', label: 'Productivity and daily goal', icon: 'stats-chart-outline' },
     { key: 'share', label: 'Share this view to chat', icon: 'paper-plane-outline' },
-    ...(currentList ? [
-      { key: 'section', label: 'Add section', icon: 'albums-outline' },
-      { key: 'edit', label: 'Edit list', icon: 'create-outline' },
-    ] : []),
+    ...(sectioned ? [{ key: 'section', label: 'Add section', icon: 'albums-outline' }] : []),
+    ...(currentList ? [{ key: 'edit', label: 'Edit list', icon: 'create-outline' }] : []),
     ...(typeof activeFilter?.id === 'number' ? [{ key: 'editFilter', label: 'Edit filter', icon: 'create-outline' }] : []),
   ];
   const onMenu = (key) => {
     if (key === 'select') setSelectMode(true);
     else if (key === 'productivity') setProductivityOpen(true);
     else if (key === 'share') (shareVisibleIds.length ? setShareOpen(true) : showToast({ message: 'Nothing to share here yet' }));
-    else if (key === 'section') setSectionEditor({ list_id: currentList.id, name: '' });
+    else if (key === 'section') setSectionEditor({ list_id: currentList?.id || null, name: '' });
     else if (key === 'edit') setListEditor({ ...currentList });
     else if (key === 'editFilter') setFilterEditor(activeFilter);
   };
@@ -660,7 +722,7 @@ export default function TodosScreen() {
     if (section.section) {
       return (
         <View style={styles.sectionActions}>
-          <AnimatedPressable onPress={() => setAddOpen({ list_id: currentList.id, section_id: section.section.id })} hitSlop={8}>
+          <AnimatedPressable onPress={() => setAddOpen({ list_id: currentList?.id, section_id: section.section.id })} hitSlop={8}>
             <Ionicons name="add" size={20} color={colors.gray[400]} />
           </AnimatedPressable>
           <AnimatedPressable onPress={() => setSectionEditor({ ...section.section })} hitSlop={8}>
@@ -673,11 +735,12 @@ export default function TodosScreen() {
   };
   const sectionsWithRight = sections.map((s) => ({ ...s, color: s.overdue ? colors.brand[600] : undefined, right: sectionRight(s) }));
 
-  const layoutSwitch = (canBoard || canTimeline) ? (
+  const layoutSwitch = (canBoard || canCalendar || canTimeline) ? (
     <View style={styles.layoutSwitch}>
-      <LayoutButton icon="list" label="List" active={effectiveLayout === 'list'} onPress={() => setLayout('list')} />
-      {canBoard && <LayoutButton icon="grid" label="Board" active={effectiveLayout === 'board'} onPress={() => setLayout('board')} />}
-      {canTimeline && <LayoutButton icon="analytics" label="Timeline" active={effectiveLayout === 'timeline'} onPress={() => setLayout('timeline')} />}
+      <LayoutButton icon="list" label="List" active={effectiveLayout === 'list'} onPress={() => chooseLayout('list')} />
+      {canBoard && <LayoutButton icon="grid" label="Board" active={effectiveLayout === 'board'} onPress={() => chooseLayout('board')} />}
+      {canCalendar && <LayoutButton icon="calendar" label="Calendar" active={effectiveLayout === 'calendar'} onPress={() => chooseLayout('calendar')} />}
+      {canTimeline && <LayoutButton icon="analytics" label="Timeline" active={effectiveLayout === 'timeline'} onPress={() => chooseLayout('timeline')} />}
     </View>
   ) : null;
 
@@ -806,6 +869,22 @@ export default function TodosScreen() {
         ? <TimelineChart data={gantt.data} onOpen={(id) => { setOpenTodoId(id); setFocusId(id); }} selectedId={openTodoId} grouped={!!business} />
         : <SkeletonList count={4} type="notification" />}
     </ScrollView>
+  ) : onCalendar ? (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={[styles.content, desktop && styles.contentDesktop, { paddingBottom: 140 + insets.bottom }]}
+      refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <CalendarView
+        todos={calendarItems}
+        today={today}
+        wide={windowWidth >= 700}
+        selectedId={openTodoId}
+        onOpen={openTodo}
+        onToggle={toggleTodo}
+        onAdd={(day) => setAddOpen({ ...(business ? { business_id: business.id } : {}), ...(currentList ? { list_id: currentList.id } : {}), due_date: day })}
+      />
+    </ScrollView>
   ) : onBoard ? (
     <ScrollView
       style={{ flex: 1 }}
@@ -825,9 +904,10 @@ export default function TodosScreen() {
         currentUserId={meId}
         onAdd={(col) => setAddOpen(business
           ? { business_id: business.id }
-          : { list_id: currentList.id, section_id: col.section ? col.section.id : undefined })}
-        onAddColumn={currentList ? () => setSectionEditor({ list_id: currentList.id, name: '' }) : undefined}
-        onEditColumn={currentList ? (s) => setSectionEditor({ ...s }) : undefined}
+          : sectioned ? { list_id: currentList?.id, section_id: col.section ? col.section.id : undefined }
+            : true)}
+        onAddColumn={sectioned ? () => setSectionEditor({ list_id: currentList?.id || null, name: '' }) : undefined}
+        onEditColumn={sectioned ? (s) => setSectionEditor({ ...s }) : undefined}
       />
     </ScrollView>
   ) : (
@@ -888,8 +968,8 @@ export default function TodosScreen() {
           {allEmpty && !business && <EmptyHero {...emptyState} />}
           {allEmpty && !!business && sections.every((s) => s.key === 'd:' + today || s.items.length === 0) && <EmptyHero {...emptyState} />}
 
-          {currentList && !search && (
-            <AnimatedPressable style={styles.addSection} onPress={() => setSectionEditor({ list_id: currentList.id, name: '' })}>
+          {sectioned && !search && (
+            <AnimatedPressable style={styles.addSection} onPress={() => setSectionEditor({ list_id: currentList?.id || null, name: '' })}>
               <Ionicons name="add" size={18} color={colors.brand[600]} />
               <Text style={styles.addSectionText}>Add section</Text>
             </AnimatedPressable>

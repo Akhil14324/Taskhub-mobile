@@ -220,6 +220,19 @@ export function TodoProvider({ children }) {
     return res.data.todo;
   }, [fetchTodos]);
 
+  /** Turn my personal to-do into a task of a business (a member's becomes a proposal). */
+  const moveToBusiness = useCallback(async (todo, businessId, assignTo) => {
+    const res = await api.post(`/todos/${todo.id}/move-to-business`, { business_id: businessId, assign_to: assignTo || undefined });
+    upsert(res.data.todo);
+    await fetchTodos();
+    showToast({
+      message: res.data.todo.review_state === 'proposed' ? 'Sent to the business as a proposal' : 'Moved to the business',
+      tone: 'success',
+      icon: 'briefcase',
+    });
+    return res.data.todo;
+  }, [upsert, fetchTodos]);
+
   /** Add to-dos fetched separately (older completions) so they can be opened like the rest. */
   const mergeTodos = useCallback((items) => {
     if (!items?.length) return;
@@ -279,7 +292,7 @@ export function TodoProvider({ children }) {
 
   // ---- sections ------------------------------------------------------------
   const createSection = useCallback(async (listId, name) => {
-    const res = await api.post(`/todos/lists/${listId}/sections`, { name });
+    const res = await api.post(listId ? `/todos/lists/${listId}/sections` : '/todos/sections', { name });
     setSections((prev) => [...prev, res.data.section]);
     return res.data.section;
   }, []);
@@ -458,6 +471,7 @@ export function TodoProvider({ children }) {
     deleteTodo,
     deleteTodos,
     duplicateTodo,
+    moveToBusiness,
     mergeTodos,
     removeMember,
     reorderTodos,
@@ -490,7 +504,7 @@ export function TodoProvider({ children }) {
     shareTodos,
     importTodos,
   }), [todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
-    toggleTodo, deleteTodo, deleteTodos, duplicateTodo, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
+    toggleTodo, deleteTodo, deleteTodos, duplicateTodo, moveToBusiness, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
     createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,
     shareTodos, importTodos]);

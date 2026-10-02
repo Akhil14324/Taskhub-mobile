@@ -30,6 +30,7 @@ import { todayYmd } from '../utils/dates';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
+import ForgotPasswordScreen from '../screens/ForgotPassword';
 import HomeScreen from '../screens/HomeScreen';
 import TodosScreen from '../screens/TodosScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
@@ -67,6 +68,7 @@ function framed(Component, maxWidth = 920) {
 
 const FramedLogin = framed(LoginScreen, 480);
 const FramedSignup = framed(SignupScreen, 480);
+const FramedForgotPassword = framed(ForgotPasswordScreen, 480);
 const FramedChangePassword = framed(ChangePasswordScreen, 480);
 const FramedChatThread = framed(ChatThreadScreen, 980);
 const FramedChatList = framed(ChatListScreen, 760);
@@ -375,6 +377,7 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="Login" component={FramedLogin} />
             <Stack.Screen name="Signup" component={FramedSignup} />
+            <Stack.Screen name="ForgotPassword" component={FramedForgotPassword} />
           </>
         ) : user.must_change_password ? (
           <Stack.Screen name="ChangePassword" component={FramedChangePassword} />

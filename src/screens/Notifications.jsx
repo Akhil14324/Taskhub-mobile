@@ -39,6 +39,7 @@ function getNotifIcons(colors) {
     mention: { icon: 'at', color: colors.brand[600], bg: colors.brand[50] },
     todo_shared: { icon: 'list', color: '#dc2626', bg: colors.red[50] },
     todo_reminder: { icon: 'alarm', color: colors.amber[600], bg: colors.amber[50] },
+    todo_deadline: { icon: 'alert-circle', color: colors.red[600], bg: colors.red[50] },
     todo_done: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
     todo_comment: { icon: 'chatbubble-ellipses', color: '#dc2626', bg: colors.red[50] },
     todo_assigned: { icon: 'person-add', color: '#dc2626', bg: colors.red[50] },

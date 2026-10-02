@@ -99,6 +99,7 @@ export const SHORTCUT_GROUPS = [
     items: [
       { keys: ['V', 'L'], label: 'List layout' },
       { keys: ['V', 'B'], label: 'Board layout' },
+      { keys: ['V', 'C'], label: 'Calendar layout' },
       { keys: ['V', 'T'], label: 'Timeline layout' },
       { keys: ['['], label: 'Hide or show the sidebar' },
       { keys: ['?'], label: 'This list' },

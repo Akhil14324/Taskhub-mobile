@@ -189,6 +189,7 @@ export function describeEntry(entry, who = 'Someone') {
   switch (e.kind) {
     case 'created': return { icon: 'add-circle', title: `${who} created this`, tone: 'neutral' };
     case 'assigned': return { icon: 'person-add', title: `${who} assigned it to ${e.to_value || 'someone'}`, detail: e.from_value ? `was ${e.from_value}` : null, tone: 'neutral' };
+    case 'moved': return { icon: 'briefcase', title: `${who} moved it to a business`, detail: e.note, tone: 'neutral' };
     case 'shared': return { icon: 'people', title: `${who} added ${e.to_value || 'someone'}`, tone: 'neutral' };
     case 'status': return { icon: STATUS[e.to_value]?.icon || 'swap-horizontal', title: `${who} moved it to ${STATUS[e.to_value]?.label || e.to_value}`, detail: e.note || (e.from_value ? `from ${STATUS[e.from_value]?.label || e.from_value}` : null), tone: e.to_value === 'blocked' ? 'bad' : 'neutral' };
     case 'blocker_raised': return { icon: 'hand-left', title: `${who} raised a blocker: ${e.to_value || ''}`.trim(), detail: e.note, tone: 'bad' };

@@ -114,6 +114,9 @@ export default function Login() {
             <PrimaryButton onPress={handleSubmit} loading={loading}>
               {loading ? t('signingIn') : t('signIn')}
             </PrimaryButton>
+            <AnimatedPressable onPress={() => navigation.navigate('ForgotPassword')} haptic="light" style={styles.forgot}>
+              <Text style={styles.signupLink}>Forgot password?</Text>
+            </AnimatedPressable>
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
               <AnimatedPressable onPress={() => navigation.navigate('Signup')} haptic="light">
@@ -195,6 +198,11 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.gray[900],
     marginBottom: spacing.lg,
     textAlign: 'center',
+  },
+  forgot: {
+    alignSelf: 'center',
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
   },
   signupRow: {
     flexDirection: 'row',

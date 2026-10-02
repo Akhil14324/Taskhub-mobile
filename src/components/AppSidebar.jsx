@@ -102,7 +102,7 @@ export default function AppSidebar({ routeName }) {
 
       <View style={styles.group}>
         <Entry icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint="G H" />
-        <Entry icon="checkbox-outline" activeIcon="checkbox" label="To-do and tasks" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
+        <Entry icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
         <Entry icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
         <Entry icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (

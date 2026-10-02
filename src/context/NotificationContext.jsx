@@ -29,6 +29,7 @@ const TYPE_ICONS = {
   overdue: 'alarm',
   todo_shared: 'list',
   todo_reminder: 'alarm',
+  todo_deadline: 'alert-circle',
   todo_done: 'checkmark-circle',
   todo_comment: 'chatbubble-ellipses',
   todo_assigned: 'person-add',

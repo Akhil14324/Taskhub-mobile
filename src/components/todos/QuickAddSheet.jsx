@@ -89,7 +89,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const listId = businessId ? null : (override.list_id !== undefined ? override.list_id : (parsed.list?.id ?? defaults.list_id ?? null));
   const list = lists.find((l) => l.id === listId);
   // A default section only applies while the list is still the default one.
-  const sectionId = listId && listId === defaults.list_id ? defaults.section_id ?? null : null;
+  const sectionId = (listId ?? null) === (defaults.list_id ?? null) ? defaults.section_id ?? null : null;
   const allLabels = [...new Set([...parsed.labels, ...extraLabels])];
 
   const mentionQuery = activeMentionQuery(text);

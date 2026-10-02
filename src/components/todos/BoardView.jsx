@@ -5,7 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import { TodoCheckbox, DueChip, Avatar, PRIORITY } from '../kit';
-import { formatDuration } from '../../utils/todoMeta';
+import { formatDuration, deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 import { makeDraggable } from '../../hooks/useWebReorder';
 
@@ -187,6 +187,12 @@ function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onTo
         </View>
         <View style={styles.cardMeta}>
           <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
+          {!!deadlineState(t) && (
+            <View style={styles.metaItem}>
+              <Ionicons name="alert-circle" size={11} color={deadlineState(t).color} />
+              <Text style={[styles.metaText, { color: deadlineState(t).color, fontWeight: '800' }]}>{deadlineState(t).label}</Text>
+            </View>
+          )}
           {t.priority < 4 && !t.is_done && (
             <View style={styles.metaItem}>
               <Ionicons name="flag" size={11} color={PRIORITY[t.priority].color} />

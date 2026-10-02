@@ -13,6 +13,8 @@ import ShareToChatSheet from '../ShareToChatSheet';
 import SubtaskTree from './SubtaskTree';
 import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
+import TaskJourney from './TaskJourney';
+import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
 import PromptSheet from './PromptSheet';
 import { Avatar, Chip, PRIORITY, TodoCheckbox, ListGlyph, DueChip } from '../kit';
@@ -26,6 +28,7 @@ const TABS = [
   { key: 'details', label: 'Details' },
   { key: 'comments', label: 'Comments' },
   { key: 'activity', label: 'Activity' },
+  { key: 'journey', label: 'Journey' },
 ];
 
 /**
@@ -39,7 +42,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
   const { user } = useAuth();
   const {
     todos, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
-    shareTodos, requestDelete,
+    shareTodos, requestDelete, businesses, moveToBusiness,
   } = useTodos();
   const { people } = useDirectory();
 
@@ -62,7 +65,8 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState(null);
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(true);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [personQuery, setPersonQuery] = useState(null);
   const [labelText, setLabelText] = useState(null); // null = not adding
   const [customDuration, setCustomDuration] = useState(false);
@@ -444,6 +448,8 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
 
             <Text style={styles.meta}>
               Created by {isCreator ? 'you' : todo.created_by_name} · {timeAgo(todo.created_at)}
+              {!todo.due_date && !todo.deadline_date && !todo.is_done ? `
+No deadline. Open since ${timeAgo(todo.created_at)}, last update ${timeAgo(todo.updated_at)}` : ''}
               {todo.is_done && todo.done_by_name ? `\nCompleted by ${todo.done_by === user?.id ? 'you' : todo.done_by_name} · ${timeAgo(todo.done_at)}` : ''}
             </Text>
           </View>
@@ -451,6 +457,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
 
         {tab === 'comments' && <TodoComments todo={todo} />}
         {tab === 'activity' && <TodoTimeline todo={todo} />}
+        {tab === 'journey' && <TaskJourney todo={todo} />}
 
         <View style={styles.actions}>
           {variant !== 'panel' && <ActionButton icon="paper-plane-outline" label="Share" onPress={() => setShareOpen(true)} />}
@@ -460,6 +467,9 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
               label="Duplicate"
               onPress={() => duplicateTodo(todo).catch((err) => showToast({ message: err.response?.data?.error || 'Could not duplicate', tone: 'error' }))}
             />
+          )}
+          {!business && !todo.parent_id && isCreator && businesses.length > 0 && (
+            <ActionButton icon="briefcase-outline" label="Move to business" onPress={() => setMoveOpen(true)} />
           )}
           {!!deleteLabel && <ActionButton icon="trash-outline" label={deleteLabel} destructive onPress={onDelete} />}
         </View>
@@ -478,6 +488,13 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
         date={todo.deadline_date}
         allowTime={false}
         onChange={({ date }) => save({ deadline_date: date })}
+      />
+      <PickerSheet
+        visible={moveOpen}
+        onClose={() => setMoveOpen(false)}
+        title="Move to a business"
+        options={businesses.map((b) => ({ key: b.id, label: b.can_manage ? b.name : `${b.name} (sent as a proposal)`, icon: 'briefcase-outline' }))}
+        onPick={(id) => moveToBusiness(todo, id).catch((err) => showToast({ message: err.response?.data?.error || 'Could not move it', tone: 'error' }))}
       />
       <AssignSheet visible={assignOpen} todo={todo} onClose={() => setAssignOpen(false)} />
       <PromptSheet
