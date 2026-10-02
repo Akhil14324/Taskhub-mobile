@@ -44,3 +44,23 @@ export function confirmDialog({ title, message, confirmLabel = 'OK', cancelLabel
     });
   });
 }
+
+/** Open quick add from anywhere: { text?, defaults? } (a chat message, shared text, a voice note...). */
+export function openQuickAdd(payload = {}) {
+  emit('quickadd:open', payload);
+}
+
+/** Open the templates sheet from anywhere: { business_id? }. */
+export function openTemplates(payload = {}) {
+  emit('templates:open', payload);
+}
+
+/** Open the keyboard shortcuts window (and its editor). */
+export function openShortcuts() {
+  emit('shortcuts:open');
+}
+
+/** Open the command palette (Ctrl or Cmd + K). */
+export function openPalette() {
+  emit('palette:open');
+}

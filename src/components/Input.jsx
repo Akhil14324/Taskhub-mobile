@@ -210,6 +210,9 @@ const createStyles = (colors) => StyleSheet.create({
     padding: spacing.lg,
   },
   calendarSheet: {
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     padding: spacing.md,

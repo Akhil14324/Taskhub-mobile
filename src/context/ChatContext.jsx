@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 const ChatContext = createContext(null);
 
 // Non-chat realtime events other parts of the app can subscribe to (see `subscribe`).
-const RELAYED_EVENTS = ['todo:changed', 'notification:new'];
+const RELAYED_EVENTS = ['todo:changed', 'notification:new', 'kudos:new'];
 
 function previewFromMeta(meta) {
   if (meta?.kind === 'task') return `Task: ${meta.task?.title || ''}`;

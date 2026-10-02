@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useEngage } from '../context/EngageContext';
 import { useChat } from '../context/ChatContext';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
@@ -36,6 +37,7 @@ export default function HomeScreen() {
   const { todos, businesses, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
   const { unreadCount, approvalCount, pushState, enablePush, refreshCounts } = useNotifications();
   const { totalUnread } = useChat();
+  const { myDay } = useEngage();
 
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -275,6 +277,27 @@ export default function HomeScreen() {
           </AnimatedPressable>
         )}
 
+        <AnimatedPressable onPress={() => navigation.navigate('MyDay')}>
+          <View style={styles.dayCard}>
+            <View style={styles.dayIcon}><Ionicons name="sunny" size={22} color="#fff" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dayTitle}>My Day</Text>
+              <Text style={styles.dayText}>
+                {myDay?.all_clear ? 'Day complete. Everything due is done.'
+                  : myDay?.waiting_on_you?.length ? `${myDay.waiting_on_you.length} waiting on you · ${myDay.remaining_today} left today`
+                    : myDay ? `${myDay.remaining_today} left today` : 'What to do next, and who is waiting on you'}
+              </Text>
+            </View>
+            {!!myDay?.streak && (
+              <View style={styles.dayStreak}>
+                <Ionicons name="flame" size={14} color="#fff" />
+                <Text style={styles.dayStreakText}>{myDay.streak}</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={18} color="#fff" />
+          </View>
+        </AnimatedPressable>
+
         <View style={[styles.panels, desktop && styles.panelsDesktop]}>
           <View style={desktop ? styles.col : undefined}>{personalPanel}</View>
           {businessPanel && <View style={desktop ? styles.col : undefined}>{businessPanel}</View>}
@@ -347,6 +370,12 @@ const createStyles = (colors) => StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.md },
   bannerLink: { backgroundColor: colors.brand[50], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.brand[200] },
   bannerText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[800], lineHeight: 19 },
+  dayCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.xl, backgroundColor: colors.brand[600], marginBottom: spacing.md },
+  dayIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  dayTitle: { color: '#fff', fontSize: fontSize.md, fontWeight: '800' },
+  dayText: { color: 'rgba(255,255,255,0.9)', fontSize: fontSize.sm, marginTop: 2 },
+  dayStreak: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.22)' },
+  dayStreakText: { color: '#fff', fontWeight: '800', fontSize: fontSize.sm },
   panels: { gap: spacing.md },
   panelsDesktop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xl },
   col: { flex: 1, minWidth: 0 },

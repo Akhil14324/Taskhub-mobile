@@ -91,6 +91,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   sheet: {
     width: '100%',
+    maxWidth: 420,
     maxHeight: 400,
     backgroundColor: colors.white,
     borderRadius: radius.lg,

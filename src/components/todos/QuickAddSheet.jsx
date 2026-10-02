@@ -12,11 +12,13 @@ import MentionSuggestions from '../MentionSuggestions';
 import { Chip, PRIORITY, Avatar } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import {
-  parseQuickAdd, activeMentionQuery, completeMention, activeLabelQuery, completeLabel, removeLabelToken,
+  parseQuickAdd, detectDelegate, activeMentionQuery, completeMention, activeLabelQuery, completeLabel, removeLabelToken,
 } from '../../utils/quickAdd';
 import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
 import { DURATION_PRESETS, formatDuration } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
+import { isSpeechSupported, startListening } from '../../utils/speech';
+import { useLang } from '../../context/LanguageContext';
 
 const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
 
@@ -36,6 +38,10 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const { lists, businesses, labels: knownLabels, createTodo, fetchAssignees } = useTodos();
   const { people } = useDirectory();
   const inputRef = useRef(null);
+  const { lang } = useLang();
+  const stopRef = useRef(null);
+  const [listening, setListening] = useState(false);
+  const [delegateOff, setDelegateOff] = useState(false);
 
   const [text, setText] = useState('');
   const [notes, setNotes] = useState('');
@@ -65,6 +71,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       setAssignId(null);
       setBizAssignee(defaults.assign_to ?? null);
       setReview(null);
+      setDelegateOff(false);
       setMenu(null);
       setTimeout(() => inputRef.current?.focus(), Platform.OS === 'web' ? 50 : 250);
     }
@@ -78,7 +85,16 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     fetchAssignees(businessId).then(setBizPeople).catch(() => setBizPeople([]));
   }, [visible, businessId, fetchAssignees]);
 
-  const parsed = useMemo(() => parseQuickAdd(text, lists), [text, lists]);
+  // "ask Ravi to send the invoice friday": the person it is for, and the task without the instruction.
+  const delegate = useMemo(
+    () => (delegateOff || isSubtask ? null : detectDelegate(text, businessId ? bizPeople : people, user?.id)),
+    [text, delegateOff, isSubtask, businessId, bizPeople, people, user]
+  );
+  const parsed = useMemo(() => {
+    const out = parseQuickAdd(delegate ? delegate.rest : text, lists);
+    if (delegate && out.title) out.title = out.title.charAt(0).toUpperCase() + out.title.slice(1);
+    return out;
+  }, [text, delegate, lists]);
   const pick = (key, fallback) => (override[key] === false ? null : override[key] ?? parsed[key] ?? fallback ?? null);
   const dueDate = pick('due_date', defaults.due_date);
   const dueTime = dueDate ? pick('due_time') : null;
@@ -100,10 +116,16 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const labelSuggestions = labelQuery !== null
     ? knownLabels.filter((l) => !allLabels.includes(l.name) && l.name.includes(labelQuery)).slice(0, 6)
     : [];
-  const mentionedPeople = businessId ? [] : parsed.mentions
+  const typedMentions = businessId ? [] : parsed.mentions
     .map((u) => people.find((p) => p.username?.toLowerCase() === u.toLowerCase()))
     .filter(Boolean);
-  const assignee = bizPeople.find((p) => p.id === bizAssignee) || null;
+  const delegateHere = delegate && !businessId ? people.find((p) => p.id === delegate.person.id) : null;
+  const mentionedPeople = delegateHere && !typedMentions.some((p) => p.id === delegateHere.id)
+    ? [...typedMentions, delegateHere]
+    : typedMentions;
+  const effectiveAssignId = delegateHere && assignId === null ? delegateHere.id : assignId;
+  const effectiveBizAssignee = bizAssignee || (delegate && businessId ? delegate.person.id : null);
+  const assignee = bizPeople.find((p) => p.id === effectiveBizAssignee) || null;
   const proposing = !!business && !business.can_manage && !isSubtask;
 
   const submit = async () => {
@@ -122,8 +144,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         parent_id: defaults.parent_id || undefined,
         business_id: businessId || undefined,
         assign_to: businessId
-          ? (bizAssignee || undefined)
-          : (mentionedPeople.some((p) => p.id === assignId) ? assignId : undefined),
+          ? (effectiveBizAssignee || undefined)
+          : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),
         requires_approval: businessId && review !== null ? review : undefined,
         labels: allLabels,
         deadline_date: deadline,
@@ -131,6 +153,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         mention_ids: mentionedPeople.map((p) => p.id),
       });
       setAssignId(null);
+      setDelegateOff(false);
       setText('');
       setNotes('');
       setOverride((o) => ({ business_id: o.business_id }));
@@ -142,6 +165,24 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       setSaving(false);
     }
   };
+
+  const toggleListening = () => {
+    if (listening) { stopRef.current?.(); return; }
+    const base = text && !text.endsWith(' ') ? `${text} ` : text;
+    const stop = startListening({
+      lang: lang === 'te' ? 'te-IN' : 'en-IN',
+      onText: (spoken) => setText(base + spoken),
+      onEnd: () => { setListening(false); stopRef.current = null; inputRef.current?.focus(); },
+      onError: (code) => {
+        setListening(false);
+        stopRef.current = null;
+        if (code === 'not-allowed' || code === 'service-not-allowed') showToast({ message: 'Allow the microphone in your browser to dictate', tone: 'error' });
+      },
+    });
+    if (stop) { stopRef.current = stop; setListening(true); }
+  };
+
+  useEffect(() => () => stopRef.current?.(), []);
 
   const cycleRecurrence = () => {
     const idx = RECURRENCE_ORDER.indexOf(recurrence);
@@ -157,7 +198,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const hasBusinesses = businesses.length > 0 && !isSubtask;
   const placeholder = isSubtask
     ? 'Sub-task, e.g. Collect invoices tomorrow'
-    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1 +finance for 1h';
+    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1, or: ask Ravi to send the invoice friday';
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight={640} avoidKeyboard>
@@ -255,7 +296,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             <Chip small icon="flag" color={PRIORITY[priority].color} label={PRIORITY[priority].short} onRemove={() => setOverride((o) => ({ ...o, priority: 4 }))} />
           )}
           {!isSubtask && list && <Chip small icon="list" label={list.name} onRemove={() => setOverride((o) => ({ ...o, list_id: null }))} />}
-          {!!assignee && <Chip small icon="person" label={`For ${assignee.name.split(' ')[0]}`} onRemove={() => setBizAssignee(null)} />}
+          {!!assignee && <Chip small icon="person" label={`For ${assignee.name.split(' ')[0]}`} onRemove={() => { setBizAssignee(null); setDelegateOff(true); }} />}
           {review === true && <Chip small icon="eye-outline" label="Needs review" onRemove={() => setReview(null)} />}
           {allLabels.map((l) => (
             <Chip key={l} small icon="pricetag" label={l} onRemove={() => removeLabel(l)} />
@@ -264,10 +305,13 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             <Chip
               key={p.id}
               small
-              icon={assignId === p.id ? 'person-add' : 'person'}
-              active={assignId === p.id}
-              label={assignId === p.id ? `Assigned to ${p.name.split(' ')[0]}` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
-              onPress={() => setAssignId(assignId === p.id ? null : p.id)}
+              icon={effectiveAssignId === p.id ? 'person-add' : 'person'}
+              active={effectiveAssignId === p.id}
+              label={effectiveAssignId === p.id ? `Assigned to ${p.name.split(' ')[0]}` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
+              onPress={() => {
+                if (delegateHere && p.id === delegateHere.id) setDelegateOff(true);
+                else setAssignId(assignId === p.id ? null : p.id);
+              }}
             />
           ))}
         </ScrollView>
@@ -378,6 +422,9 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
                   inputRef.current?.focus();
                 }}
               />
+            )}
+            {isSpeechSupported() && (
+              <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" active={listening} color={colors.brand[600]} onPress={toggleListening} />
             )}
             <ToolButton icon="ellipsis-horizontal" label="More" active={menu === 'more' || menu === 'notes'} onPress={() => setMenu(menu === 'more' || menu === 'notes' ? null : 'more')} />
           </View>

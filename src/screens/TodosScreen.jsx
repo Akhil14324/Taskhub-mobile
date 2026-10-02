@@ -24,6 +24,7 @@ import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
 import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
+import { openTemplates } from '../utils/events';
 import BulkBar from '../components/todos/BulkBar';
 import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
@@ -34,7 +35,7 @@ import useWebReorder, { makeDraggable } from '../hooks/useWebReorder';
 import useShortcuts from '../hooks/useShortcuts';
 import * as SecureStore from '../utils/secureStorage';
 import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
-import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd } from '../utils/dates';
+import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd, formatTime } from '../utils/dates';
 import {
   BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf,
 } from '../utils/todoMeta';
@@ -640,39 +641,36 @@ export default function TodosScreen() {
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
 
   useShortcuts({
-    q: () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
-    n: () => setAddOpen(true),
-    '/': () => { setSearching(true); },
-    '[': () => setSidebarHidden((v) => !v),
-    j: () => stepFocus(1),
-    k: () => stepFocus(-1),
-    ArrowDown: () => stepFocus(1),
-    ArrowUp: () => stepFocus(-1),
-    Enter: () => { if (focused) openTodo(focused); else return false; return undefined; },
-    x: () => { if (focused) toggleTodo(focused); },
-    e: () => { if (focused) openTodo(focused); },
-    s: () => { if (focused?.permissions?.can_add_subtask !== false && focused) setAddOpen({ parent_id: focused.id }); },
-    d: () => { if (focused) openTodo(focused); },
-    Delete: () => { if (focused) requestRowDelete(focused); },
-    Backspace: () => { if (focused && !openTodoId) requestRowDelete(focused); else return false; return undefined; },
-    1: () => focused && updateTodo(focused.id, { priority: 1 }),
-    2: () => focused && updateTodo(focused.id, { priority: 2 }),
-    3: () => focused && updateTodo(focused.id, { priority: 3 }),
-    4: () => focused && updateTodo(focused.id, { priority: 4 }),
+    'todo.quickAdd': () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
+    'todo.new': () => setAddOpen(true),
+    'todo.search': () => { setSearching(true); },
+    'todo.sidebar': () => setSidebarHidden((v) => !v),
+    'todo.next': () => stepFocus(1),
+    'todo.prev': () => stepFocus(-1),
+    'todo.open': () => { if (focused) openTodo(focused); else return false; return undefined; },
+    'todo.complete': () => { if (focused) toggleTodo(focused); },
+    'todo.subtask': () => { if (focused?.permissions?.can_add_subtask !== false && focused) setAddOpen({ parent_id: focused.id }); },
+    'todo.due': () => { if (focused) openTodo(focused); },
+    'todo.delete': () => { if (focused && !openTodoId) requestRowDelete(focused); else return false; return undefined; },
+    'todo.p1': () => focused && updateTodo(focused.id, { priority: 1 }),
+    'todo.p2': () => focused && updateTodo(focused.id, { priority: 2 }),
+    'todo.p3': () => focused && updateTodo(focused.id, { priority: 3 }),
+    'todo.p4': () => focused && updateTodo(focused.id, { priority: 4 }),
     Escape: () => {
       if (openTodoId) setOpenTodoId(null);
       else if (searching) { setSearching(false); setSearch(''); } else if (selectMode) exitSelect();
       else setFocusId(null);
       return undefined;
     },
-    'v l': () => setLayoutKey('list', true),
-    'v b': () => setLayoutKey('board', canBoard),
-    'v c': () => setLayoutKey('calendar', canCalendar),
-    'v t': () => setLayoutKey('timeline', canTimeline),
+    'view.list': () => setLayoutKey('list', true),
+    'view.board': () => setLayoutKey('board', canBoard),
+    'view.calendar': () => setLayoutKey('calendar', canCalendar),
+    'view.timeline': () => setLayoutKey('timeline', canTimeline),
   }, desktop);
 
   // ---- overflow menu -------------------------------------------------------
   const menuOptions = [
+    { key: 'templates', label: 'Start from a template', icon: 'copy-outline' },
     { key: 'select', label: 'Select to-dos', icon: 'checkbox-outline' },
     { key: 'productivity', label: 'Productivity and daily goal', icon: 'stats-chart-outline' },
     { key: 'share', label: 'Share this view to chat', icon: 'paper-plane-outline' },
@@ -681,7 +679,8 @@ export default function TodosScreen() {
     ...(typeof activeFilter?.id === 'number' ? [{ key: 'editFilter', label: 'Edit filter', icon: 'create-outline' }] : []),
   ];
   const onMenu = (key) => {
-    if (key === 'select') setSelectMode(true);
+    if (key === 'templates') openTemplates({ business_id: bizId || undefined });
+    else if (key === 'select') setSelectMode(true);
     else if (key === 'productivity') setProductivityOpen(true);
     else if (key === 'share') (shareVisibleIds.length ? setShareOpen(true) : showToast({ message: 'Nothing to share here yet' }));
     else if (key === 'section') setSectionEditor({ list_id: currentList?.id || null, name: '' });
@@ -892,7 +891,14 @@ export default function TodosScreen() {
         selectedId={openTodoId}
         onOpen={openTodo}
         onToggle={toggleTodo}
-        onAdd={(day) => setAddOpen({ ...(business ? { business_id: business.id } : {}), ...(currentList ? { list_id: currentList.id } : {}), due_date: day })}
+        onAdd={(day, time) => setAddOpen({ ...(business ? { business_id: business.id } : {}), ...(currentList ? { list_id: currentList.id } : {}), due_date: day, ...(time ? { due_time: time } : {}) })}
+        onReschedule={(id, patch) => {
+          const t = todos.find((x) => x.id === id);
+          if (!t || (patch.due_date === t.due_date && (patch.due_time === undefined || patch.due_time === t.due_time))) return;
+          updateTodo(id, patch)
+            .then(() => showToast({ message: `Moved to ${formatDayHeader(patch.due_date)}${patch.due_time ? ` at ${formatTime(patch.due_time)}` : ''}`, icon: 'calendar' }))
+            .catch(() => {});
+        }}
       />
     </ScrollView>
   ) : onBoard ? (

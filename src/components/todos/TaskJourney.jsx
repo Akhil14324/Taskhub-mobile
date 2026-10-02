@@ -23,6 +23,9 @@ function statusAfter(e) {
   }
 }
 
+/** The log entries that count as an "update" on the way to done; priority, due-date and edit changes do not. */
+const MILESTONES = new Set(['update', 'blocker_raised', 'blocker_cleared', 'submitted', 'changes_requested', 'approved']);
+
 const fmtStamp = (t) => {
   const d = new Date(t);
   const day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -79,27 +82,34 @@ export default function TaskJourney({ todo }) {
       ...b, from: ms(b.raised_at), to: b.resolved_at ? ms(b.resolved_at) : end, open: !b.resolved_at,
     }));
 
-    // Flowchart steps: every event, in order, with the gap since the previous one and, for a status
-    // change or a blocker, how long it lasted.
-    const steps = events.map((e, i) => {
-      const at = ms(e.created_at);
-      const prev = i > 0 ? ms(events[i - 1].created_at) : null;
+    // Milestones: only the moments that report progress (updates, blockers, review hand-ins), not every
+    // edit. Each one knows how long it took since the start and since the milestone before it.
+    const marks = [];
+    let prevAt = start;
+    for (const e of events) {
+      if (!MILESTONES.has(e.kind)) continue;
+      const at = Math.min(end, Math.max(prevAt, ms(e.created_at)));
       let held = null;
-      const next = statusAfter(e);
-      if (next && next !== 'done') {
-        const seg = segs.find((s) => s.status === next && Math.abs(s.from - at) < 2000);
-        if (seg) held = { label: `Stayed ${STATUS[next]?.label || next}`, seconds: secs(seg.from, seg.to), running: !!seg.running };
-      }
       if (e.kind === 'blocker_raised') {
         const b = blockers.find((x) => Math.abs(x.from - at) < 5000);
-        if (b) held = { label: b.open ? 'Still stuck' : 'Stuck for', seconds: secs(b.from, b.to), running: b.open, bad: true };
+        if (b) held = { label: b.open ? 'Still stuck' : 'Stuck for', seconds: secs(b.from, b.to), running: b.open };
       }
-      return { e, at, gap: prev ? secs(prev, at) : null, held };
-    });
+      marks.push({ n: marks.length + 1, e, at, sinceStart: secs(start, at), sinceLast: secs(prevAt, at), held });
+      prevAt = at;
+    }
+    // Legs: start → first milestone → … → finish (or now).
+    const points = [start, ...marks.map((m) => m.at), end];
+    const legs = points.slice(0, -1).map((from, i) => ({
+      from, to: points[i + 1], seconds: secs(from, points[i + 1]),
+      toMark: marks[i] || null, last: i === marks.length,
+    }));
+    const gaps = marks.map((m) => m.sinceLast);
+    const longest = gaps.length ? Math.max(...gaps) : 0;
+    const average = gaps.length ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
 
     const byStatus = {};
     segs.forEach((s) => { byStatus[s.status] = (byStatus[s.status] || 0) + secs(s.from, s.to); });
-    return { start, end, finished, segs, blockers, steps, byStatus, total: Math.max(1, end - start) };
+    return { start, end, finished, segs, blockers, marks, legs, longest, average, byStatus, total: Math.max(1, end - start) };
   }, [data, todo.created_at, todo.is_done, todo.done_at, now]);
 
   if (!model) return <Text style={styles.empty}>Loading the journey...</Text>;
@@ -128,13 +138,53 @@ export default function TaskJourney({ todo }) {
         </View>
       </View>
 
+      <View style={styles.stats}>
+        {[
+          { label: 'Total time', value: formatSeconds(totalSeconds), strong: true },
+          { label: 'Active time', value: formatSeconds(Math.max(0, totalSeconds - (model.byStatus.on_hold || 0))) },
+          { label: 'Updates', value: String(model.marks.length) },
+          { label: model.marks.length ? 'To first update' : 'No update yet', value: model.marks.length ? formatSeconds(model.marks[0].sinceStart) : '-' },
+          { label: 'Between updates (avg)', value: model.marks.length > 1 ? formatSeconds(model.average) : '-' },
+          { label: 'Longest wait', value: model.marks.length ? formatSeconds(model.longest) : '-' },
+        ].map((s) => (
+          <View key={s.label} style={styles.stat}>
+            <Text style={[styles.statValue, s.strong && { color: colors.brand[700] }]}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+
       <Text style={styles.heading}>Gantt</Text>
+      <View style={styles.pins}>
+        {model.marks.map((m) => {
+          const bad = m.e.kind === 'blocker_raised';
+          return (
+            <View
+              key={m.n}
+              style={[styles.pin, { left: `${Math.min(97, ((m.at - model.start) / model.total) * 100)}%`, backgroundColor: bad ? red : colors.brand[600] }]}
+            >
+              <Text style={styles.pinText}>{m.n}</Text>
+            </View>
+          );
+        })}
+      </View>
       <View style={styles.track}>
         {model.segs.map((s, i) => (
           <View
             key={i}
             style={[styles.seg, { flex: Math.max(s.to - s.from, model.total * 0.02), backgroundColor: shade(s.status) }]}
           />
+        ))}
+      </View>
+      <Text style={styles.laneLabel}>Time between updates</Text>
+      <View style={styles.legs}>
+        {model.legs.map((l, i) => (
+          <View
+            key={i}
+            style={[styles.leg, { flex: Math.max(l.to - l.from, model.total * 0.04), backgroundColor: i % 2 ? colors.brand[100] : colors.brand[200] }]}
+          >
+            <Text style={styles.legText} numberOfLines={1}>{formatSeconds(l.seconds)}</Text>
+          </View>
         ))}
       </View>
       {model.blockers.length > 0 && (
@@ -190,8 +240,13 @@ export default function TaskJourney({ todo }) {
         </>
       )}
 
-      <Text style={styles.heading}>Flow</Text>
-      {model.steps.map((step, i) => {
+      <Text style={styles.heading}>Updates</Text>
+      <View style={styles.startNode}>
+        <Ionicons name="flag" size={14} color={colors.brand[600]} />
+        <Text style={styles.startText}>Started {fmtStamp(model.start)}</Text>
+      </View>
+      {model.marks.length === 0 && <Text style={styles.empty}>No updates were posted {model.finished ? 'before it was finished.' : 'yet.'}</Text>}
+      {model.marks.map((step) => {
         const who = step.e.user_id === user?.id ? 'You' : (step.e.user_name || 'Someone');
         const d = describeEntry(step.e, who);
         const bad = d.tone === 'bad';
@@ -199,16 +254,14 @@ export default function TaskJourney({ todo }) {
         const tone = bad ? red : good ? healthColor('green', theme) : colors.gray[500];
         return (
           <View key={step.e.id}>
-            {step.gap !== null && (
-              <View style={styles.link}>
-                <View style={styles.linkLine} />
-                <View style={styles.linkPill}>
-                  <Ionicons name="arrow-down" size={11} color={colors.gray[500]} />
-                  <Text style={styles.linkText}>{step.gap >= 60 ? formatSeconds(step.gap) : 'right after'}</Text>
-                </View>
-                <View style={styles.linkLine} />
+            <View style={styles.link}>
+              <View style={styles.linkLine} />
+              <View style={styles.linkPill}>
+                <Ionicons name="arrow-down" size={11} color={colors.gray[500]} />
+                <Text style={styles.linkText}>{step.sinceLast >= 60 ? formatSeconds(step.sinceLast) : 'right after'}{step.n === 1 ? ' from the start' : ' since the last one'}</Text>
               </View>
-            )}
+              <View style={styles.linkLine} />
+            </View>
             <View style={[styles.node, { borderColor: bad ? red : colors.gray[200] }]}>
               <View style={[styles.nodeIcon, { backgroundColor: bad ? healthTint('red', theme, 0.16) : good ? healthTint('green', theme, 0.16) : colors.gray[100] }]}>
                 <Ionicons name={d.icon} size={16} color={tone} />
@@ -216,7 +269,8 @@ export default function TaskJourney({ todo }) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.nodeTitle}>{d.title}</Text>
                 {!!d.detail && <Text style={styles.nodeDetail}>{d.detail}</Text>}
-                <Text style={styles.nodeTime}>{fmtStamp(step.at)}</Text>
+                <Text style={styles.nodeTime}>#{step.n} · {fmtStamp(step.at)} · {formatSeconds(step.sinceStart)} after the start</Text>
+                {!!step.e.meta?.progress && <Text style={styles.nodeTime}>Progress {step.e.meta.progress}%</Text>}
                 {step.held && (
                   <View style={[styles.held, { backgroundColor: step.held.bad ? healthTint('red', theme, 0.14) : colors.gray[100] }]}>
                     <Ionicons name="time-outline" size={12} color={step.held.bad ? red : colors.gray[600]} />
@@ -230,12 +284,40 @@ export default function TaskJourney({ todo }) {
           </View>
         );
       })}
-      {!model.finished && (
-        <View style={styles.link}>
-          <View style={styles.linkLine} />
-          <View style={styles.linkPill}><Text style={styles.linkText}>in progress, {formatSeconds(secs(model.steps.length ? model.steps[model.steps.length - 1].at : model.start, now))} since the last step</Text></View>
-        </View>
-      )}
+      {(() => {
+        const last = model.legs[model.legs.length - 1];
+        return (
+          <>
+            <View style={styles.link}>
+              <View style={styles.linkLine} />
+              <View style={styles.linkPill}>
+                <Ionicons name="arrow-down" size={11} color={colors.gray[500]} />
+                <Text style={styles.linkText}>
+                  {model.finished
+                    ? `${formatSeconds(last.seconds)} ${model.marks.length ? 'from the last update' : 'from the start'} to finishing`
+                    : `${formatSeconds(last.seconds)} ${model.marks.length ? 'since the last update' : 'since the start'}, still going`}
+                </Text>
+              </View>
+              <View style={styles.linkLine} />
+            </View>
+            <View style={[styles.node, { borderColor: model.finished ? healthColor('green', theme) : colors.gray[200] }]}>
+              <View style={[styles.nodeIcon, { backgroundColor: model.finished ? healthTint('green', theme, 0.16) : colors.gray[100] }]}>
+                <Ionicons name={model.finished ? 'checkmark-circle' : 'hourglass-outline'} size={16} color={model.finished ? healthColor('green', theme) : colors.gray[500]} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.nodeTitle}>{model.finished ? 'Marked complete' : 'Not complete yet'}</Text>
+                <Text style={styles.nodeTime}>{model.finished ? fmtStamp(model.finished) : `now · ${fmtStamp(now)}`}</Text>
+                <View style={[styles.held, { backgroundColor: colors.gray[100] }]}>
+                  <Ionicons name="time-outline" size={12} color={colors.gray[600]} />
+                  <Text style={[styles.heldText, { color: colors.gray[700] }]}>
+                    Total {formatSeconds(totalSeconds)}{model.finished ? '' : ' so far'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </>
+        );
+      })()}
     </View>
   );
 }
@@ -249,6 +331,19 @@ const createStyles = (c) => StyleSheet.create({
   heading: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', color: c.gray[500], marginTop: spacing.lg, marginBottom: spacing.sm },
   track: { flexDirection: 'row', height: 18, borderRadius: 9, overflow: 'hidden', backgroundColor: c.gray[100], gap: 1 },
   seg: { height: 18 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  stat: { flexGrow: 1, flexBasis: 90, backgroundColor: c.gray[50], borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: spacing.md },
+  statValue: { fontSize: fontSize.md, fontWeight: '800', color: c.gray[900] },
+  statLabel: { fontSize: 10, fontWeight: '600', color: c.gray[500], marginTop: 1 },
+  pins: { height: 22, position: 'relative' },
+  pin: { position: 'absolute', top: 2, width: 18, height: 18, borderRadius: 9, marginLeft: -9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.white },
+  pinText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+  laneLabel: { fontSize: 10, fontWeight: '700', color: c.gray[400], marginTop: 6, marginBottom: 3 },
+  legs: { flexDirection: 'row', height: 22, borderRadius: 6, overflow: 'hidden', gap: 1 },
+  leg: { height: 22, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  legText: { fontSize: 10, fontWeight: '700', color: c.gray[800] },
+  startNode: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  startText: { fontSize: fontSize.sm, fontWeight: '700', color: c.gray[800] },
   lane: { height: 10, marginTop: 4, position: 'relative' },
   blockBar: { position: 'absolute', top: 0, height: 10, borderRadius: 5, borderWidth: 1 },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },

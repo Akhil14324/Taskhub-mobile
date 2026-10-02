@@ -40,6 +40,7 @@ import SharedTodosCard from '../components/SharedTodosCard';
 import SharedTaskCard from '../components/SharedTaskCard';
 import MentionSuggestions from '../components/MentionSuggestions';
 import { activeMentionQuery, completeMention } from '../utils/quickAdd';
+import { openQuickAdd } from '../utils/events';
 import AnimatedPressable from '../components/AnimatedPressable';
 import TypingIndicator from '../components/TypingIndicator';
 
@@ -1347,6 +1348,16 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
           <Ionicons name="arrow-undo" size={22} color={colors.gray[700]} />
           <Text style={styles.reactionActionText}>{t('reply')}</Text>
         </AnimatedPressable>
+        {!!reactionTarget?.body && (
+          <AnimatedPressable
+            style={styles.reactionAction}
+            onPress={() => { const m = reactionTarget; setReactionTarget(null); openQuickAdd({ text: m.body.slice(0, 300), defaults: { due_date: null } }); }}
+            haptic="light"
+          >
+            <Ionicons name="checkbox-outline" size={22} color={colors.gray[700]} />
+            <Text style={styles.reactionActionText}>Make a to-do</Text>
+          </AnimatedPressable>
+        )}
         <AnimatedPressable style={styles.reactionAction} onPress={() => reactionTarget && handleCopyMessage(reactionTarget)} haptic="light">
           <Ionicons name="copy-outline" size={22} color={colors.gray[700]} />
           <Text style={styles.reactionActionText}>{t('copy')}</Text>

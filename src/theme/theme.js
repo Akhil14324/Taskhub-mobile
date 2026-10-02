@@ -74,9 +74,9 @@ export const darkColors = {
   gray: {
     // Neutral greys on a true-black base (no blue tint): 50 is the page, `white` below is a card.
     50: '#000000',
-    100: '#141414',
-    200: '#262626',
-    300: '#404040',
+    100: '#1a1a1a',
+    200: '#2c2c2c',
+    300: '#454545',
     400: '#737373',
     500: '#a3a3a3',
     600: '#d4d4d4',
@@ -97,7 +97,7 @@ export const darkColors = {
   blue: darkRedScale,
   indigo: darkRedScale,
   amber: darkRedScale,
-  white: '#0a0a0a',
+  white: '#101010',
   black: '#fafafa',
   overlay: 'rgba(0, 0, 0, 0.6)',
 };

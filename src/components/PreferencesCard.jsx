@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import { Card } from './UI';
+import { configureFeedback, playSound } from '../utils/feedback';
 
 const CHOICES = [
   { key: 'viewMode', icon: 'leaf-outline', label: 'How much to show', hint: 'Simple hides labels, estimates, filters, calendar and timeline. Full shows everything.', fallback: 'full',
@@ -64,6 +65,58 @@ export default function PreferencesCard() {
           </View>
         </View>
       ))}
+
+      <View style={[styles.row, styles.switchRow]}>
+        <Ionicons name="sunny-outline" size={18} color={colors.gray[500]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Morning digest and weekly recap</Text>
+          <Text style={styles.hint}>One message each morning with what is due, and a Monday summary of your week</Text>
+        </View>
+        <Switch
+          value={prefs.morningDigest !== false}
+          onValueChange={(v) => updatePreferences({ morningDigest: v })}
+          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
+        />
+      </View>
+
+      <View style={[styles.row, styles.switchRow]}>
+        <Ionicons name="trophy-outline" size={18} color={colors.gray[500]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Celebrations</Text>
+          <Text style={styles.hint}>A short animation when your day is complete and when you earn a badge</Text>
+        </View>
+        <Switch
+          value={prefs.celebrations !== false}
+          onValueChange={(v) => updatePreferences({ celebrations: v })}
+          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
+        />
+      </View>
+
+      <View style={[styles.row, styles.switchRow]}>
+        <Ionicons name="volume-low-outline" size={18} color={colors.gray[500]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Sounds</Text>
+          <Text style={styles.hint}>A soft tone when you finish a to-do or a day. Off by default</Text>
+        </View>
+        <Switch
+          value={prefs.sounds === true}
+          onValueChange={(v) => { updatePreferences({ sounds: v }); if (v) { configureFeedback({ ...prefs, sounds: true }); playSound('done'); } }}
+          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
+        />
+      </View>
+
+      <View style={[styles.row, styles.switchRow]}>
+        <Ionicons name="phone-portrait-outline" size={18} color={colors.gray[500]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Haptics</Text>
+          <Text style={styles.hint}>A tiny vibration on taps and when you finish something (phones that support it)</Text>
+        </View>
+        <Switch
+          value={prefs.haptics !== false}
+          onValueChange={(v) => updatePreferences({ haptics: v })}
+          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
+        />
+      </View>
 
       <View style={[styles.row, styles.switchRow]}>
         <Ionicons name="flash-off-outline" size={18} color={colors.gray[500]} />

@@ -12,11 +12,14 @@ import Animated, {
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
+import useIsDesktop from '../hooks/useBreakpoint';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SPRING_CONFIG = { damping: 24, stiffness: 280, mass: 0.8, overshootClamping: true };
 
-export default function Modal({ open, onClose, title, children }) {
+/** Phones: a tall sheet from the bottom. Desktop browsers: a compact centred dialog that fits its content (`width` sets its maximum). */
+export default function Modal({ open, onClose, title, children, width = 460 }) {
+  const desktop = useIsDesktop();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -24,11 +27,21 @@ export default function Modal({ open, onClose, title, children }) {
   const overlayOpacity = useSharedValue(0);
 
   useEffect(() => {
-    if (open) {
+    if (open && desktop) {
+      translateY.value = 0;
+      overlayOpacity.value = withTiming(1, { duration: 160 });
+    } else if (open) {
       translateY.value = withSpring(0, SPRING_CONFIG);
       overlayOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.ease) });
     }
-  }, [open, translateY, overlayOpacity]);
+  }, [open, desktop, translateY, overlayOpacity]);
+
+  useEffect(() => {
+    if (!open || !desktop || typeof document === 'undefined') return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, desktop, onClose]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -48,16 +61,16 @@ export default function Modal({ open, onClose, title, children }) {
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View style={[styles.overlay, overlayStyle]}>
+        <Animated.View style={[styles.overlay, desktop && styles.overlayDesktop, overlayStyle]}>
           <TouchableWithoutFeedback onPress={() => {}}>
-            <Animated.View style={[styles.container, { paddingBottom: spacing.xxxl + insets.bottom }, sheetStyle]}>
+            <Animated.View style={[styles.container, desktop ? [styles.dialog, { maxWidth: width }] : { paddingBottom: spacing.xxxl + insets.bottom }, sheetStyle]}>
               <View style={styles.header}>
                 <Text style={styles.title}>{title}</Text>
                 <AnimatedPressable onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">
                   <Ionicons name="close" size={24} color={colors.gray[400]} />
                 </AnimatedPressable>
               </View>
-              <ScrollView style={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView style={desktop ? styles.bodyDesktop : styles.body} contentContainerStyle={desktop ? { padding: spacing.lg, paddingTop: spacing.md } : undefined} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {children}
               </ScrollView>
             </Animated.View>
@@ -74,6 +87,12 @@ const createStyles = (colors) => StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: colors.overlay,
   },
+  overlayDesktop: { justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
+  dialog: {
+    height: 'auto', width: '100%', maxHeight: '88%', borderRadius: radius.xl, overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
+  },
+  bodyDesktop: { flexGrow: 0 },
   container: {
     backgroundColor: colors.white,
     borderTopLeftRadius: radius.xl,

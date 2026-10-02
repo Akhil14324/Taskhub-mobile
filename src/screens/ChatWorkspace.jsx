@@ -28,7 +28,7 @@ export default function ChatWorkspace() {
     setActiveId(list[Math.max(0, Math.min(list.length - 1, i < 0 ? 0 : i + d))].id);
     return undefined;
   };
-  useShortcuts({ ArrowDown: () => step(1), ArrowUp: () => step(-1), Escape: () => { if (activeId) { setActiveId(null); return undefined; } return false; } });
+  useShortcuts({ 'chat.next': () => step(1), 'chat.prev': () => step(-1), Escape: () => { if (activeId) { setActiveId(null); return undefined; } return false; } });
 
   // A notification or shared card can open a specific conversation.
   useEffect(() => { if (fromLink) setActiveId(fromLink); }, [fromLink]);

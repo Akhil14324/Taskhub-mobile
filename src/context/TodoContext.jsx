@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import api from '../api/client';
+import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast } from '../utils/events';
@@ -145,6 +146,7 @@ export function TodoProvider({ children }) {
         });
       });
     }
+    if (completing && !needsReview) feedback.complete();
     try {
       const res = await api.post(`/todos/${todo.id}/toggle`);
       const updated = res.data.todo;
@@ -330,8 +332,10 @@ export function TodoProvider({ children }) {
     return res.data.comments || [];
   }, []);
 
-  const addComment = useCallback(async (todoId, body, mentionIds = []) => {
-    const res = await api.post(`/todos/${todoId}/comments`, { body, mention_ids: mentionIds });
+  const addComment = useCallback(async (todoId, body, mentionIds = [], extra = {}) => {
+    const res = await api.post(`/todos/${todoId}/comments`, {
+      body, mention_ids: mentionIds, parent_id: extra.parentId || undefined, attachment_ids: extra.attachmentIds || undefined,
+    });
     setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, comment_count: (t.comment_count || 0) + 1 } : t)));
     return res.data.comment;
   }, []);

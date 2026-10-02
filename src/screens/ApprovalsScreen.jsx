@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useColors } from '../context/ThemeContext';
 import { useChat } from '../context/ChatContext';
 import { useTodos } from '../context/TodoContext';
@@ -14,8 +15,9 @@ import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import PromptSheet from '../components/todos/PromptSheet';
 import { IconButton, EmptyHero, SectionHeader, Avatar } from '../components/kit';
 import useIsDesktop from '../hooks/useBreakpoint';
+import useShortcuts from '../hooks/useShortcuts';
 import { timeAgo } from '../utils/dates';
-import { showToast } from '../utils/events';
+import { showToast, confirmDialog } from '../utils/events';
 
 /**
  * Everything waiting on me, in order of the chain of command:
@@ -24,6 +26,37 @@ import { showToast } from '../utils/events';
  *  - requests to delete a task
  * plus the requests I made myself.
  */
+/** A card that can be swiped: right to approve, left to decline (or ask for changes). */
+function SwipeCard({ onApprove, onDecline, approveLabel, declineLabel, selected, children }) {
+  const colors = useColors();
+  const ref = useRef(null);
+  const action = (label, icon, solid) => (
+    <View style={{
+      width: 112, marginBottom: spacing.sm, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', gap: 4,
+      backgroundColor: solid ? colors.brand[600] : colors.gray[700],
+    }}
+    >
+      <Ionicons name={icon} size={20} color="#fff" />
+      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{label}</Text>
+    </View>
+  );
+  return (
+    <Swipeable
+      ref={ref}
+      friction={2}
+      overshootLeft={false}
+      overshootRight={false}
+      leftThreshold={70}
+      rightThreshold={70}
+      renderLeftActions={() => action(approveLabel, 'checkmark', true)}
+      renderRightActions={() => action(declineLabel, 'close', false)}
+      onSwipeableOpen={(direction) => { ref.current?.close(); (direction === 'left' ? onApprove : onDecline)(); }}
+    >
+      <View style={selected ? { borderRadius: radius.lg, borderWidth: 2, borderColor: colors.brand[500], marginBottom: spacing.sm } : null}>{children}</View>
+    </Swipeable>
+  );
+}
+
 export default function ApprovalsScreen() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -37,6 +70,7 @@ export default function ApprovalsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(null);
   const [prompt, setPrompt] = useState(null);
+  const [selKey, setSelKey] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -82,6 +116,48 @@ export default function ApprovalsScreen() {
   const mine = data?.mine || [];
   const nothing = !proposals.length && !reviews.length && !requests.length;
 
+  // Every decision in one list, so swipes, buttons and the keyboard all do the same thing.
+  const decisions = [
+    ...proposals.map((t) => ({
+      key: `p${t.id}`,
+      approve: () => act(`acc${t.id}`, () => reviewTodo(t.id, 'accept'), 'Accepted'),
+      decline: () => setPrompt({ kind: 'decline', id: t.id, title: 'Decline this task', hint: 'Tell them why. They can see your reason.', placeholder: 'Reason', confirmLabel: 'Decline', required: true }),
+    })),
+    ...reviews.map((t) => ({
+      key: `r${t.id}`,
+      approve: () => act(`app${t.id}`, () => approveTodo(t.id), 'Approved'),
+      decline: () => setPrompt({ kind: 'changes', id: t.id, title: 'Ask for changes', hint: 'It goes back to in progress with your note.', placeholder: 'What should change?', confirmLabel: 'Send back' }),
+    })),
+    ...requests.map((a) => ({
+      key: `a${a.id}`,
+      approve: async () => {
+        const ok = await confirmDialog({ title: 'Delete this task?', message: a.todo_title, confirmLabel: 'Approve delete', destructive: true });
+        if (ok) act(`ok${a.id}`, () => api.post(`/approvals/${a.id}/decide`, { decision: 'approve' }), 'Task deleted');
+      },
+      decline: () => act(`dd${a.id}`, () => api.post(`/approvals/${a.id}/decide`, { decision: 'reject' }), 'Request declined'),
+    })),
+  ];
+  const byKey = new Map(decisions.map((d) => [d.key, d]));
+
+  const step = (dir) => {
+    if (!decisions.length) return false;
+    const i = decisions.findIndex((d) => d.key === selKey);
+    setSelKey(decisions[Math.max(0, Math.min(decisions.length - 1, i < 0 ? (dir > 0 ? 0 : decisions.length - 1) : i + dir))].key);
+    return undefined;
+  };
+  useShortcuts({
+    'approvals.next': () => step(1),
+    'approvals.prev': () => step(-1),
+    'approvals.approve': () => { const d = byKey.get(selKey); if (!d) return false; d.approve(); return undefined; },
+    'approvals.decline': () => { const d = byKey.get(selKey); if (!d) return false; d.decline(); return undefined; },
+  }, desktop);
+
+  const approveAllReviews = async () => {
+    const ok = await confirmDialog({ title: `Approve all ${reviews.length} finished tasks?`, message: 'Each one is marked approved.', confirmLabel: 'Approve all' });
+    if (!ok) return;
+    await act('all', async () => { for (const t of reviews) await approveTodo(t.id); }, 'All approved');
+  };
+
   return (
     <View style={[styles.container, { paddingTop: desktop ? spacing.lg : insets.top }]}>
       <View style={styles.header}>
@@ -105,7 +181,8 @@ export default function ApprovalsScreen() {
 
           {proposals.length > 0 && <SectionHeader title="Suggested tasks" count={proposals.length} />}
           {proposals.map((t) => (
-            <View key={`p${t.id}`} style={styles.card}>
+            <SwipeCard key={`p${t.id}`} approveLabel="Accept" declineLabel="Decline" selected={selKey === `p${t.id}`} onApprove={byKey.get(`p${t.id}`).approve} onDecline={byKey.get(`p${t.id}`).decline}>
+            <View style={styles.card}>
               <AnimatedPressable onPress={() => openTodo(t.id)}>
                 <View style={styles.cardTop}>
                   <Avatar name={t.created_by_name} size={34} />
@@ -133,11 +210,19 @@ export default function ApprovalsScreen() {
                 />
               </View>
             </View>
+            </SwipeCard>
           ))}
 
           {reviews.length > 0 && <SectionHeader title="Finished work to review" count={reviews.length} />}
+          {reviews.length > 1 && (
+            <AnimatedPressable onPress={approveAllReviews} disabled={busy === 'all'} style={styles.approveAll}>
+              <Ionicons name="checkmark-done" size={15} color={colors.brand[700]} />
+              <Text style={styles.approveAllText}>{busy === 'all' ? 'Approving...' : `Approve all ${reviews.length}`}</Text>
+            </AnimatedPressable>
+          )}
           {reviews.map((t) => (
-            <View key={`r${t.id}`} style={styles.card}>
+            <SwipeCard key={`r${t.id}`} approveLabel="Approve" declineLabel="Changes" selected={selKey === `r${t.id}`} onApprove={byKey.get(`r${t.id}`).approve} onDecline={byKey.get(`r${t.id}`).decline}>
+            <View style={styles.card}>
               <AnimatedPressable onPress={() => openTodo(t.id)}>
                 <View style={styles.cardTop}>
                   <Avatar name={t.submitted_by_name || t.assignee_name} size={34} />
@@ -166,11 +251,13 @@ export default function ApprovalsScreen() {
                 />
               </View>
             </View>
+            </SwipeCard>
           ))}
 
           {requests.length > 0 && <SectionHeader title="Requests from your team" count={requests.length} />}
           {requests.map((a) => (
-            <View key={`a${a.id}`} style={styles.card}>
+            <SwipeCard key={`a${a.id}`} approveLabel="Delete" declineLabel="Decline" selected={selKey === `a${a.id}`} onApprove={byKey.get(`a${a.id}`).approve} onDecline={byKey.get(`a${a.id}`).decline}>
+            <View style={styles.card}>
               <View style={styles.cardTop}>
                 <View style={styles.kindIcon}>
                   <Ionicons name="trash-bin-outline" size={18} color={colors.brand[700]} />
@@ -193,10 +280,11 @@ export default function ApprovalsScreen() {
                   icon="trash"
                   solid
                   loading={busy === `ok${a.id}`}
-                  onPress={() => act(`ok${a.id}`, () => api.post(`/approvals/${a.id}/decide`, { decision: 'approve' }), 'Task deleted')}
+                  onPress={() => byKey.get(`a${a.id}`).approve()}
                 />
               </View>
             </View>
+            </SwipeCard>
           ))}
 
           {mine.length > 0 && <SectionHeader title="Your requests" count={mine.length} />}
@@ -265,5 +353,7 @@ const createStyles = (colors) => StyleSheet.create({
   mineRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   statusDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brand[600] },
   mineTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[900] },
+  approveAll: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', height: 30, paddingHorizontal: 12, borderRadius: 15, backgroundColor: colors.brand[50], marginBottom: spacing.sm },
+  approveAllText: { fontSize: fontSize.xs, fontWeight: '800', color: colors.brand[700] },
   withdraw: { fontSize: fontSize.sm, fontWeight: '700', color: colors.red[600] },
 });

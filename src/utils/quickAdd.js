@@ -202,3 +202,32 @@ export function activeMentionQuery(text) {
 export function completeMention(text, username) {
   return String(text || '').replace(/(^|\s)@([A-Za-z0-9._-]{0,30})$/, `$1@${username} `);
 }
+
+const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+
+/**
+ * "ask Ravi to send the invoice friday" / "tell priya to call the bank" / "send the quote, assign to Ravi":
+ * finds the colleague (first name, full name or username, only when it is unambiguous) and the task
+ * without the instruction. Returns { person, rest } or null.
+ */
+export function detectDelegate(text, people = [], meId = null) {
+  const input = String(text || '').trim();
+  if (!input || !people.length) return null;
+  let chunk = null;
+  let rest = null;
+  let m = input.match(/^(?:please\s+)?(?:ask|tell|remind|get|have|let)\s+@?([\w.'-]+(?:\s[\w.'-]+){0,2}?)\s+to\s+(.+)$/i);
+  if (m) { chunk = m[1]; rest = m[2]; }
+  if (!m) {
+    m = input.match(/^(.+?)[,\s]+(?:and\s+)?assign(?:ed)?\s+(?:it\s+)?to\s+@?([\w.'-]+(?:\s[\w.'-]+)?)\s*$/i);
+    if (m) { rest = m[1]; chunk = m[2]; }
+  }
+  if (!chunk || !rest) return null;
+  const key = chunk.toLowerCase().trim();
+  if (['me', 'myself', 'us', 'everyone', 'them', 'him', 'her'].includes(key)) return null;
+  const pool = people.filter((p) => p.id !== meId);
+  const exact = pool.filter((p) => p.name?.toLowerCase() === key || p.username?.toLowerCase() === key);
+  const loose = pool.filter((p) => p.name?.toLowerCase().split(' ')[0] === key || p.name?.toLowerCase().startsWith(key + ' '));
+  const hits = exact.length ? exact : loose;
+  if (hits.length !== 1) return null;
+  return { person: hits[0], rest: cap(rest.trim().replace(/[,\s]+$/, '')) };
+}

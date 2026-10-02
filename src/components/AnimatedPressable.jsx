@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { haptic as webHaptic } from '../utils/feedback';
 
 const SPRING_CONFIG = { damping: 30, stiffness: 500, mass: 0.5, overshootClamping: true };
 const SCALE_DOWN = 0.985;
@@ -82,10 +83,7 @@ function WebPressable({
 
   const triggerHaptic = useCallback(() => {
     if (!hapticRef.current || disabled) return;
-    const hapticStyle = hapticRef.current === 'heavy' ? Haptics.ImpactFeedbackStyle.Heavy
-      : hapticRef.current === 'medium' ? Haptics.ImpactFeedbackStyle.Medium
-      : Haptics.ImpactFeedbackStyle.Light;
-    Haptics.impactAsync(hapticStyle).catch(() => {});
+    webHaptic(hapticRef.current === true ? 'light' : hapticRef.current);
   }, [disabled]);
 
   const handlePress = useCallback((e) => {

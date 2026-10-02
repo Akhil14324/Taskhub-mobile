@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors, useTheme } from '../context/ThemeContext';
@@ -10,13 +10,18 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import ShortcutsSheet from './ShortcutsSheet';
 import { Avatar } from './kit';
+import { useEngage } from '../context/EngageContext';
+import { openPalette, on } from '../utils/events';
 import { navigationRef } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
+import { useHint } from '../utils/shortcutRegistry';
 import { todayYmd } from '../utils/dates';
 
 // Which sidebar entry owns which route.
 const SECTION_OF = {
   Dashboard: 'home',
+  MyDay: 'myday',
+  Recap: 'myday',
   Todos: 'todos',
   ChatList: 'chat',
   ChatThread: 'chat',
@@ -24,6 +29,10 @@ const SECTION_OF = {
   Approvals: 'approvals',
   TeamMonitor: 'monitor',
   PersonMonitor: 'monitor',
+  Insights: 'insights',
+  Goals: 'goals',
+  Standup: 'standup',
+  Wins: 'wins',
   Notifications: 'notifications',
   Organization: 'org',
   Profile: 'profile',
@@ -75,22 +84,31 @@ export default function AppSidebar({ routeName }) {
   const { totalUnread } = useChat();
   const { todos } = useTodos();
   const { unreadCount, approvalCount } = useNotifications();
+  const { myDay } = useEngage();
+  const dayBadge = (myDay?.waiting_on_you || []).length;
   const [help, setHelp] = useState(false);
+  const hint = useHint();
+  useEffect(() => on('shortcuts:open', () => setHelp(true)), []);
   const section = SECTION_OF[routeName] || null;
 
   const today = todayYmd();
   const dueCount = todos.filter((t) => !t.is_done && t.due_date && t.due_date <= today && (!t.business_id || t.assignee_id === user?.id)).length;
 
   useShortcuts({
-    'g h': () => go('Dashboard'),
-    'g t': () => go('Todos'),
-    'g c': () => go('ChatList'),
-    'g a': () => go('Approvals'),
-    'g m': () => (user?.can_monitor ? go('TeamMonitor') : false),
-    'g n': () => go('Notifications'),
-    'g o': () => go('Organization'),
-    'g p': () => go('Profile'),
-    '?': () => setHelp(true),
+    'nav.home': () => go('Dashboard'),
+    'nav.myday': () => go('MyDay'),
+    'nav.todos': () => go('Todos'),
+    'nav.chat': () => go('ChatList'),
+    'nav.approvals': () => go('Approvals'),
+    'nav.monitor': () => (user?.can_monitor ? go('TeamMonitor') : false),
+    'nav.insights': () => go('Insights'),
+    'nav.goals': () => go('Goals'),
+    'nav.standup': () => go('Standup'),
+    'nav.wins': () => go('Wins'),
+    'nav.notifications': () => go('Notifications'),
+    'nav.org': () => go('Organization'),
+    'nav.profile': () => go('Profile'),
+    'app.help': () => setHelp(true),
   }, true);
 
   return (
@@ -101,13 +119,19 @@ export default function AppSidebar({ routeName }) {
       </View>
 
       <View style={styles.group}>
-        <Entry icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint="G H" />
+        <Entry icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
+        <Entry icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
+        <Entry icon="sunny-outline" activeIcon="sunny" label="My Day" badge={dayBadge} active={section === 'myday'} onPress={() => go('MyDay')} hint={hint('nav.myday')} />
         <Entry icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
         <Entry icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
         <Entry icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (
           <Entry icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
+        <Entry icon="megaphone-outline" activeIcon="megaphone" label="Stand-up" active={section === 'standup'} onPress={() => go('Standup')} hint={hint('nav.standup')} />
+        <Entry icon="trophy-outline" activeIcon="trophy" label="Wins" active={section === 'wins'} onPress={() => go('Wins')} hint={hint('nav.wins')} />
+        <Entry icon="flag-outline" activeIcon="flag" label="Goals" active={section === 'goals'} onPress={() => go('Goals')} hint={hint('nav.goals')} />
+        <Entry icon="pulse-outline" activeIcon="pulse" label="Insights" active={section === 'insights'} onPress={() => go('Insights')} hint={hint('nav.insights')} />
         <Entry icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
         <Entry icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />
       </View>
@@ -115,7 +139,7 @@ export default function AppSidebar({ routeName }) {
       <View style={{ flex: 1 }} />
 
       <View style={styles.group}>
-        <Entry icon="keypad-outline" label="Keyboard shortcuts" hint="?" onPress={() => setHelp(true)} />
+        <Entry icon="keypad-outline" label="Keyboard shortcuts" hint={hint('app.help')} onPress={() => setHelp(true)} />
         <Entry icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onPress={toggleTheme} />
       </View>
       <AnimatedPressable style={styles.me} onPress={() => go('Profile')}>

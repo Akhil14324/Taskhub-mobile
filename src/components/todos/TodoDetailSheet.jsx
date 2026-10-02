@@ -10,6 +10,8 @@ import BottomSheet from '../BottomSheet';
 import DueDatePicker from '../DueDatePicker';
 import MentionSuggestions from '../MentionSuggestions';
 import ShareToChatSheet from '../ShareToChatSheet';
+import KudosSheet from '../engage/KudosSheet';
+import { SaveTemplateSheet } from './TemplatesSheet';
 import SubtaskTree from './SubtaskTree';
 import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
@@ -63,6 +65,8 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
   const [dateOpen, setDateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [kudosOpen, setKudosOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState(null);
   const [more, setMore] = useState(true);
@@ -99,6 +103,13 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
 
   const members = todo?.members || [];
   const isCreator = todo?.created_by === user?.id;
+  // Finished work can be thanked: the person who did it, unless that is you.
+  const kudosTarget = (() => {
+    if (!todo?.is_done) return null;
+    if (todo.assignee_id && todo.assignee_id !== user?.id) return { id: todo.assignee_id, name: todo.assignee_name || 'them', profile_picture: todo.assignee_picture };
+    if (todo.done_by && todo.done_by !== user?.id) return { id: todo.done_by, name: todo.done_by_name || 'them' };
+    return null;
+  })();
   const simple = user?.preferences?.viewMode === 'simple';
   const suggestions = personQuery !== null
     ? filterPeople(people, personQuery, { excludeIds: members.map((m) => m.id), limit: 6 })
@@ -469,6 +480,8 @@ No deadline. Open since ${timeAgo(todo.created_at)}, last update ${timeAgo(todo.
 
         <View style={styles.actions}>
           {variant !== 'panel' && <ActionButton icon="paper-plane-outline" label="Share" onPress={() => setShareOpen(true)} />}
+          <ActionButton icon="copy-outline" label="Save as template" onPress={() => setTemplateOpen(true)} />
+          {!!kudosTarget && <ActionButton icon="heart-outline" label={`Thank ${kudosTarget.name.split(' ')[0]}`} onPress={() => setKudosOpen(true)} />}
           {!business && (
             <ActionButton
               icon="copy-outline"
@@ -518,6 +531,8 @@ No deadline. Open since ${timeAgo(todo.created_at)}, last update ${timeAgo(todo.
           }
         }}
       />
+      <SaveTemplateSheet visible={templateOpen} onClose={() => setTemplateOpen(false)} todo={todo} />
+      <KudosSheet visible={kudosOpen} onClose={() => setKudosOpen(false)} toUser={kudosTarget} todo={todo} />
       <ShareToChatSheet
         visible={shareOpen}
         onClose={() => setShareOpen(false)}

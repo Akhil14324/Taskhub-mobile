@@ -47,6 +47,10 @@ function getNotifIcons(colors) {
     todo_unblocked: { icon: 'checkmark-done', color: '#dc2626', bg: colors.red[50] },
     todo_update: { icon: 'document-text', color: '#dc2626', bg: colors.red[50] },
     todo_question: { icon: 'help-circle', color: '#dc2626', bg: colors.red[50] },
+    kudos: { icon: 'heart', color: '#dc2626', bg: colors.red[50] },
+    daily_digest: { icon: 'sunny', color: '#dc2626', bg: colors.red[50] },
+    weekly_recap: { icon: 'stats-chart', color: '#dc2626', bg: colors.red[50] },
+    blocker_nudge: { icon: 'hourglass', color: '#dc2626', bg: colors.red[50] },
   };
 }
 

@@ -13,6 +13,7 @@ import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
+import useIsDesktop from '../hooks/useBreakpoint';
 
 function useThemedStyles() {
   const colors = useColors();
@@ -97,6 +98,7 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
 }
 
 export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
+  const desktop = useIsDesktop();
   const { colors, styles } = useThemedStyles();
   const { t } = useLang();
   const insets = useSafeAreaInsets();
@@ -120,9 +122,9 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[styles.overlay, overlayStyle]}>
+      <Animated.View style={[styles.overlay, desktop && { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <Animated.View style={[styles.sheet, { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
+        <Animated.View style={[styles.sheet, desktop ? { width: '100%', maxWidth: 420, borderRadius: radius.xl, paddingBottom: spacing.md } : { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{title || t('more')}</Text>
             <AnimatedPressable onPress={onClose} style={styles.sheetCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">

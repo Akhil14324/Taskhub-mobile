@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getColors } from '../theme/theme';
+import { setDarkMode } from '../components/kit';
 
 const ThemeContext = createContext(null);
 
@@ -22,7 +23,17 @@ export function ThemeProvider({ children }) {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   }, []);
 
+  setDarkMode(theme === 'dark');
   const colors = useMemo(() => getColors(theme), [theme]);
+
+  // Native controls (scrollbars, date inputs, autofill) follow the app's theme on the web.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+    document.body.style.backgroundColor = colors.gray[50];
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#dc2626');
+  }, [theme, colors]);
 
   const value = useMemo(() => ({ theme, setTheme, toggleTheme, colors }), [theme, toggleTheme, colors]);
 

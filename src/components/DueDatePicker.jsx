@@ -44,10 +44,10 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
   };
 
   const quick = [
-    { label: 'Today', icon: 'today-outline', color: '#dc2626', value: todayYmd() },
-    { label: 'Tomorrow', icon: 'sunny-outline', color: '#b91c1c', value: addDays(todayYmd(), 1) },
-    { label: 'This weekend', icon: 'cafe-outline', color: '#dc2626', value: nextSaturday() },
-    { label: 'Next week', icon: 'arrow-forward-circle-outline', color: '#b91c1c', value: nextMonday() },
+    { label: 'Today', icon: 'today-outline', color: colors.brand[600], value: todayYmd() },
+    { label: 'Tomorrow', icon: 'sunny-outline', color: colors.brand[700], value: addDays(todayYmd(), 1) },
+    { label: 'This weekend', icon: 'cafe-outline', color: colors.brand[600], value: nextSaturday() },
+    { label: 'Next week', icon: 'arrow-forward-circle-outline', color: colors.brand[700], value: nextMonday() },
     { label: 'No date', icon: 'close-circle-outline', color: colors.gray[500], value: null },
   ];
 

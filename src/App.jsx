@@ -16,6 +16,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ChatProvider } from './context/ChatContext';
 import { TodoProvider } from './context/TodoContext';
+import { EngageProvider } from './context/EngageContext';
 import { NotificationProvider } from './context/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import DialogHost from './components/DialogHost';
@@ -136,6 +137,7 @@ function AppRoot() {
           <PreferencesApplier />
           <ChatProvider>
             <TodoProvider>
+              <EngageProvider>
               <NotificationProvider>
                 <LanguageProvider>
                   <ErrorBoundary>
@@ -147,6 +149,7 @@ function AppRoot() {
                   <DialogHost />
                 </LanguageProvider>
               </NotificationProvider>
+            </EngageProvider>
             </TodoProvider>
           </ChatProvider>
         </AuthProvider>

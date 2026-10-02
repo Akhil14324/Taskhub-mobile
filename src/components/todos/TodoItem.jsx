@@ -14,6 +14,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useEngage } from '../../context/EngageContext';
 import { spacing, fontSize } from '../../theme/theme';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { HealthPill } from './TimeHealth';
@@ -46,6 +47,7 @@ function TodoItem({
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: me } = useAuth();
+  const { waitingIds } = useEngage();
   const simple = me?.preferences?.viewMode === 'simple'; // Simple view: only title, date, owner and progress
   const translateX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -207,6 +209,12 @@ function TodoItem({
                 </View>
               )}
               {!!timePill && <HealthPill level={timePill.level} label={timePill.label} icon={timePill.icon} compact />}
+              {!todo.is_done && waitingIds.has(todo.id) && (
+                <View style={styles.waiting}>
+                  <Ionicons name="hourglass" size={10} color="#fff" />
+                  <Text style={styles.waitingText}>Waiting on you</Text>
+                </View>
+              )}
               {todo.is_warned && !todo.is_done && (
                 <View style={styles.metaItem}>
                   <Ionicons name="warning" size={12} color={colors.red[600]} />
@@ -266,6 +274,8 @@ function TodoItem({
 }
 
 const createStyles = (colors) => StyleSheet.create({
+  waiting: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.brand[600], paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
+  waitingText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   container: { position: 'relative' },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.gray[200], marginTop: 6, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.brand[500] },

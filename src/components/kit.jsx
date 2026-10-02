@@ -28,8 +28,12 @@ export function tint(hex, alpha = 0.14) {
 }
 
 // Priorities are told apart by shade of red (darkest = most urgent); P4 is neutral.
+// The darkest red is unreadable on a dark page, so it lifts to a light red there (set by ThemeProvider).
+let darkMode = false;
+export function setDarkMode(value) { darkMode = !!value; }
+export const darkestRed = () => (darkMode ? '#fca5a5' : '#991b1b');
 export const PRIORITY = {
-  1: { label: 'Priority 1', short: 'P1', color: '#991b1b' },
+  1: { label: 'Priority 1', short: 'P1', get color() { return darkestRed(); } },
   2: { label: 'Priority 2', short: 'P2', color: '#dc2626' },
   3: { label: 'Priority 3', short: 'P3', color: '#f87171' },
   4: { label: 'Priority 4', short: 'P4', color: '#94a3b8' },
@@ -163,7 +167,7 @@ export const DueChip = memo(function DueChip({ date, time, recurrence, done, com
   if (!date) return null;
   const diff = daysFromToday(date);
   const color = done ? colors.gray[400]
-    : diff < 0 ? '#991b1b'
+    : diff < 0 ? darkestRed()
       : diff === 0 ? '#dc2626'
         : diff === 1 ? '#f87171'
           : colors.gray[500];

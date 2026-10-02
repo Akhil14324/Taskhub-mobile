@@ -1,31 +1,53 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors, useTheme } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
-import { Avatar, Chip } from '../kit';
-import { STATUS, healthColor, formatSeconds } from '../../utils/timeline';
+import { Avatar, Chip, PRIORITY } from '../kit';
+import { STATUS, healthColor, healthTint, formatSeconds } from '../../utils/timeline';
 import { formatDue, MONTHS_SHORT } from '../../utils/dates';
 
 const DAY = 24 * 3600 * 1000;
-const ROW = 40;
-const HEAD = 52;
-const LABEL_W = 232;
+const ROW = 58;
+const GROUP_ROW = 36;
+const HEAD_MONTH = 24;
+const HEAD_DAY = 34;
+const HEAD = HEAD_MONTH + HEAD_DAY;
+const LABEL_W = 260;
+const BAR_H = 24;
+const BAR_TOP = 9;
 const ZOOMS = [
-  { key: 'day', label: 'Days', px: 44 },
-  { key: 'week', label: 'Weeks', px: 18 },
-  { key: 'month', label: 'Months', px: 7 },
+  { key: 'day', label: 'Days', px: 48 },
+  { key: 'week', label: 'Weeks', px: 20 },
+  { key: 'month', label: 'Months', px: 8 },
 ];
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const STATUS_KEYS = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold'];
 
+const web = Platform.OS === 'web';
 const setTitle = (text) => (el) => {
   if (el && typeof el.setAttribute === 'function') el.setAttribute('title', text);
 };
+const stripes = (color) => (web
+  ? { backgroundImage: `repeating-linear-gradient(135deg, ${color} 0 6px, rgba(255,255,255,0.28) 6px 12px)` }
+  : null);
+
+const ms = (v) => new Date(v).getTime();
+const secsBetween = (a, b) => Math.max(0, Math.round((b - a) / 1000));
+const fmtStamp = (t) => {
+  const d = new Date(t);
+  const day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${day}, ${time}`;
+};
+const firstName = (p) => (p?.name || '').split(' ')[0];
 
 /**
  * Gantt-style timeline: one bar per to-do from the day it was created to the day it was finished
  * (or today, while it is still open). The bar is cut into stretches by status and by who held it, with
- * hand-offs marked, so "who had this, for how long, and where did it stall" reads at a glance.
+ * hand-offs, the deadline, lateness and time spent written on it, so "who had this, for how long, and
+ * where did it stall" reads at a glance. Tapping a row opens its full breakdown under the chart.
  * `data` is the response of GET /api/todos/gantt.
  */
 export default function TimelineChart({ data, onOpen, selectedId, grouped = true }) {
@@ -33,7 +55,10 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [zoom, setZoom] = useState('week');
+  const [focusId, setFocusId] = useState(selectedId || null);
+  const scrollRef = useRef(null);
   const px = ZOOMS.find((z) => z.key === zoom).px;
+  useEffect(() => { if (selectedId) setFocusId(selectedId); }, [selectedId]);
 
   const people = useMemo(() => new Map((data?.people || []).map((p) => [p.id, p])), [data]);
   const fromMs = useMemo(() => new Date(`${data?.from || '1970-01-01'}T00:00:00`).getTime(), [data]);
@@ -41,14 +66,17 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const days = Math.max(1, Math.ceil((toMs - fromMs) / DAY));
   const width = days * px;
   const todayMs = data?.today ? new Date(`${data.today}T12:00:00`).getTime() : Date.now();
-  const x = (ms) => Math.max(0, Math.min(width, ((ms - fromMs) / DAY) * px));
+  const nowMs = Date.now();
+  const x = (t) => Math.max(0, Math.min(width, ((t - fromMs) / DAY) * px));
 
+  const red = healthColor('red', theme);
+  const amber = healthColor('orange', theme);
   const statusColor = (status) => {
     switch (status) {
       case 'in_progress': return colors.brand[600];
       case 'in_review': return colors.brand[300];
-      case 'blocked': return healthColor('orange', theme);
-      case 'on_hold': return colors.gray[400];
+      case 'blocked': return amber;
+      case 'on_hold': return colors.gray[500];
       default: return colors.gray[300];
     }
   };
@@ -87,53 +115,108 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
         return (people.get(a)?.name || '').localeCompare(people.get(b)?.name || '');
       })
       .forEach(([key, list]) => {
-        out.push({ type: 'group', key, person: key ? people.get(key) : null, count: list.length });
+        out.push({ type: 'group', key, person: key ? people.get(key) : null, list });
         list.sort((a, b) => new Date(a.start) - new Date(b.start)).forEach((r) => flatten(r, 0, out));
       });
     return out;
   }, [data, grouped, people]);
 
-  // Axis
+  // Axis: month bands on top, one cell per day below.
   const axis = useMemo(() => {
-    const out = [];
+    const cells = [];
+    const months = [];
     for (let i = 0; i < days; i += 1) {
       const d = new Date(fromMs + i * DAY);
-      out.push({ i, day: d.getDate(), month: d.getMonth(), dow: d.getDay(), first: d.getDate() === 1 || i === 0 });
+      cells.push({ i, day: d.getDate(), month: d.getMonth(), dow: d.getDay() });
+      const last = months[months.length - 1];
+      if (last && last.month === d.getMonth() && last.year === d.getFullYear()) last.days += 1;
+      else months.push({ month: d.getMonth(), year: d.getFullYear(), start: i, days: 1 });
     }
-    return out;
+    return { cells, months };
   }, [days, fromMs]);
+
+  // Numbers across everything on the chart.
+  const stats = useMemo(() => {
+    const items = data?.items || [];
+    const done = items.filter((i) => i.is_done);
+    const open = items.filter((i) => !i.is_done);
+    const overdue = open.filter((i) => i.due_at && ms(i.due_at) < nowMs);
+    const stuck = open.filter((i) => i.status === 'blocked');
+    const hold = open.filter((i) => i.status === 'on_hold');
+    const avg = done.length ? done.reduce((n, i) => n + secsBetween(ms(i.start), ms(i.end)), 0) / done.length : 0;
+    const handoffs = items.reduce((n, i) => n + (i.handoffs?.length || 0), 0);
+    return { total: items.length, done: done.length, open: open.length, overdue: overdue.length, stuck: stuck.length, hold: hold.length, avg, handoffs };
+  }, [data, nowMs]);
+
+  const jumpToToday = () => {
+    scrollRef.current?.scrollTo?.({ x: Math.max(0, x(todayMs) - 240), animated: true });
+  };
 
   if (!data) return null;
   const empty = rows.length === 0;
   const todayX = x(todayMs);
   const showEveryDay = px >= 30;
+  const focus = focusId ? (data.items || []).find((i) => i.id === focusId) : null;
+  const open = (id) => { setFocusId(id); onOpen?.(id); };
+
+  const tiles = [
+    { icon: 'layers-outline', label: 'On the chart', value: stats.total },
+    { icon: 'play-circle-outline', label: 'Open', value: stats.open },
+    { icon: 'checkmark-circle-outline', label: 'Finished', value: stats.done },
+    { icon: 'hand-left-outline', label: 'Stuck or on hold', value: stats.stuck + stats.hold, warn: stats.stuck > 0 },
+    { icon: 'flame-outline', label: 'Past deadline', value: stats.overdue, bad: stats.overdue > 0 },
+    { icon: 'swap-horizontal', label: 'Hand-overs', value: stats.handoffs },
+    { icon: 'timer-outline', label: 'Average to finish', value: stats.avg ? formatSeconds(stats.avg) : '-' },
+  ];
 
   return (
     <View style={styles.wrap}>
+      <View style={styles.tiles}>
+        {tiles.map((t) => (
+          <View key={t.label} style={[styles.tile, t.bad && { borderColor: red }]}>
+            <View style={[styles.tileIcon, t.bad && { backgroundColor: healthTint('red', theme, 0.16) }, t.warn && { backgroundColor: healthTint('orange', theme, 0.18) }]}>
+              <Ionicons name={t.icon} size={15} color={t.bad ? red : t.warn ? amber : colors.brand[600]} />
+            </View>
+            <View>
+              <Text style={[styles.tileValue, t.bad && { color: red }]}>{t.value}</Text>
+              <Text style={styles.tileLabel}>{t.label}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
       <View style={styles.toolbar}>
-        <Text style={styles.range}>
-          {formatDue(data.from)} to {formatDue(data.to)}
-        </Text>
+        <Ionicons name="calendar-outline" size={14} color={colors.gray[500]} />
+        <Text style={styles.range}>{formatDue(data.from)} to {formatDue(data.to)}</Text>
         <View style={{ flex: 1 }} />
+        <Chip small icon="locate-outline" label="Today" onPress={jumpToToday} />
         {ZOOMS.map((z) => (
           <Chip key={z.key} small label={z.label} active={zoom === z.key} onPress={() => setZoom(z.key)} />
         ))}
       </View>
 
       <View style={styles.legend}>
-        {['todo', 'in_progress', 'in_review', 'blocked', 'on_hold'].map((s) => (
+        {STATUS_KEYS.map((s) => (
           <View key={s} style={styles.legendItem}>
             <View style={[styles.swatch, { backgroundColor: statusColor(s) }]} />
             <Text style={styles.legendText}>{STATUS[s].label}</Text>
           </View>
         ))}
         <View style={styles.legendItem}>
-          <Ionicons name="diamond" size={9} color={colors.gray[600]} />
-          <Text style={styles.legendText}>Due</Text>
+          <View style={[styles.swatch, { backgroundColor: red }]} />
+          <Text style={styles.legendText}>Past deadline</Text>
         </View>
         <View style={styles.legendItem}>
-          <Ionicons name="swap-horizontal" size={11} color={colors.gray[600]} />
-          <Text style={styles.legendText}>Handed over</Text>
+          <Ionicons name="flag" size={11} color={colors.gray[600]} />
+          <Text style={styles.legendText}>Deadline</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Ionicons name="swap-horizontal" size={12} color={colors.gray[600]} />
+          <Text style={styles.legendText}>Handed over (face = new owner)</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Ionicons name="checkmark-circle" size={12} color={colors.brand[700]} />
+          <Text style={styles.legendText}>Finished</Text>
         </View>
       </View>
 
@@ -150,96 +233,197 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
             <View style={[styles.cornerHead, { height: HEAD }]}>
               <Text style={styles.headText}>{grouped ? 'Person and task' : 'Task'}</Text>
             </View>
-            {rows.map((r) => (r.type === 'group' ? (
-              <View key={`g${r.key}`} style={[styles.groupRow, { height: ROW - 6 }]}>
-                {r.person
-                  ? <Avatar name={r.person.name} uri={r.person.profile_picture} size={20} />
-                  : <Ionicons name="people-outline" size={18} color={colors.gray[500]} />}
-                <Text style={styles.groupName} numberOfLines={1}>{r.person ? r.person.name : 'Open to the business'}</Text>
-                <Text style={styles.groupCount}>{r.count}</Text>
-              </View>
-            ) : (
-              <AnimatedPressable
-                key={r.item.id}
-                onPress={() => onOpen?.(r.item.id)}
-                style={[styles.nameRow, { height: ROW, paddingLeft: spacing.md + r.depth * 14 }, selectedId === r.item.id && styles.rowSelected]}
-              >
-                <Text style={[styles.itemTitle, r.item.is_done && styles.itemDone]} numberOfLines={1}>{r.item.title}</Text>
-              </AnimatedPressable>
-            )))}
+            {rows.map((r) => {
+              if (r.type === 'group') {
+                const openCount = r.list.filter((i) => !i.is_done).length;
+                return (
+                  <View key={`g${r.key}`} style={[styles.groupRow, { height: GROUP_ROW }]}>
+                    {r.person
+                      ? <Avatar name={r.person.name} uri={r.person.profile_picture} size={22} />
+                      : <Ionicons name="people-outline" size={18} color={colors.gray[500]} />}
+                    <Text style={styles.groupName} numberOfLines={1}>{r.person ? r.person.name : 'Open to the business'}</Text>
+                    <Text style={styles.groupCount}>{openCount} open · {r.list.length - openCount} done</Text>
+                  </View>
+                );
+              }
+              const it = r.item;
+              const pr = PRIORITY[it.priority];
+              const lateRow = !it.is_done && it.due_at && ms(it.due_at) < nowMs;
+              return (
+                <AnimatedPressable
+                  key={it.id}
+                  onPress={() => open(it.id)}
+                  style={[styles.nameRow, { height: ROW, paddingLeft: spacing.md + r.depth * 16 }, focusId === it.id && styles.rowSelected]}
+                >
+                  {r.depth > 0 && <View style={[styles.elbow, { left: spacing.md + (r.depth - 1) * 16 + 4 }]} />}
+                  {pr && it.priority < 4 && <View style={[styles.prioBar, { backgroundColor: pr.color }]} />}
+                  <View style={styles.nameTop}>
+                    <Ionicons
+                      name={it.is_done ? 'checkmark-circle' : (STATUS[it.status]?.icon || 'ellipse-outline')}
+                      size={14}
+                      color={it.is_done ? colors.brand[700] : statusColor(it.status)}
+                    />
+                    <Text style={[styles.itemTitle, it.is_done && styles.itemDone]} numberOfLines={1}>{it.title}</Text>
+                  </View>
+                  <Text style={[styles.itemMeta, lateRow && { color: red }]} numberOfLines={1}>
+                    {it.is_done ? 'Done' : (STATUS[it.status]?.label || 'Open')}
+                    {pr ? ` · ${pr.short}` : ''}
+                    {!grouped && it.assignee_id && people.get(it.assignee_id) ? ` · ${firstName(people.get(it.assignee_id))}` : ''}
+                    {it.due_date ? ` · due ${formatDue(it.due_date)}` : ''}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
           </View>
 
           {/* Bars */}
-          <ScrollView horizontal showsHorizontalScrollIndicator contentOffset={{ x: Math.max(0, todayX - 220), y: 0 }} style={{ flex: 1 }}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator
+            contentOffset={{ x: Math.max(0, todayX - 240), y: 0 }}
+            style={{ flex: 1 }}
+          >
             <View style={{ width }}>
-              <View style={[styles.axis, { height: HEAD }]}>
-                {axis.map((a) => (
-                  <View key={a.i} style={[styles.axisCell, { left: a.i * px, width: px }, (a.dow === 0 || a.dow === 6) && styles.weekend]}>
-                    {a.first && px >= 7 && <Text style={styles.month}>{MONTHS_SHORT[a.month]}</Text>}
-                    {(showEveryDay || a.dow === 1 || a.first) && px >= 12 && <Text style={styles.dayNum}>{a.day}</Text>}
-                  </View>
-                ))}
+              <View style={{ height: HEAD, backgroundColor: colors.gray[50], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] }}>
+                <View style={{ height: HEAD_MONTH }}>
+                  {axis.months.map((m) => (
+                    <View key={`${m.year}-${m.month}`} style={[styles.monthCell, { left: m.start * px, width: m.days * px }]}>
+                      <Text style={styles.month} numberOfLines={1}>{MONTHS_SHORT[m.month]} {m.year}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={{ height: HEAD_DAY }}>
+                  {axis.cells.map((a) => {
+                    const isToday = a.i === Math.floor((todayMs - fromMs) / DAY);
+                    return (
+                      <View key={a.i} style={[styles.axisCell, { left: a.i * px, width: px }, (a.dow === 0 || a.dow === 6) && styles.weekend]}>
+                        {(showEveryDay || a.dow === 1) && px >= 12 && (
+                          <Text style={[styles.dayNum, isToday && styles.dayToday]}>{a.day}</Text>
+                        )}
+                        {showEveryDay && <Text style={styles.dow}>{WEEKDAYS[a.dow]}</Text>}
+                      </View>
+                    );
+                  })}
+                </View>
+                <View pointerEvents="none" style={[styles.todayFlag, { left: Math.max(0, todayX - 22) }]}>
+                  <Text style={styles.todayFlagText}>Today</Text>
+                </View>
               </View>
+
               <View>
-                {/* weekend shading + today */}
-                {axis.filter((a) => a.dow === 0 || a.dow === 6).map((a) => (
+                {/* weekend shading, week grid lines, today */}
+                {axis.cells.filter((a) => a.dow === 0 || a.dow === 6).map((a) => (
                   <View key={`w${a.i}`} pointerEvents="none" style={[styles.shade, { left: a.i * px, width: px }]} />
                 ))}
-                <View pointerEvents="none" style={[styles.todayLine, { left: todayX }]} />
+                {axis.cells.filter((a) => (showEveryDay ? true : a.dow === 1)).map((a) => (
+                  <View key={`l${a.i}`} pointerEvents="none" style={[styles.gridLine, { left: a.i * px }, a.dow === 1 && styles.gridWeek]} />
+                ))}
+                <View pointerEvents="none" style={[styles.todayLine, { left: todayX - 1 }]} />
                 {rows.map((r) => {
-                  if (r.type === 'group') return <View key={`g${r.key}`} style={{ height: ROW - 6 }} />;
+                  if (r.type === 'group') return <View key={`g${r.key}`} style={[styles.groupBand, { height: GROUP_ROW }]} />;
                   const it = r.item;
-                  const startX = x(new Date(it.start).getTime());
-                  const endX = Math.max(startX + 4, x(new Date(it.end).getTime()));
-                  const dueX = it.due_at ? x(new Date(it.due_at).getTime()) : null;
-                  const late = !it.is_done && it.due_at && new Date(it.due_at).getTime() < Date.now();
-                  const total = Math.round((new Date(it.end).getTime() - new Date(it.start).getTime()) / 1000);
-                  const summary = `${it.title}\n${it.is_done ? 'Finished' : 'Open'} · ${formatSeconds(total)} so far`
-                    + `${it.due_date ? `\nDue ${formatDue(it.due_date)}` : ''}`;
+                  const startMs = ms(it.start);
+                  const endMs = ms(it.end);
+                  const startX = x(startMs);
+                  const endX = Math.max(startX + 6, x(endMs));
+                  const barW = endX - startX;
+                  const dueMs = it.due_at ? ms(it.due_at) : null;
+                  const dueX = dueMs !== null ? x(dueMs) : null;
+                  const late = !it.is_done && dueMs !== null && dueMs < nowMs;
+                  const total = secsBetween(startMs, endMs);
+                  const owner = people.get(it.assignee_id);
+                  const lateBy = late ? secsBetween(dueMs, nowMs) : 0;
+                  const afterDue = it.is_done && dueMs !== null && endMs > dueMs ? secsBetween(dueMs, endMs) : 0;
+                  const summary = `${it.title}\n${it.is_done ? 'Finished' : 'Open'} · ${formatSeconds(total)}${owner ? `\nWith ${owner.name}` : ''}`
+                    + `\nStarted ${fmtStamp(startMs)}${it.is_done ? `\nFinished ${fmtStamp(endMs)}` : ''}`
+                    + `${it.due_date ? `\nDue ${formatDue(it.due_date)}` : ''}`
+                    + `${late ? `\nLate by ${formatSeconds(lateBy)}` : ''}`;
+                  const captionLeft = Math.max(0, Math.min(startX, width - 300));
                   return (
-                    <View key={it.id} style={{ height: ROW, justifyContent: 'center' }}>
+                    <View key={it.id} style={[styles.barRow, { height: ROW }, focusId === it.id && styles.rowSelected]}>
                       <AnimatedPressable
-                        onPress={() => onOpen?.(it.id)}
-                        style={[styles.bar, { left: startX, width: endX - startX }, selectedId === it.id && styles.barSelected]}
+                        onPress={() => open(it.id)}
+                        style={[styles.bar, { left: startX, width: barW }, focusId === it.id && styles.barSelected]}
                       >
-                        <View ref={Platform.OS === 'web' ? setTitle(summary) : undefined} style={styles.barTrack}>
+                        <View ref={web ? setTitle(summary) : undefined} style={styles.barTrack}>
                           {it.segments.map((s, i) => {
-                            const a = x(new Date(s.from).getTime());
-                            const b = s.to ? x(new Date(s.to).getTime()) : endX;
-                            const w = Math.max(2, b - a);
+                            const a = x(ms(s.from));
+                            const b = s.to ? x(ms(s.to)) : endX;
+                            const w = Math.max(3, b - a);
+                            const person = people.get(s.assignee_id);
+                            const dur = secsBetween(ms(s.from), s.to ? ms(s.to) : endMs);
+                            const base = statusColor(s.status);
+                            const light = s.status === 'in_review' || s.status === 'todo';
+                            const ink = light ? colors.gray[900] : '#fff';
+                            const label = w > 120 && person ? `${firstName(person)} · ${formatSeconds(dur)}`
+                              : w > 64 && person ? firstName(person)
+                                : w > 50 ? formatSeconds(dur) : '';
+                            const running = !it.is_done && !s.to && i === it.segments.length - 1;
                             return (
                               <View
                                 key={i}
-                                style={{
-                                  position: 'absolute', left: a - startX, width: w, top: 0, bottom: 0,
-                                  backgroundColor: statusColor(s.status),
-                                  opacity: it.is_done ? 0.75 : 1,
-                                  borderRightWidth: i < it.segments.length - 1 ? 1 : 0,
-                                  borderRightColor: colors.white,
-                                }}
+                                style={[
+                                  {
+                                    position: 'absolute', left: a - startX, width: w, top: 0, bottom: 0,
+                                    backgroundColor: base,
+                                    opacity: it.is_done ? 0.82 : 1,
+                                    borderRightWidth: i < it.segments.length - 1 ? 1.5 : 0,
+                                    borderRightColor: colors.white,
+                                    justifyContent: 'center',
+                                  },
+                                  running && stripes(base),
+                                ]}
                               >
-                                {w > 54 && s.assignee_id && people.get(s.assignee_id) && (
-                                  <Text style={styles.segName} numberOfLines={1}>{people.get(s.assignee_id).name.split(' ')[0]}</Text>
-                                )}
+                                {!!label && <Text style={[styles.segName, { color: ink }]} numberOfLines={1}>{label}</Text>}
                               </View>
                             );
                           })}
-                          {late && <View style={[styles.lateEdge]} />}
+                          {late && <View style={styles.lateEdge} />}
                         </View>
                         {it.is_done && (
-                          <View style={styles.doneDot}><Ionicons name="checkmark" size={10} color="#fff" /></View>
+                          <View style={styles.doneDot}><Ionicons name="checkmark" size={11} color="#fff" /></View>
+                        )}
+                        {!it.is_done && (
+                          <View style={[styles.runDot, { backgroundColor: late ? red : statusColor(it.status) }]} />
                         )}
                       </AnimatedPressable>
-                      {it.handoffs.map((h, i) => (
-                        <View key={i} pointerEvents="none" style={[styles.handoff, { left: x(new Date(h.at).getTime()) - 8 }]}>
-                          <Ionicons name="swap-horizontal" size={11} color={colors.gray[700]} />
-                        </View>
-                      ))}
+
+                      {it.handoffs.map((h, i) => {
+                        const to = people.get(h.to);
+                        const from = people.get(h.from);
+                        return (
+                          <View
+                            key={i}
+                            ref={web ? setTitle(`Handed over${from ? ` from ${from.name}` : ''}${to ? ` to ${to.name}` : ''}\n${fmtStamp(ms(h.at))}`) : undefined}
+                            style={[styles.handoff, { left: x(ms(h.at)) - 10 }]}
+                          >
+                            {to
+                              ? <Avatar name={to.name} uri={to.profile_picture} size={16} />
+                              : <Ionicons name="swap-horizontal" size={11} color={colors.gray[700]} />}
+                          </View>
+                        );
+                      })}
+
                       {dueX !== null && (
-                        <View pointerEvents="none" style={[styles.due, { left: dueX - 5 }]}>
-                          <Ionicons name="diamond" size={10} color={late ? healthColor('red', theme) : colors.gray[600]} />
+                        <View pointerEvents="none" style={[styles.due, { left: dueX - 6 }]}>
+                          <View style={[styles.dueStem, { backgroundColor: late ? red : colors.gray[400] }]} />
+                          <Ionicons name="flag" size={13} color={late ? red : colors.gray[600]} style={styles.dueFlag} />
                         </View>
                       )}
+
+                      <View pointerEvents="none" style={[styles.caption, { left: captionLeft }]}>
+                        <Text style={styles.captionText} numberOfLines={1}>
+                          {it.is_done ? 'Finished in ' : 'Open for '}
+                          <Text style={styles.captionStrong}>{formatSeconds(total)}</Text>
+                          {owner ? `  ·  ${firstName(owner)}` : ''}
+                          {it.segments.length > 1 ? `  ·  ${it.segments.length} stages` : ''}
+                          {it.handoffs.length ? `  ·  ${it.handoffs.length} hand-over${it.handoffs.length > 1 ? 's' : ''}` : ''}
+                          {it.due_date ? `  ·  due ${formatDue(it.due_date)}` : ''}
+                          {late ? <Text style={{ color: red, fontWeight: '700' }}>{`  ·  ${formatSeconds(lateBy)} late`}</Text> : null}
+                          {afterDue ? <Text style={{ color: red, fontWeight: '700' }}>{`  ·  finished ${formatSeconds(afterDue)} after the deadline`}</Text> : null}
+                        </Text>
+                      </View>
                     </View>
                   );
                 })}
@@ -248,21 +432,184 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
           </ScrollView>
         </View>
       )}
+
+      {focus && (
+        <FocusCard
+          it={focus}
+          people={people}
+          statusColor={statusColor}
+          colors={colors}
+          theme={theme}
+          nowMs={nowMs}
+          onClose={() => setFocusId(null)}
+          onOpen={() => onOpen?.(focus.id)}
+        />
+      )}
+    </View>
+  );
+}
+
+/** Everything about one bar: totals, time per status, time per person, and each stretch in order. */
+function FocusCard({ it, people, statusColor, colors, theme, nowMs, onClose, onOpen }) {
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const red = healthColor('red', theme);
+  const startMs = ms(it.start);
+  const endMs = ms(it.end);
+  const total = Math.max(1, secsBetween(startMs, endMs));
+  const owner = people.get(it.assignee_id);
+  const dueMs = it.due_at ? ms(it.due_at) : null;
+  const late = !it.is_done && dueMs !== null && dueMs < nowMs;
+  const pr = PRIORITY[it.priority];
+
+  const stretches = it.segments.map((s) => {
+    const from = ms(s.from);
+    const to = s.to ? ms(s.to) : endMs;
+    return { ...s, fromMs: from, toMs: to, secs: secsBetween(from, to), person: people.get(s.assignee_id) };
+  });
+  const byStatus = {};
+  const byPerson = new Map();
+  stretches.forEach((s) => {
+    byStatus[s.status] = (byStatus[s.status] || 0) + s.secs;
+    const k = s.assignee_id || 0;
+    byPerson.set(k, (byPerson.get(k) || 0) + s.secs);
+  });
+  const personRows = [...byPerson.entries()].sort((a, b) => b[1] - a[1]);
+
+  return (
+    <View style={styles.focus}>
+      <View style={styles.focusHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.focusTitle} numberOfLines={2}>{it.title}</Text>
+          <Text style={styles.focusSub}>
+            {it.business_name ? `${it.business_name} · ` : ''}{it.is_done ? 'Finished' : STATUS[it.status]?.label || 'Open'}
+            {pr ? ` · ${pr.label}` : ''}{owner ? ` · ${owner.name}` : ''}
+          </Text>
+        </View>
+        <AnimatedPressable onPress={onOpen} style={styles.focusBtn}>
+          <Text style={styles.focusBtnText}>Open</Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.brand[700]} />
+        </AnimatedPressable>
+        <AnimatedPressable onPress={onClose} style={styles.focusClose} hitSlop={8}>
+          <Ionicons name="close" size={16} color={colors.gray[500]} />
+        </AnimatedPressable>
+      </View>
+
+      <View style={styles.facts}>
+        <Fact label="Started" value={fmtStamp(startMs)} colors={colors} />
+        <Fact label={it.is_done ? 'Finished' : 'Until now'} value={it.is_done ? fmtStamp(endMs) : 'still open'} colors={colors} />
+        <Fact label={it.is_done ? 'Took' : 'Open for'} value={formatSeconds(total)} colors={colors} />
+        <Fact
+          label="Deadline"
+          value={dueMs !== null ? `${fmtStamp(dueMs)}${late ? ` (${formatSeconds(secsBetween(dueMs, nowMs))} late)` : ''}` : 'none'}
+          color={late ? red : undefined}
+          colors={colors}
+        />
+        <Fact label="Hand-overs" value={String(it.handoffs.length)} colors={colors} />
+      </View>
+
+      <Text style={styles.focusHeading}>Time in each status</Text>
+      <View style={styles.split}>
+        {Object.keys(byStatus).map((k) => (
+          <View key={k} style={{ flex: Math.max(byStatus[k], total * 0.02), backgroundColor: statusColor(k), height: 12 }} />
+        ))}
+      </View>
+      <View style={styles.legendRow}>
+        {Object.keys(byStatus).map((k) => (
+          <View key={k} style={styles.legendItem}>
+            <View style={[styles.swatch, { backgroundColor: statusColor(k) }]} />
+            <Text style={styles.focusLegend}>
+              {STATUS[k]?.label || k} {formatSeconds(byStatus[k])} ({Math.round((byStatus[k] / total) * 100)}%)
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {personRows.length > 0 && (
+        <>
+          <Text style={styles.focusHeading}>Who held it</Text>
+          {personRows.map(([id, secs]) => {
+            const p = people.get(id);
+            return (
+              <View key={id} style={styles.personRow}>
+                {p ? <Avatar name={p.name} uri={p.profile_picture} size={20} /> : <Ionicons name="people-outline" size={18} color={colors.gray[500]} />}
+                <Text style={styles.personName} numberOfLines={1}>{p ? p.name : 'Nobody in particular'}</Text>
+                <View style={styles.personTrack}>
+                  <View style={[styles.personFill, { width: `${Math.max(3, (secs / total) * 100)}%` }]} />
+                </View>
+                <Text style={styles.personSecs}>{formatSeconds(secs)}</Text>
+              </View>
+            );
+          })}
+        </>
+      )}
+
+      <Text style={styles.focusHeading}>Every stretch</Text>
+      {stretches.map((s, i) => (
+        <View key={i} style={styles.stretch}>
+          <View style={[styles.stretchDot, { backgroundColor: statusColor(s.status) }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.stretchTitle}>
+              {STATUS[s.status]?.label || s.status}{s.person ? ` with ${s.person.name}` : ''}
+            </Text>
+            <Text style={styles.stretchTime}>
+              {fmtStamp(s.fromMs)} to {s.to ? fmtStamp(s.toMs) : (it.is_done ? fmtStamp(endMs) : 'now')}
+            </Text>
+          </View>
+          <Text style={styles.stretchSecs}>{formatSeconds(s.secs)}</Text>
+        </View>
+      ))}
+
+      {it.handoffs.length > 0 && (
+        <>
+          <Text style={styles.focusHeading}>Hand-overs</Text>
+          {it.handoffs.map((h, i) => {
+            const from = people.get(h.from);
+            const to = people.get(h.to);
+            return (
+              <View key={i} style={styles.stretch}>
+                <Ionicons name="swap-horizontal" size={16} color={colors.gray[600]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stretchTitle}>{from ? from.name : 'Nobody'} to {to ? to.name : 'nobody'}</Text>
+                  <Text style={styles.stretchTime}>{fmtStamp(ms(h.at))}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}
+
+function Fact({ label, value, color, colors }) {
+  return (
+    <View style={{ minWidth: 120, flexGrow: 1, flexBasis: 120, paddingVertical: 6 }}>
+      <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.gray[400] }}>{label}</Text>
+      <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: color || colors.gray[900], marginTop: 1 }}>{value}</Text>
     </View>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
   wrap: { flex: 1 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm },
+  tile: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexGrow: 1, flexBasis: 128, paddingVertical: 10, paddingHorizontal: spacing.md,
+    backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200],
+  },
+  tileIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand[50] },
+  tileValue: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900], lineHeight: 22 },
+  tileLabel: { fontSize: 10, fontWeight: '600', color: colors.gray[500], marginTop: 1 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
   range: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[600] },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingBottom: spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: 6 },
   swatch: { width: 14, height: 8, borderRadius: 3 },
   legendText: { fontSize: 11, color: colors.gray[500] },
   chart: {
     flexDirection: 'row', backgroundColor: colors.white, borderRadius: radius.lg, overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
+    borderWidth: 1, borderColor: colors.gray[200],
   },
   cornerHead: {
     justifyContent: 'flex-end', paddingHorizontal: spacing.md, paddingBottom: 8,
@@ -271,40 +618,89 @@ const createStyles = (colors) => StyleSheet.create({
   },
   headText: { fontSize: 11, fontWeight: '700', color: colors.gray[500], textTransform: 'uppercase', letterSpacing: 0.6 },
   groupRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.gray[50],
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.gray[100],
     borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.gray[200],
   },
-  groupName: { flex: 1, fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[800] },
-  groupCount: { fontSize: 11, color: colors.gray[400], fontWeight: '600' },
+  groupBand: { backgroundColor: colors.gray[100], opacity: 0.7 },
+  groupName: { flex: 1, fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[800] },
+  groupCount: { fontSize: 10, color: colors.gray[500], fontWeight: '600' },
   nameRow: {
-    justifyContent: 'center', paddingRight: spacing.sm, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.gray[200],
+    justifyContent: 'center', gap: 3, paddingRight: spacing.sm, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.gray[200],
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[100],
   },
+  nameTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  prioBar: { position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2 },
+  elbow: { position: 'absolute', top: 0, height: '50%', width: 8, borderLeftWidth: 1.5, borderBottomWidth: 1.5, borderColor: colors.gray[300], borderBottomLeftRadius: 5 },
   rowSelected: { backgroundColor: colors.brand[50] },
-  itemTitle: { fontSize: fontSize.sm, color: colors.gray[900], fontWeight: '500' },
+  itemTitle: { flex: 1, fontSize: fontSize.sm, color: colors.gray[900], fontWeight: '600' },
   itemDone: { textDecorationLine: 'line-through', color: colors.gray[400] },
-  axis: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200], backgroundColor: colors.gray[50] },
-  axisCell: { position: 'absolute', top: 0, bottom: 0, alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 6, paddingLeft: 3 },
+  itemMeta: { fontSize: 11, color: colors.gray[500], paddingLeft: 20 },
+  monthCell: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', paddingLeft: 8, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.gray[300] },
+  month: { fontSize: 11, fontWeight: '800', color: colors.gray[700], letterSpacing: 0.3 },
+  axisCell: { position: 'absolute', top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   weekend: { backgroundColor: colors.gray[100] },
-  month: { position: 'absolute', top: 6, left: 4, fontSize: 11, fontWeight: '700', color: colors.gray[600] },
-  dayNum: { fontSize: 11, color: colors.gray[500] },
+  dayNum: { fontSize: 11, color: colors.gray[600], fontWeight: '600' },
+  dayToday: { color: colors.brand[700], fontWeight: '800' },
+  dow: { fontSize: 9, color: colors.gray[400], fontWeight: '700' },
+  todayFlag: {
+    position: 'absolute', top: 2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full, backgroundColor: colors.brand[600], zIndex: 6,
+  },
+  todayFlagText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
   shade: { position: 'absolute', top: 0, bottom: 0, backgroundColor: colors.gray[50] },
-  todayLine: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: colors.brand[500], opacity: 0.7, zIndex: 3 },
-  bar: { position: 'absolute', height: 20, justifyContent: 'center', zIndex: 2 },
-  barTrack: { height: 18, borderRadius: 5, overflow: 'hidden', backgroundColor: colors.gray[200] },
-  barSelected: { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  segName: { fontSize: 10, fontWeight: '600', color: '#fff', paddingLeft: 5, lineHeight: 18 },
-  lateEdge: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.red[600] },
+  gridLine: { position: 'absolute', top: 0, bottom: 0, width: StyleSheet.hairlineWidth, backgroundColor: colors.gray[100] },
+  gridWeek: { backgroundColor: colors.gray[200] },
+  todayLine: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: colors.brand[500], opacity: 0.75, zIndex: 3 },
+  barRow: { justifyContent: 'flex-start', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[100] },
+  bar: { position: 'absolute', top: BAR_TOP, height: BAR_H, justifyContent: 'center', zIndex: 2 },
+  barTrack: {
+    height: BAR_H, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.gray[200],
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 },
+  },
+  barSelected: { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  segName: { fontSize: 10, fontWeight: '700', paddingLeft: 7 },
+  lateEdge: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 4, backgroundColor: colors.red[600] },
   doneDot: {
-    position: 'absolute', right: -6, top: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.brand[700],
-    alignItems: 'center', justifyContent: 'center',
+    position: 'absolute', right: -7, top: 4, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.brand[700],
+    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.white,
   },
+  runDot: { position: 'absolute', right: -4, top: 8, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: colors.white },
   handoff: {
-    position: 'absolute', top: 1, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.white, alignItems: 'center',
-    justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[300], zIndex: 4,
+    position: 'absolute', top: BAR_TOP - 6, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.white, alignItems: 'center',
+    justifyContent: 'center', borderWidth: 1.5, borderColor: colors.gray[400], zIndex: 5,
   },
-  due: { position: 'absolute', bottom: 2, zIndex: 4 },
+  due: { position: 'absolute', top: BAR_TOP - 2, height: BAR_H + 4, zIndex: 4 },
+  dueStem: { position: 'absolute', left: 6, top: 4, bottom: 0, width: 1.5, opacity: 0.8 },
+  dueFlag: { position: 'absolute', left: 6, top: -3 },
+  caption: { position: 'absolute', top: BAR_TOP + BAR_H + 6, zIndex: 1 },
+  captionText: { fontSize: 10.5, color: colors.gray[500], width: 520 },
+  captionStrong: { fontWeight: '800', color: colors.gray[800] },
   empty: { alignItems: 'center', paddingVertical: spacing.xxxl, gap: 6 },
   emptyTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.gray[700] },
   emptyText: { fontSize: fontSize.sm, color: colors.gray[400] },
+
+  focus: {
+    marginTop: spacing.md, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], padding: spacing.md,
+  },
+  focusHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  focusTitle: { fontSize: fontSize.md, fontWeight: '800', color: colors.gray[900] },
+  focusSub: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 2 },
+  focusBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full, backgroundColor: colors.brand[50] },
+  focusBtnText: { fontSize: fontSize.xs, fontWeight: '700', color: colors.brand[700] },
+  focusClose: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: colors.gray[100] },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.sm },
+  focusHeading: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.gray[500], marginTop: spacing.md, marginBottom: 6,
+  },
+  split: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: colors.gray[100], gap: 1 },
+  focusLegend: { fontSize: fontSize.xs, color: colors.gray[700], fontWeight: '600' },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 3 },
+  personName: { width: 130, fontSize: fontSize.sm, color: colors.gray[800], fontWeight: '600' },
+  personTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.gray[100], overflow: 'hidden' },
+  personFill: { height: 8, borderRadius: 4, backgroundColor: colors.brand[500] },
+  personSecs: { width: 72, textAlign: 'right', fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[700] },
+  stretch: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 5, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[100] },
+  stretchDot: { width: 10, height: 10, borderRadius: 5 },
+  stretchTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[900] },
+  stretchTime: { fontSize: 11, color: colors.gray[500], marginTop: 1 },
+  stretchSecs: { fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[700] },
 });
