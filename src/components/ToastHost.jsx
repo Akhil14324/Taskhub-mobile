@@ -105,7 +105,7 @@ const createStyles = (colors, theme) => StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.xl,
-    backgroundColor: theme === 'dark' ? '#334155' : '#1f2937',
+    backgroundColor: theme === 'dark' ? '#262626' : '#1f2937',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 16,

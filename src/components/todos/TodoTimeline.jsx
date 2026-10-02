@@ -145,8 +145,11 @@ export default function TodoTimeline({ todo }) {
           <View key={b.id} style={[styles.blocker, { borderColor: healthColor(level, theme) }]}>
             <Ionicons name={meta.icon} size={22} color={healthColor(level, theme)} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.blockerTitle}>{meta.label}{b.kind === 'dependency' && b.blocked_by_todo_title ? `: ${b.blocked_by_todo_title}` : ''}{b.blocked_by_user_name ? `: ${b.blocked_by_user_name}` : ''}</Text>
+              <Text style={styles.blockerTitle}>{meta.label}{[b.blocked_by_todo_title, b.blocked_by_user_name].filter(Boolean).map((v, i) => `${i ? ' · ' : ': '}${v}`).join('')}</Text>
               {!!b.note && <Text style={styles.blockerNote}>{b.note}</Text>}
+              {Array.isArray(b.mentions) && b.mentions.length > 0 && (
+                <Text style={styles.blockerNote}>Tagged: {b.mentions.map((m) => `@${m.label}`).join(', ')}</Text>
+              )}
               <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Blocked for {formatSeconds(since)} · raised by {b.raised_by === user?.id ? 'you' : b.raised_by_name}</Text>
             </View>
             <AnimatedPressable onPress={() => clearBlocker(b)} haptic="medium" style={styles.clearBtn}>
@@ -158,7 +161,7 @@ export default function TodoTimeline({ todo }) {
       {!todo.is_done && todo.status !== 'blocked' && canWork && (
         <AnimatedPressable style={styles.addBlocker} onPress={() => setBlockerOpen(true)} haptic="light">
           <Ionicons name="hand-left-outline" size={17} color={colors.brand[600]} />
-          <Text style={styles.addBlockerText}>Raise a blocker — dependency, issue or dead stop</Text>
+          <Text style={styles.addBlockerText}>Raise a blocker — dependency, decision, issue or dead stop</Text>
         </AnimatedPressable>
       )}
 

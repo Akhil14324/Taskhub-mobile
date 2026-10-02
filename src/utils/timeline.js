@@ -47,10 +47,11 @@ export const STATUS = {
 export const STATUS_ORDER = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold', 'done'];
 
 export const BLOCKER_KINDS = {
-  dependency: { label: 'Waiting on a to-do', short: 'Dependency', icon: 'git-merge-outline', hint: 'It cannot start or finish until another to-do is done.' },
-  waiting_on: { label: 'Waiting on someone', short: 'Waiting', icon: 'hourglass-outline', hint: 'You need something from a person or a company.' },
-  issue: { label: 'Issue / problem', short: 'Issue', icon: 'bug-outline', hint: 'Something is wrong and it needs fixing first.' },
-  dead_stop: { label: 'Dead stop', short: 'Dead stop', icon: 'stop-circle-outline', hint: 'Work cannot continue at all until this is solved.' },
+  // `waiting_on` is the stored value; people see it as "Needs a decision".
+  dependency: { label: 'Dependency', short: 'Dependency', icon: 'git-merge-outline', hint: 'Something has to be finished first: another to-do, or a person doing their part.' },
+  waiting_on: { label: 'Needs a decision', short: 'Decision', icon: 'ribbon-outline', hint: 'You need an approval, a decision or a suggestion from someone senior before you can go on.' },
+  issue: { label: 'Issue', short: 'Issue', icon: 'bug-outline', hint: 'Something went wrong while doing this. Tag who or what is involved so they are told.' },
+  dead_stop: { label: 'Dead stop', short: 'Dead stop', icon: 'stop-circle-outline', hint: 'Work cannot continue at all because of this. Say what stopped it and tag what it is about.' },
 };
 
 // ---------------------------------------------------------------------------

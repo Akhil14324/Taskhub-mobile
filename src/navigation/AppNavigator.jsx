@@ -70,15 +70,17 @@ const FramedLogin = framed(LoginScreen, 480);
 const FramedSignup = framed(SignupScreen, 480);
 const FramedForgotPassword = framed(ForgotPasswordScreen, 480);
 const FramedChangePassword = framed(ChangePasswordScreen, 480);
-const FramedChatThread = framed(ChatThreadScreen, 980);
-const FramedChatList = framed(ChatListScreen, 760);
-const FramedGroupInfo = framed(GroupInfoScreen, 760);
-const FramedApprovals = framed(ApprovalsScreen);
-const FramedOrganization = framed(OrganizationScreen, 1080);
-const FramedTeamMonitor = framed(TeamMonitorScreen, 1080);
-const FramedPersonMonitor = framed(PersonMonitorScreen, 1080);
-const FramedNotifications = framed(NotificationsScreen, 760);
-const FramedProfile = framed(ProfileScreen, 760);
+// Pages that have to fill a desktop window (like Home and To-do do) get a wide frame; only forms stay narrow.
+const WIDE = 1560;
+const FramedChatThread = framed(ChatThreadScreen, WIDE);
+const FramedChatList = framed(ChatListScreen, WIDE);
+const FramedGroupInfo = framed(GroupInfoScreen, 1000);
+const FramedApprovals = framed(ApprovalsScreen, WIDE);
+const FramedOrganization = framed(OrganizationScreen, WIDE);
+const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
+const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
+const FramedNotifications = framed(NotificationsScreen, WIDE);
+const FramedProfile = framed(ProfileScreen, 1000);
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();

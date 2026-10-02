@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as ImagePicker from 'expo-image-picker';
+import { Avatar } from '../components/kit';
+import { invalidateDirectory } from '../hooks/useDirectory';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
@@ -41,13 +44,6 @@ function getStatusBadge(colors) {
   };
 }
 
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 function formatDate(dateStr, lang) {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString(lang === 'te' ? 'te-IN' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -71,6 +67,8 @@ export default function Profile() {
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editPhoto, setEditPhoto] = useState(null);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -159,21 +157,57 @@ export default function Profile() {
 
   const openEditModal = () => {
     setEditName(user?.name || '');
+    setEditUsername(user?.username || '');
+    setEditPhoto(null);
     setEditError('');
     setEditSuccess('');
     setEditModalOpen(true);
   };
 
+  const pickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      const asset = !result.canceled && result.assets?.[0];
+      if (asset) setEditPhoto({ uri: asset.uri, type: asset.mimeType || 'image/jpeg', name: asset.fileName || `profile_${Date.now()}.jpg` });
+    } catch {
+      setEditError('Could not open your photos');
+    }
+  };
+
+  const uploadPhoto = async ({ uri, type, name }) => {
+    const formData = new FormData();
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(uri)).blob();
+      formData.append('file', blob.type === type ? blob : new Blob([blob], { type }), name);
+    } else {
+      formData.append('file', { uri, type, name });
+    }
+    await api.post('/chat/upload-profile-picture', formData, Platform.OS === 'web' ? undefined : { headers: { 'Content-Type': 'multipart/form-data' } });
+  };
+
   const handleEditSave = async () => {
     const trimmed = editName.trim();
+    const handle = editUsername.trim();
     if (!trimmed) {
       setEditError(t('nameRequired'));
+      return;
+    }
+    if (!/^[A-Za-z0-9._-]{3,30}$/.test(handle)) {
+      setEditError('Username can use letters, numbers, dot, dash or underscore (3–30 characters, no spaces)');
       return;
     }
     setEditError('');
     setSavingName(true);
     try {
-      await api.put('/users/me', { name: trimmed });
+      // The name and username go first: a taken username must not leave a half-saved profile.
+      await api.put('/users/me', { name: trimmed, username: handle });
+      if (editPhoto) await uploadPhoto(editPhoto);
+      invalidateDirectory();
       await refreshUser();
       setEditSuccess(t('profileUpdated'));
       setEditModalOpen(false);
@@ -252,7 +286,6 @@ export default function Profile() {
     </ScrollView>
   );
 
-  const avatarStyle = (roleStyles[user?.role] || roleStyles.user);
   const roleBadgeStyle = (roleStyles[user?.role] || roleStyles.user);
   const roleLabel = t(ROLE_LABEL[user?.role] || 'user');
   const statusBadgeStyle = (getStatusBadge(colors)[user?.status] || getStatusBadge(colors).active);
@@ -286,9 +319,7 @@ export default function Profile() {
       {/* Header Card */}
       <Card style={styles.headerCard}>
         <View style={styles.headerRow}>
-          <View style={[styles.avatar, { backgroundColor: avatarStyle.bg }]}>
-            <Text style={[styles.avatarText, { color: avatarStyle.text }]}>{getInitials(user?.name)}</Text>
-          </View>
+          <Avatar name={user?.name} uri={user?.profile_picture} size={64} />
           <View style={styles.headerInfo}>
             <Text style={styles.userName}>{getDynamic(user?.name)}</Text>
             <View style={styles.headerBadges}>
@@ -498,7 +529,15 @@ export default function Profile() {
       {/* Edit Modal */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t('editProfile')}>
         {editError && <ErrorBanner message={editError} />}
-        <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder={t('namePlaceholder')} />
+        <AnimatedPressable onPress={pickPhoto} haptic="light" style={{ alignSelf: 'center', marginBottom: spacing.md }}>
+          <Avatar name={editName || user?.name} uri={editPhoto?.uri || user?.profile_picture} size={88} />
+          <View style={styles.cameraBadge}>
+            <Ionicons name="camera" size={15} color="#fff" />
+          </View>
+        </AnimatedPressable>
+        <Text style={styles.photoHint}>{editPhoto ? 'New photo selected. Save to apply.' : 'Tap the photo to change it'}</Text>
+        <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder={t('namePlaceholder')} autoCapitalize="words" />
+        <Input label={t('username')} value={editUsername} onChangeText={setEditUsername} placeholder="Unique username" />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
             {t('cancel')}
@@ -759,4 +798,10 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     marginTop: spacing.md,
   },
+  cameraBadge: {
+    position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand[600],
+    borderWidth: 2, borderColor: colors.white,
+  },
+  photoHint: { fontSize: fontSize.xs, color: colors.gray[500], textAlign: 'center', marginBottom: spacing.md },
 });
