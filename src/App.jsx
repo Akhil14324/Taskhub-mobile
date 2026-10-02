@@ -11,7 +11,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ChatProvider } from './context/ChatContext';
@@ -26,7 +26,14 @@ import AppNavigator from './navigation/AppNavigator';
 SplashScreen.preventAutoHideAsync().catch(() => { /* already prevented or native */ });
 
 function ThemedStatusBar() {
-  const { theme } = useTheme();
+  const { theme, colors } = useTheme();
+  // The page behind the app must follow the theme too, or any gap shows the browser's white.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.backgroundColor = colors.gray[50];
+    document.body.style.backgroundColor = colors.gray[50];
+    document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+  }, [colors, theme]);
   return <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />;
 }
 
@@ -55,6 +62,42 @@ function ThemeCrossfade({ children }) {
       {children}
     </Animated.View>
   );
+}
+
+const TEXT_ZOOM = { small: 0.92, normal: 1, large: 1.12 };
+
+/** Applies the signed-in person's own settings (theme, text size, motion) to this device. */
+function PreferencesApplier() {
+  const { user } = useAuth();
+  const { setTheme } = useTheme();
+  const prefs = user?.preferences || {};
+
+  useEffect(() => {
+    if (!prefs.theme) return undefined;
+    if (prefs.theme !== 'system') { setTheme(prefs.theme); return undefined; }
+    const media = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    if (!media) return undefined;
+    const apply = () => setTheme(media.matches ? 'dark' : 'light');
+    apply();
+    media.addEventListener?.('change', apply);
+    return () => media.removeEventListener?.('change', apply);
+  }, [prefs.theme, setTheme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.zoom = String(TEXT_ZOOM[prefs.textSize] || 1);
+  }, [prefs.textSize]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    if (!prefs.reduceMotion) return undefined;
+    const style = document.createElement('style');
+    style.textContent = '*,*::before,*::after{transition-duration:0s !important;animation-duration:0s !important;animation-delay:0s !important}';
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, [prefs.reduceMotion]);
+
+  return null;
 }
 
 function AppRoot() {
@@ -90,6 +133,7 @@ function AppRoot() {
       <SafeAreaProvider>
         <ThemedStatusBar />
         <AuthProvider>
+          <PreferencesApplier />
           <ChatProvider>
             <TodoProvider>
               <NotificationProvider>

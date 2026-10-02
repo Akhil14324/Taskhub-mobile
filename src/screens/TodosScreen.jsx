@@ -18,6 +18,7 @@ import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoTreeList from '../components/todos/TodoTreeList';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailSheet';
+import InlineQuickAdd from '../components/todos/InlineQuickAdd';
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
@@ -77,7 +78,7 @@ export default function TodosScreen() {
   } = useTodos();
 
   // today | upcoming | inbox | shared | done | list:<id> | filter:<id> | label:<name> | biz:<id>
-  const [view, setView] = useState(() => (route.params?.business_id ? `biz:${route.params.business_id}` : 'today'));
+  const [view, setView] = useState(() => (route.params?.business_id ? `biz:${route.params.business_id}` : (user?.preferences?.defaultView || 'today')));
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [openTodoId, setOpenTodoId] = useState(null);
@@ -118,6 +119,8 @@ export default function TodosScreen() {
   const [scope, setScope] = useState(() => (route.params?.business_id ? 'business' : 'mine'));
   const now = useNowTick(60000);
   const scrollRef = useRef(null);
+  const inlineAddRef = useRef(null);
+  const simpleView = user?.preferences?.viewMode === 'simple';
   const listAreaRef = useRef(null);
   const meId = user?.id;
   const today = todayYmd();
@@ -199,8 +202,8 @@ export default function TodosScreen() {
 
   // Layouts a view can be shown in.
   const canBoard = view !== 'done';
-  const canCalendar = view !== 'done';
-  const canTimeline = !!business || view === 'today' || view === 'upcoming' || !!currentList;
+  const canCalendar = view !== 'done' && !simpleView;
+  const canTimeline = !simpleView && (!!business || view === 'today' || view === 'upcoming' || !!currentList);
   const effectiveLayout = layout === 'board' && canBoard ? 'board'
     : layout === 'calendar' && canCalendar ? 'calendar'
       : layout === 'timeline' && canTimeline ? 'timeline' : 'list';
@@ -486,6 +489,13 @@ export default function TodosScreen() {
     now,
   }), [view, search, activeFilter, labelName, business, meId, highlightId, openTodoId, focusId, toggleTodo, openTodo, requestRowDelete, selectMode, selected, toggleSelected, now]);
 
+  // One clear next step instead of a blank page.
+  const emptyAction = search || view === 'done' ? undefined : (
+    <AnimatedPressable onPress={() => setAddOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand[600], borderRadius: radius.lg, paddingVertical: 11, paddingHorizontal: spacing.xl }}>
+      <Ionicons name="add" size={18} color="#fff" />
+      <Text style={{ color: '#fff', fontWeight: '800', fontSize: fontSize.base }}>Add your first to-do</Text>
+    </AnimatedPressable>
+  );
   const allEmpty = sections.every((s) => s.items.length === 0);
   const emptyState = (() => {
     if (search) return { icon: 'search', title: 'Nothing found', message: 'Try another word.' };
@@ -630,7 +640,7 @@ export default function TodosScreen() {
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
 
   useShortcuts({
-    q: () => setAddOpen(true),
+    q: () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
     n: () => setAddOpen(true),
     '/': () => { setSearching(true); },
     '[': () => setSidebarHidden((v) => !v),
@@ -965,8 +975,8 @@ export default function TodosScreen() {
             />
           </View>
 
-          {allEmpty && !business && <EmptyHero {...emptyState} />}
-          {allEmpty && !!business && sections.every((s) => s.key === 'd:' + today || s.items.length === 0) && <EmptyHero {...emptyState} />}
+          {allEmpty && !business && <EmptyHero {...emptyState} action={emptyAction} />}
+          {allEmpty && !!business && sections.every((s) => s.key === 'd:' + today || s.items.length === 0) && <EmptyHero {...emptyState} action={emptyAction} />}
 
           {sectioned && !search && (
             <AnimatedPressable style={styles.addSection} onPress={() => setSectionEditor({ list_id: currentList?.id || null, name: '' })}>
@@ -1009,6 +1019,9 @@ export default function TodosScreen() {
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
+      {desktop && view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
+        <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} />
+      )}
       {mobileNav}
       {body}
       {selectMode ? (
@@ -1048,6 +1061,7 @@ export default function TodosScreen() {
           onApprovals={() => navigation.navigate('Approvals')}
           onMonitor={() => navigation.navigate('TeamMonitor')}
           onFilters={() => setFiltersOpen(true)}
+          simple={simpleView}
         />
       )}
       {main}

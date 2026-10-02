@@ -129,7 +129,7 @@ export default function TodoTimeline({ todo }) {
       <AnimatedPressable style={styles.assignee} onPress={() => (perms.can_assign !== false ? setAssignOpen(true) : null)} haptic="light">
         <Avatar name={todo.assignee_name || todo.created_by_name || '?'} size={30} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.assigneeLabel}>Accountable</Text>
+          <Text style={styles.assigneeLabel}>Owner</Text>
           <Text style={styles.assigneeName}>{assigneeIsMe ? 'You' : todo.assignee_name || (todo.business_id ? 'Open to the business' : 'Nobody')}</Text>
         </View>
         {!!todo.assigned_at && <Text style={styles.assignedAgo}>since {timeAgo(todo.assigned_at)}</Text>}
@@ -150,7 +150,7 @@ export default function TodoTimeline({ todo }) {
               {Array.isArray(b.mentions) && b.mentions.length > 0 && (
                 <Text style={styles.blockerNote}>Tagged: {b.mentions.map((m) => `@${m.label}`).join(', ')}</Text>
               )}
-              <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Blocked for {formatSeconds(since)} · raised by {b.raised_by === user?.id ? 'you' : b.raised_by_name}</Text>
+              <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Stuck for {formatSeconds(since)} · raised by {b.raised_by === user?.id ? 'you' : b.raised_by_name}</Text>
             </View>
             <AnimatedPressable onPress={() => clearBlocker(b)} haptic="medium" style={styles.clearBtn}>
               <Text style={styles.clearText}>Clear</Text>
@@ -161,7 +161,7 @@ export default function TodoTimeline({ todo }) {
       {!todo.is_done && todo.status !== 'blocked' && canWork && (
         <AnimatedPressable style={styles.addBlocker} onPress={() => setBlockerOpen(true)} haptic="light">
           <Ionicons name="hand-left-outline" size={17} color={colors.brand[600]} />
-          <Text style={styles.addBlockerText}>Raise a blocker — dependency, decision, issue or dead stop</Text>
+          <Text style={styles.addBlockerText}>Stuck? Tell the right person</Text>
         </AnimatedPressable>
       )}
 

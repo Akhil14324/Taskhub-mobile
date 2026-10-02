@@ -126,7 +126,7 @@ const ConversationItem = memo(function ConversationItem({ item, userId, colors, 
   );
 });
 
-export default function ChatListScreen() {
+export default function ChatListScreen({ onOpen, activeId } = {}) {
   const { user } = useAuth();
   const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation, deleteConversation, markRead } = useChat();
   const colors = useColors();
@@ -212,7 +212,7 @@ export default function ChatListScreen() {
     try {
       const conv = await createConversation(chatType, recipients, groupName.trim() || undefined);
       setShowNewModal(false);
-      navigation.navigate('ChatThread', { conversationId: conv.id });
+      if (onOpen) onOpen(conv.id); else navigation.navigate('ChatThread', { conversationId: conv.id });
     } catch (err) {
       Alert.alert(t('somethingWentWrong'), err.response?.data?.error || t('failedCreateConversation'));
     }
@@ -290,8 +290,9 @@ export default function ChatListScreen() {
   }, [deleteConversation]);
 
   const handlePressConversation = useCallback((conversationId) => {
-    navigation.navigate('ChatThread', { conversationId });
-  }, [navigation]);
+    if (onOpen) onOpen(conversationId);
+    else navigation.navigate('ChatThread', { conversationId });
+  }, [navigation, onOpen]);
 
   const renderItem = useCallback(({ item, index }) => {
     const isGroup = item.type === 'group';
@@ -299,6 +300,7 @@ export default function ChatListScreen() {
     const isOnline = !!(otherParticipant && onlineUsers.has(otherParticipant.id));
     return (
       <FadeInItem index={index}>
+        <View style={activeId != null && String(activeId) === String(item.id) ? { backgroundColor: colors.brand[50] } : null}>
         <ConversationItem
           item={item}
           userId={user.id}
@@ -311,9 +313,10 @@ export default function ChatListScreen() {
           onShowOptions={showChatOptions}
           onDelete={handleDeleteConversation}
         />
+        </View>
       </FadeInItem>
     );
-  }, [user.id, colors, styles, t, getDynamic, onlineUsers, handlePressConversation, showChatOptions, handleDeleteConversation]);
+  }, [user.id, colors, styles, t, getDynamic, onlineUsers, handlePressConversation, showChatOptions, handleDeleteConversation, activeId]);
 
   if (loading) return (
     <Screen style={styles.container}>

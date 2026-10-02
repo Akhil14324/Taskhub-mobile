@@ -34,6 +34,9 @@ export default function useShortcuts(bindings, enabled = true) {
       const name = mod ? `mod+${key}` : key;
 
       if (typing && name !== 'Escape' && !mod) return;
+      // Enter / Space on a button reached with Tab presses that button, not a shortcut.
+      const onButton = el && el !== document.body && (el.getAttribute?.('role') === 'button' || el.getAttribute?.('role') === 'link' || tag === 'BUTTON' || tag === 'A');
+      if (onButton && (name === 'Enter' || name === ' ')) return;
       const map = ref.current || {};
 
       if (pending) {
@@ -75,6 +78,24 @@ export const SHORTCUT_GROUPS = [
       { keys: ['G', 'N'], label: 'Notifications' },
       { keys: ['G', 'O'], label: 'Organisation' },
       { keys: ['G', 'P'], label: 'Profile' },
+    ],
+  },
+  {
+    title: 'Everywhere',
+    items: [
+      { keys: ['Tab'], altKeys: ['Shift+Tab'], label: 'Move to the next / previous button' },
+      { keys: ['Enter'], altKeys: ['Space'], label: 'Press the focused button' },
+      { keys: ['Esc'], label: 'Close a window or dialog' },
+      { keys: ['Enter'], label: 'In a dialog: confirm' },
+    ],
+  },
+  {
+    title: 'Chat',
+    items: [
+      { keys: ['Enter'], label: 'Send the message' },
+      { keys: ['Shift', 'Enter'], label: 'New line' },
+      { keys: ['Up'], altKeys: ['Down'], label: 'Previous / next conversation' },
+      { keys: ['Esc'], label: 'Close the conversation' },
     ],
   },
   {

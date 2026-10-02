@@ -92,7 +92,7 @@ export default function TaskJourney({ todo }) {
       }
       if (e.kind === 'blocker_raised') {
         const b = blockers.find((x) => Math.abs(x.from - at) < 5000);
-        if (b) held = { label: b.open ? 'Still blocked' : 'Blocked for', seconds: secs(b.from, b.to), running: b.open, bad: true };
+        if (b) held = { label: b.open ? 'Still stuck' : 'Stuck for', seconds: secs(b.from, b.to), running: b.open, bad: true };
       }
       return { e, at, gap: prev ? secs(prev, at) : null, held };
     });
@@ -162,7 +162,7 @@ export default function TaskJourney({ todo }) {
         {model.blockers.length > 0 && (
           <View style={styles.legendItem}>
             <View style={[styles.swatch, { backgroundColor: healthTint('red', theme, 0.4), borderWidth: 1, borderColor: red }]} />
-            <Text style={styles.legendText}>Blocked {formatSeconds(model.blockers.reduce((n, b) => n + secs(b.from, b.to), 0))}</Text>
+            <Text style={styles.legendText}>Stuck {formatSeconds(model.blockers.reduce((n, b) => n + secs(b.from, b.to), 0))}</Text>
           </View>
         )}
       </View>

@@ -24,7 +24,7 @@ export function ThemeProvider({ children }) {
 
   const colors = useMemo(() => getColors(theme), [theme]);
 
-  const value = useMemo(() => ({ theme, toggleTheme, colors }), [theme, toggleTheme, colors]);
+  const value = useMemo(() => ({ theme, setTheme, toggleTheme, colors }), [theme, toggleTheme, colors]);
 
   return (
     <ThemeContext.Provider value={value}>

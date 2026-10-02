@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Modal, StyleSheet, Dimensions, Pressable, useWindowDimensions } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -75,30 +75,56 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 
-  const pan = Gesture.Pan()
-    .activeOffsetY(12)
-    .failOffsetX(8)
-    .onUpdate((e) => {
-      translateY.value = Math.max(0, e.translationY);
-      overlayOpacity.value = interpolate(
-        translateY.value,
-        [0, maxHeight],
-        [1, 0],
-        Extrapolation.CLAMP,
-      );
-    })
-    .onEnd((e) => {
-      const shouldClose = e.translationY > maxHeight * 0.35 || e.velocityY > 800;
-      if (shouldClose) {
-        // Start animation immediately on UI thread, then notify JS to unmount
+  // Esc closes the sheet (keyboard use).
+  useEffect(() => {
+    if (!visible || typeof document === 'undefined') return undefined;
+    const onKey = (e) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [visible, onClose]);
+
+  // Touch screens: pulling the sheet down from anywhere closes it, as long as whatever scrolls inside it
+  // is already at the top (otherwise the pull is just scrolling).
+  const touch = useRef(null);
+  const scrolledAway = (node) => {
+    for (let el = node; el && el.nodeType === 1; el = el.parentElement) {
+      if (el.scrollHeight > el.clientHeight + 1 && el.scrollTop > 0) return true;
+    }
+    return false;
+  };
+  const touchHandlers = desktop ? {} : {
+    onTouchStart: (e) => {
+      const t = e.nativeEvent.touches?.[0];
+      touch.current = t ? { y: t.pageY, x: t.pageX, active: false, off: scrolledAway(e.target) } : null;
+    },
+    onTouchMove: (e) => {
+      const s = touch.current;
+      const t = e.nativeEvent.touches?.[0];
+      if (!s || !t || s.off) return;
+      const dy = t.pageY - s.y;
+      if (!s.active) {
+        if (dy > 14 && Math.abs(t.pageX - s.x) < dy) s.active = true;
+        else return;
+      }
+      translateY.value = Math.max(0, dy - 14);
+      overlayOpacity.value = interpolate(translateY.value, [0, maxHeight], [1, 0], Extrapolation.CLAMP);
+    },
+    onTouchEnd: (e) => {
+      const s = touch.current;
+      touch.current = null;
+      if (!s || !s.active) return;
+      const t = e.nativeEvent.changedTouches?.[0];
+      const dy = t ? t.pageY - s.y : 0;
+      if (dy > 110) {
         translateY.value = withTiming(maxHeight, { duration: CLOSE_DURATION });
         overlayOpacity.value = withTiming(0, { duration: CLOSE_DURATION });
-        runOnJS(onClose)();
+        onClose();
       } else {
         translateY.value = withTiming(0, { duration: 140 });
         overlayOpacity.value = withTiming(1, { duration: 120 });
       }
-    });
+    },
+  };
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -119,20 +145,20 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       onRequestClose={onClose}
       statusBarTranslucent
     >
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <Animated.View style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <Animated.View style={[styles.sheet, desktop && styles.dialog, { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md }, sheetStyle]}>
-          {/* Drag only from the grip so scrollable content inside the sheet keeps scrolling. */}
+        <Animated.View style={[styles.sheet, desktop && styles.dialog, { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md }, sheetStyle]} {...touchHandlers}>
+          {/* Swipe-down handling is the touch handlers above (works from anywhere once content is at the top). */}
           {desktop ? <View style={{ height: spacing.sm }} /> : (
-            <GestureDetector gesture={pan}>
-              <View style={styles.handleZone}>
-                <View style={styles.handle} />
-              </View>
-            </GestureDetector>
+            <View style={styles.handleZone}>
+              <View style={styles.handle} />
+            </View>
           )}
           {children}
         </Animated.View>
       </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -161,8 +187,8 @@ const createStyles = (colors, insets) => StyleSheet.create({
     paddingTop: spacing.sm,
   },
   handleZone: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
     marginTop: -spacing.sm,
     alignSelf: 'stretch',
     alignItems: 'center',

@@ -268,14 +268,24 @@ export function Fab({ onPress, icon = 'add', bottom = 24, color, label }) {
   );
 }
 
+// Plain words for icons that have no label of their own (hover text on desktop, screen readers everywhere).
+const ICON_WORDS = {
+  search: 'Search', close: 'Close', 'ellipsis-horizontal': 'More options', 'ellipsis-vertical': 'More options', add: 'Add',
+  'create-outline': 'Edit', 'trash-outline': 'Delete', 'send': 'Send', 'paper-plane-outline': 'Send', 'arrow-back': 'Back',
+  'chevron-back': 'Back', 'moon-outline': 'Dark mode', 'sunny-outline': 'Light mode', 'notifications-outline': 'Notifications',
+  'filter-outline': 'Filter', 'funnel-outline': 'Filter', 'share-outline': 'Share', 'copy-outline': 'Copy', 'attach': 'Attach a file',
+};
+
 export function IconButton({ icon, onPress, color, size = 22, badge, style, accessibilityLabel }) {
   const colors = useColors();
+  const word = accessibilityLabel || ICON_WORDS[icon] || ICON_WORDS[String(icon).replace(/-outline$/, '')];
   return (
     <AnimatedPressable
       onPress={onPress}
       haptic="light"
       hitSlop={6}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={word}
+      dataSet={word ? { tip: word } : undefined}
       style={[{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, style]}
     >
       <Ionicons name={icon} size={size} color={color || colors.gray[600]} />

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { ActivityIndicator, Text, View, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
 import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -42,6 +42,7 @@ import NotificationsScreen from '../screens/Notifications';
 import ProfileScreen from '../screens/Profile';
 import ChatListScreen from '../screens/ChatListScreen';
 import ChatThreadScreen from '../screens/ChatThreadScreen';
+import ChatWorkspace from '../screens/ChatWorkspace';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
 import LegalScreen from '../screens/Legal';
 import OopsScreen from '../screens/Oops';
@@ -72,14 +73,17 @@ const FramedForgotPassword = framed(ForgotPasswordScreen, 480);
 const FramedChangePassword = framed(ChangePasswordScreen, 480);
 // Pages that have to fill a desktop window (like Home and To-do do) get a wide frame; only forms stay narrow.
 const WIDE = 1560;
-const FramedChatThread = framed(ChatThreadScreen, WIDE);
-const FramedChatList = framed(ChatListScreen, WIDE);
+// Desktop shows list and conversation side by side; phones keep two screens.
+function ChatThreadEntry(props) { return useIsDesktop() ? <ChatWorkspace /> : <ChatThreadScreen {...props} />; }
+function ChatListEntry(props) { return useIsDesktop() ? <ChatWorkspace /> : <ChatListScreen {...props} />; }
+const FramedChatThread = ChatThreadEntry;
+const FramedChatList = ChatListEntry;
 const FramedGroupInfo = framed(GroupInfoScreen, 1000);
-const FramedApprovals = framed(ApprovalsScreen, WIDE);
+const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
-const FramedNotifications = framed(NotificationsScreen, WIDE);
+const FramedNotifications = framed(NotificationsScreen, 1100);
 const FramedProfile = framed(ProfileScreen, 1000);
 
 const Stack = createNativeStackNavigator();
@@ -183,6 +187,7 @@ function MainTabs() {
   return (
     <>
       <Tab.Navigator
+        initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || 'Dashboard'}
         tabBar={desktop ? () => null : undefined}
         screenOptions={{
           headerShown: false,
@@ -337,6 +342,12 @@ export default function AppNavigator() {
   const notificationListenerRef = useRef(null);
   const [routeName, setRouteName] = useState(null);
 
+  // The default navigation theme paints a pale grey behind screens that do not fill the window.
+  const navTheme = useMemo(() => ({
+    ...DefaultTheme,
+    colors: { ...DefaultTheme.colors, background: colors.gray[50], card: colors.white, border: colors.gray[200], text: colors.gray[900], primary: colors.brand[600] },
+  }), [colors]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -368,7 +379,7 @@ export default function AppNavigator() {
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.gray[50] }}>
       {showShell && <AppSidebar routeName={routeName} />}
       <View style={{ flex: 1, minWidth: 0 }}>
-    <NavigationContainer ref={navigationRef} onReady={syncRoute} onStateChange={syncRoute}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

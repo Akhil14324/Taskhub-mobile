@@ -56,8 +56,6 @@ export default function BlockerSheet({ visible, todo, onClose }) {
     }
   }, [visible]);
 
-  const myLevel = useMemo(() => people.find((p) => p.id === user?.id)?.level ?? null, [people, user?.id]);
-
   // Only to-dos that can really hold this one up: the same business (everyone's), or the personal ones.
   // Never this to-do, its sub-tasks or its parent.
   const candidates = useMemo(() => {
@@ -70,12 +68,9 @@ export default function BlockerSheet({ visible, todo, onClose }) {
   }, [todos, todo, query]);
 
   const peopleMatches = useMemo(() => {
-    const all = filterPeople(people, query, { excludeIds: [user?.id], limit: 60 });
-    if (kind !== 'waiting_on') return all.slice(0, 6);
-    // A decision comes from someone above you in the chain of command.
-    const senior = all.filter((p) => p.level != null && (myLevel == null || p.level < myLevel));
-    return (senior.length || query.trim() ? senior : all).slice(0, 6);
-  }, [people, query, user?.id, kind, myLevel]);
+    // A decision or suggestion can come from anyone: above you, beside you or below you.
+    return filterPeople(people, query, { excludeIds: [user?.id], limit: 6 });
+  }, [people, query, user?.id]);
 
   const valid = kind === 'dependency' ? (depOn === 'todo' ? !!depId : !!personId)
     : kind === 'waiting_on' ? (!!personId || note.trim().length > 0)
@@ -107,7 +102,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder={kind === 'waiting_on' ? 'Search who has to decide' : 'Search the person'}
+        placeholder={kind === 'waiting_on' ? 'Search anyone whose decision or suggestion you need' : 'Search the person'}
         placeholderTextColor={colors.gray[400]}
         style={styles.input}
       />
@@ -128,7 +123,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight={700} avoidKeyboard>
       <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>What is blocking this?</Text>
+        <Text style={styles.heading}>What is stopping this?</Text>
         <Text style={styles.sub} numberOfLines={2}>{todo?.title}</Text>
 
         <View style={styles.kinds}>
@@ -198,7 +193,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
 
         <AnimatedPressable disabled={!valid || saving} onPress={submit} haptic="medium" style={[styles.submit, { opacity: valid && !saving ? 1 : 0.4 }]}>
           <Ionicons name="hand-left" size={18} color="#fff" />
-          <Text style={styles.submitText}>Mark as blocked</Text>
+          <Text style={styles.submitText}>Report as stuck</Text>
         </AnimatedPressable>
       </ScrollView>
     </BottomSheet>

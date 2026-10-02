@@ -110,6 +110,8 @@ function WebPressable({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
+      // A button role lets Tab reach it and Enter / Space press it (keyboard-only use).
+      accessibilityRole={onPress ? 'button' : undefined}
       style={[style, { transform: [{ scale: pressed ? scale : 1 }], transitionProperty: 'transform', transitionDuration: '90ms', transitionTimingFunction: 'ease-out' }]}
       {...rest}
     >

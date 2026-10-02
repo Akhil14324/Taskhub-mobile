@@ -85,7 +85,7 @@ export function MetricsGrid({ todo, now, reschedules = 0 }) {
     { label: 'Lead time', value: formatSeconds(m.lead_s), hint: 'created → ' + (todo.is_done ? 'done' : 'now') },
     { label: 'Response', value: formatSeconds(m.response_s), hint: 'assigned → started' },
     { label: 'Cycle', value: formatSeconds(m.cycle_s), hint: 'started → ' + (todo.is_done ? 'done' : 'now') },
-    { label: 'Blocked', value: formatSeconds(m.blocked_s), hint: 'time stuck', level: m.blocked_s > 0 ? (m.blocked_s >= 86400 ? 'red' : 'orange') : 'none' },
+    { label: 'Stuck', value: formatSeconds(m.blocked_s), hint: 'time stuck', level: m.blocked_s > 0 ? (m.blocked_s >= 86400 ? 'red' : 'orange') : 'none' },
     { label: 'Active', value: formatSeconds(m.active_s), hint: 'cycle − blocked' },
     {
       label: 'Estimate',

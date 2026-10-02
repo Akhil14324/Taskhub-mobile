@@ -20,7 +20,7 @@ import { describeEntry, formatSeconds, formatRatio, healthColor, todoHealth, tod
 const RANGES = [7, 30, 90];
 const VIEWS = [
   { key: 'open', label: 'Open' },
-  { key: 'blocked', label: 'Blocked' },
+  { key: 'blocked', label: 'Stuck' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'done', label: 'Done' },
   { key: 'all', label: 'All' },
@@ -127,7 +127,7 @@ export default function PersonMonitorScreen() {
             <View style={{ flexDirection: 'row' }}>
               <Stat label="Open" value={stats.open} />
               <Stat label="Overdue" value={stats.overdue} level={stats.overdue ? 'red' : null} />
-              <Stat label="Blocked" value={stats.blocked} level={stats.blocked ? 'orange' : null} />
+              <Stat label="Stuck" value={stats.blocked} level={stats.blocked ? 'orange' : null} />
               <Stat label="Done" value={stats.completed} level={stats.completed ? 'green' : null} />
             </View>
             <HealthBar health={stats.health} height={10} />
@@ -202,7 +202,7 @@ function TodoRow({ todo, personId, now, onPress }) {
   if (todo.is_done) {
     pill = health.level === 'none' ? null : { level: health.level, label: health.reasons[0] };
   } else if (todo.status === 'blocked') {
-    pill = { level: health.level === 'red' ? 'red' : 'orange', label: `Blocked ${formatSecondsShort(m.status_s.blocked)}`, icon: 'hand-left' };
+    pill = { level: health.level === 'red' ? 'red' : 'orange', label: `Stuck ${formatSecondsShort(m.status_s.blocked)}`, icon: 'hand-left' };
   } else if (health.level !== 'none') {
     pill = { level: health.level, label: health.reasons[0] || 'On track' };
   }

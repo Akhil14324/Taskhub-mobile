@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { spacing, fontSize } from '../../theme/theme';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { HealthPill } from './TimeHealth';
@@ -25,7 +26,7 @@ const INDENT = 22;
 
 /** Short text tag for states that are not "just open". */
 function stateTag(todo) {
-  if (todo.review_state === 'proposed') return { label: 'Proposed', icon: 'git-pull-request-outline' };
+  if (todo.review_state === 'proposed') return { label: 'Suggested', icon: 'git-pull-request-outline' };
   if (todo.review_state === 'rejected') return { label: 'Declined', icon: 'close-circle-outline' };
   if (todo.status === 'in_review' && !todo.is_done) return { label: 'In review', icon: STATUS.in_review.icon };
   if (todo.status === 'on_hold' && !todo.is_done) return { label: 'On hold', icon: STATUS.on_hold.icon };
@@ -44,6 +45,8 @@ function TodoItem({
 }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { user: me } = useAuth();
+  const simple = me?.preferences?.viewMode === 'simple'; // Simple view: only title, date, owner and progress
   const translateX = useSharedValue(0);
   const flash = useSharedValue(0);
   const canTick = todo.permissions ? todo.permissions.can_change_status : true;
@@ -98,7 +101,7 @@ function TodoItem({
     }
     if (todo.status === 'blocked') {
       const blocked = todoMetrics(todo, at).status_s.blocked;
-      return { level: health.level === 'red' ? 'red' : 'orange', label: `Blocked ${formatSecondsShort(blocked)}`, icon: 'hand-left' };
+      return { level: health.level === 'red' ? 'red' : 'orange', label: `Stuck ${formatSecondsShort(blocked)}`, icon: 'hand-left' };
     }
     if (todo.status === 'on_hold' || todo.status === 'in_review') return null;
     if (health.level === 'red' || health.level === 'orange') return { level: health.level, label: health.reasons[0] || HEALTH[health.level].label };
@@ -157,13 +160,13 @@ function TodoItem({
             >
               {todo.title}
             </Text>
-            {!!todo.notes && !todo.is_done && (
+            {!simple && !!todo.notes && !todo.is_done && (
               <Text style={styles.notes} numberOfLines={1}>{todo.notes}</Text>
             )}
             {!!doneLine && <Text style={styles.doneLine}>{doneLine}</Text>}
             <View style={styles.metaRow}>
               <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
-              {!todo.due_date && !todo.deadline_date && !todo.is_done && (
+              {!simple && !todo.due_date && !todo.deadline_date && !todo.is_done && (
                 <View style={styles.metaItem}>
                   <Ionicons name="hourglass-outline" size={12} color={colors.gray[500]} />
                   <Text style={styles.metaText} numberOfLines={1}>
@@ -179,7 +182,7 @@ function TodoItem({
                   </Text>
                 </View>
               )}
-              {!!todo.duration_minutes && (
+              {!simple && !!todo.duration_minutes && (
                 <View style={styles.metaItem}>
                   <Ionicons name="time-outline" size={12} color={colors.gray[500]} />
                   <Text style={styles.metaText}>{formatDuration(todo.duration_minutes)}</Text>
@@ -191,7 +194,7 @@ function TodoItem({
                   <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
                 </View>
               )}
-              {todo.comment_count > 0 && (
+              {!simple && todo.comment_count > 0 && (
                 <View style={styles.metaItem}>
                   <Ionicons name="chatbubble-outline" size={11} color={colors.gray[500]} />
                   <Text style={styles.metaText}>{todo.comment_count}</Text>
@@ -237,7 +240,12 @@ function TodoItem({
               )}
               {!todo.business_id && others.length > 0 && <AvatarStack people={others} size={18} />}
             </View>
-            {labels.length > 0 && (
+            {hasSubtasks && !todo.is_done && (
+              <View style={styles.progressTrack} accessibilityLabel={`${progress.done} of ${progress.total} sub-tasks done`}>
+                <View style={[styles.progressFill, { width: `${Math.round((progress.done / progress.total) * 100)}%` }]} />
+              </View>
+            )}
+            {!simple && labels.length > 0 && (
               <View style={styles.labelRow}>
                 {labels.slice(0, 4).map((l) => (
                   <Text key={l} style={styles.label}>+{l}</Text>
@@ -259,6 +267,8 @@ function TodoItem({
 
 const createStyles = (colors) => StyleSheet.create({
   container: { position: 'relative' },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.gray[200], marginTop: 6, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.brand[500] },
   swipeBg: {
     ...StyleSheet.absoluteFillObject,
     flexDirection: 'row',

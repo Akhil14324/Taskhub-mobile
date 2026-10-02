@@ -18,7 +18,7 @@ const RANGES = [7, 30, 90];
 const FILTERS = [
   { key: 'all', label: 'Everyone', icon: 'people' },
   { key: 'attention', label: 'Needs attention', icon: 'alert-circle' },
-  { key: 'blocked', label: 'Blocked', icon: 'hand-left' },
+  { key: 'blocked', label: 'Stuck', icon: 'hand-left' },
   { key: 'overdue', label: 'Overdue', icon: 'time' },
 ];
 
@@ -106,7 +106,7 @@ export default function TeamMonitorScreen() {
             <View style={styles.teamTop}>
               <Stat label="Open" value={team.open} />
               <Stat label="Overdue" value={team.overdue} level={team.overdue ? 'red' : null} />
-              <Stat label="Blocked" value={team.blocked} level={team.blocked ? 'orange' : null} />
+              <Stat label="Stuck" value={team.blocked} level={team.blocked ? 'orange' : null} />
               <Stat label="Done" value={team.completed} level={team.completed ? 'green' : null} />
             </View>
             <HealthBar health={team.health} height={10} />

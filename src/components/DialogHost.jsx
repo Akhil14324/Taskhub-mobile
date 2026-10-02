@@ -41,6 +41,19 @@ export default function DialogHost() {
     if (button?.onPress) setTimeout(() => button.onPress(), 0);
   }, []);
 
+  const confirmKey = current;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !confirmKey) return undefined;
+    const list = confirmKey.buttons && confirmKey.buttons.length ? confirmKey.buttons : [{ text: 'OK' }];
+    const action = list.filter((b) => b.style !== 'cancel');
+    const onKey = (e) => {
+      if (e.key === 'Enter' && action.length === 1) { e.preventDefault(); close(action[0]); }
+      else if (e.key === 'Escape') { e.preventDefault(); confirmKey.onDismiss?.(); close(list.find((b) => b.style === 'cancel')); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmKey, close]);
+
   if (!current) return null;
   const buttons = current.buttons && current.buttons.length ? current.buttons : [{ text: 'OK' }];
   const cancelButton = buttons.find((b) => b.style === 'cancel');

@@ -87,6 +87,21 @@ export function AuthProvider({ children }) {
     });
   };
 
+  // Personal settings: applied at once, then saved to the account so they follow it to other devices.
+  const updatePreferences = useCallback(async (patch) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, preferences: { ...(prev.preferences || {}), ...patch } };
+      SecureStore.setItemAsync('user', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    try {
+      await api.put('/users/me/preferences', patch, { __skipOops: true });
+    } catch (err) {
+      console.warn('[auth] could not save preferences:', err.message);
+    }
+  }, []);
+
   const logout = async () => {
     await teardownPushNotifications();
     await SecureStore.deleteItemAsync('token');
@@ -95,7 +110,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser: fetchMe }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser: fetchMe, updatePreferences }}>
       {children}
     </AuthContext.Provider>
   );

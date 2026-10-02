@@ -105,7 +105,7 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.blockerTitle}>{meta.label}{b.blocked_by_todo_title ? `: ${b.blocked_by_todo_title}` : ''}{b.blocked_by_user_name ? `: ${b.blocked_by_user_name}` : ''}</Text>
                   {!!b.note && <Text style={styles.blockerNote}>{b.note}</Text>}
-                  <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Blocked for {formatSeconds(since)}</Text>
+                  <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Stuck for {formatSeconds(since)}</Text>
                 </View>
               </View>
             );

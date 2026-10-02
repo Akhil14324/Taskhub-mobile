@@ -205,7 +205,7 @@ export default function HomeScreen() {
           </View>
           <Stat label="Open" value={b.open} />
           <Stat label="Overdue" value={b.overdue} hot={b.overdue > 0} />
-          <Stat label={b.can_manage && b.proposed ? 'Proposed' : 'Review'} value={b.can_manage && b.proposed ? b.proposed : b.review} hot={(b.can_manage && b.proposed > 0) || b.review > 0} />
+          <Stat label={b.can_manage && b.proposed ? 'Suggested' : 'Review'} value={b.can_manage && b.proposed ? b.proposed : b.review} hot={(b.can_manage && b.proposed > 0) || b.review > 0} />
           <Ionicons name="chevron-forward" size={16} color={colors.gray[300]} />
         </AnimatedPressable>
       ))}

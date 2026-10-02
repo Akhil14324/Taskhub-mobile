@@ -103,7 +103,7 @@ export default function ApprovalsScreen() {
             <EmptyHero icon="shield-checkmark" title="Nothing waiting on you" message="Tasks proposed by your team, finished work that needs your sign-off and deletion requests appear here." />
           )}
 
-          {proposals.length > 0 && <SectionHeader title="Proposed tasks" count={proposals.length} />}
+          {proposals.length > 0 && <SectionHeader title="Suggested tasks" count={proposals.length} />}
           {proposals.map((t) => (
             <View key={`p${t.id}`} style={styles.card}>
               <AnimatedPressable onPress={() => openTodo(t.id)}>

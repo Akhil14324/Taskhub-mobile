@@ -169,9 +169,9 @@ export default function BoardView({
 function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onToggle, onMove, styles }) {
   const colors = useColors();
   const canTick = t.permissions ? t.permissions.can_change_status : true;
-  const tag = t.review_state === 'proposed' ? 'Proposed'
+  const tag = t.review_state === 'proposed' ? 'Suggested'
     : t.status === 'in_review' && !t.is_done ? 'In review'
-      : t.status === 'blocked' && !t.is_done ? 'Blocked'
+      : t.status === 'blocked' && !t.is_done ? 'Stuck'
         : t.status === 'on_hold' && !t.is_done ? 'On hold' : null;
   return (
     <View ref={makeDraggable} dataSet={{ boardCard: String(t.id), col: String(colKey) }} style={styles.cardWrap}>

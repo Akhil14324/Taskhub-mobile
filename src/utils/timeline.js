@@ -37,7 +37,7 @@ export function healthTint(level, theme = 'light', alpha = 0.14) {
 export const STATUS = {
   todo: { label: 'To do', icon: 'ellipse-outline' },
   in_progress: { label: 'In progress', icon: 'play-circle' },
-  blocked: { label: 'Blocked', icon: 'hand-left' },
+  blocked: { label: 'Stuck', icon: 'hand-left' },
   in_review: { label: 'In review', icon: 'eye' },
   on_hold: { label: 'On hold', icon: 'pause-circle' },
   done: { label: 'Done', icon: 'checkmark-circle' },
@@ -49,7 +49,7 @@ export const STATUS_ORDER = ['todo', 'in_progress', 'in_review', 'blocked', 'on_
 export const BLOCKER_KINDS = {
   // `waiting_on` is the stored value; people see it as "Needs a decision".
   dependency: { label: 'Dependency', short: 'Dependency', icon: 'git-merge-outline', hint: 'Something has to be finished first: another to-do, or a person doing their part.' },
-  waiting_on: { label: 'Needs a decision', short: 'Decision', icon: 'ribbon-outline', hint: 'You need an approval, a decision or a suggestion from someone senior before you can go on.' },
+  waiting_on: { label: 'Needs a decision', short: 'Decision', icon: 'ribbon-outline', hint: 'You need an approval, a decision or a suggestion from anyone, senior or not, before you can go on.' },
   issue: { label: 'Issue', short: 'Issue', icon: 'bug-outline', hint: 'Something went wrong while doing this. Tag who or what is involved so they are told.' },
   dead_stop: { label: 'Dead stop', short: 'Dead stop', icon: 'stop-circle-outline', hint: 'Work cannot continue at all because of this. Say what stopped it and tag what it is about.' },
 };
@@ -163,7 +163,7 @@ export function todoHealth(todo, now = Date.now()) {
   }
   if (todo.status === 'blocked') {
     if (m.status_s.blocked >= DAY) mark('red', 'Blocked for over a day');
-    else mark('orange', 'Blocked');
+    else mark('orange', 'Stuck');
   }
   if (m.estimate_s && todo.started_at) {
     const ratio = m.status_s.in_progress / m.estimate_s;

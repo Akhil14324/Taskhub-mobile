@@ -28,7 +28,7 @@ const TABS = [
   { key: 'details', label: 'Details' },
   { key: 'comments', label: 'Comments' },
   { key: 'activity', label: 'Activity' },
-  { key: 'journey', label: 'Journey' },
+  { key: 'journey', label: 'History' },
 ];
 
 /**
@@ -99,6 +99,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
 
   const members = todo?.members || [];
   const isCreator = todo?.created_by === user?.id;
+  const simple = user?.preferences?.viewMode === 'simple';
   const suggestions = personQuery !== null
     ? filterPeople(people, personQuery, { excludeIds: members.map((m) => m.id), limit: 6 })
     : [];
@@ -204,6 +205,13 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
           )}
         </View>
 
+        {(editable || todo.permissions?.can_change_status !== false) && (
+          <AnimatedPressable style={[styles.doneBtn, todo.is_done && styles.doneBtnOff]} onPress={() => toggleTodo(todo)} haptic="medium">
+            <Ionicons name={todo.is_done ? 'refresh' : 'checkmark-circle'} size={19} color={todo.is_done ? colors.gray[700] : '#fff'} />
+            <Text style={[styles.doneBtnText, todo.is_done && { color: colors.gray[700] }]}>{todo.is_done ? 'Reopen' : 'Mark done'}</Text>
+          </AnimatedPressable>
+        )}
+
         <GovernancePanel todo={todo} />
 
         <View style={styles.tabs}>
@@ -290,15 +298,15 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
               </>
             )}
 
-            <Text style={styles.label}>Labels</Text>
-            <View style={styles.chipRow}>
+            {!simple && <Text style={styles.label}>Labels</Text>}
+            {!simple && <View style={styles.chipRow}>
               {todoLabels.map((l) => (
                 <Chip key={l} icon="pricetag" label={l} active onRemove={editable ? () => save({ labels: todoLabels.filter((x) => x !== l) }) : undefined} />
               ))}
               {editable && labelText === null && <Chip icon="add" label="Label" onPress={() => setLabelText('')} />}
               {!editable && todoLabels.length === 0 && <Text style={styles.fieldPlaceholder}>None</Text>}
-            </View>
-            {labelText !== null && (
+            </View>}
+            {!simple && labelText !== null && (
               <View>
                 <TextInput
                   autoFocus
@@ -319,14 +327,14 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
               </View>
             )}
 
-            {editable && (
+            {editable && !simple && (
               <AnimatedPressable style={styles.moreToggle} onPress={() => setMore((v) => !v)}>
                 <Ionicons name={more ? 'chevron-down' : 'chevron-forward'} size={15} color={colors.gray[500]} />
-                <Text style={styles.moreText}>More options</Text>
-                <Text style={styles.moreHint}>deadline, estimate, repeat, reminders{business && !todo.parent_id ? ', review' : ''}</Text>
+                <Text style={styles.moreText}>Date & reminders</Text>
+                <Text style={styles.moreHint}>deadline, time estimate, repeat, reminders{business && !todo.parent_id ? ', review' : ''}</Text>
               </AnimatedPressable>
             )}
-            {editable && more && (
+            {editable && !simple && more && (
               <View>
                 <Text style={styles.label}>Deadline</Text>
                 <AnimatedPressable style={styles.field} onPress={() => setDeadlineOpen(true)}>
@@ -623,6 +631,9 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.sm },
+  doneBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginHorizontal: spacing.sm, marginTop: spacing.md, paddingVertical: 11, borderRadius: radius.lg, backgroundColor: colors.brand[600] },
+  doneBtnOff: { backgroundColor: colors.gray[100] },
+  doneBtnText: { color: '#fff', fontWeight: '800', fontSize: fontSize.base },
   moreToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, marginTop: spacing.sm },
   moreText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[700] },
   moreHint: { fontSize: 11, color: colors.gray[400], flexShrink: 1 },

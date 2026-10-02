@@ -44,6 +44,14 @@
       [role="button"]:focus-visible, a:focus-visible, button:focus-visible, [tabindex="0"]:not(input):not(textarea):focus-visible {
         outline: 2px solid #dc2626; outline-offset: 2px;
       }
+      /* Hover words for icon-only buttons (desktop); appears at once, unlike the slow browser tooltip. */
+      @media (hover: hover) {
+        [data-tip]:hover::after {
+          content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 50%; transform: translateX(50%);
+          background: #262626; color: #fafafa; font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
+          padding: 6px 8px; border-radius: 6px; pointer-events: none; z-index: 9999;
+        }
+      }
       * { scrollbar-width: thin; scrollbar-color: rgba(120, 120, 130, 0.35) transparent; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
       *::-webkit-scrollbar-thumb { background: rgba(120, 120, 130, 0.35); border-radius: 8px; }

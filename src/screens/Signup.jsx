@@ -49,7 +49,7 @@ export default function Signup() {
   const formStyle = useAnimatedStyle(() => ({ opacity: formOpacity.value, transform: [{ translateY: formTranslateY.value }] }));
 
   const handleSubmit = async () => {
-    if (!name || !username || !password || !confirmPassword) {
+    if (!name || !password || !confirmPassword) {
       setError(t('allFieldsRequired'));
       return;
     }
@@ -76,8 +76,9 @@ export default function Signup() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/auth/signup', { name, username, password });
-      const loginRes = await api.post('/auth/login', { username, password });
+      // Left empty, the server makes a lowercase, unique username from the name.
+      const signupRes = await api.post('/auth/signup', { name, username, password });
+      const loginRes = await api.post('/auth/login', { username: signupRes.data.user?.username || username, password });
       await login(loginRes.data.token, loginRes.data.user);
     } catch (err) {
       setError(err.response?.data?.error || t('signupFailed'));
@@ -123,7 +124,7 @@ export default function Signup() {
             <Input
               label={t('username')}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={(v) => setUsername(v.toLowerCase().replace(/\s/g, ''))}
               placeholder={t('usernamePlaceholder')}
               autoCapitalize="none"
             />

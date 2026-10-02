@@ -56,7 +56,7 @@ export default function GovernancePanel({ todo }) {
           <View style={styles.head}>
             <Ionicons name="git-pull-request-outline" size={18} color={colors.brand[700]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Proposed by {first(todo.created_by_name)}</Text>
+              <Text style={styles.title}>Suggested by {first(todo.created_by_name)}</Text>
               <Text style={styles.sub}>
                 {p.can_review
                   ? 'Accept it to make it real work for the business, or decline it with a reason.'

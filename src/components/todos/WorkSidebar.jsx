@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -45,8 +45,10 @@ function Heading({ children, right }) {
  */
 export default function WorkSidebar({
   view, onView, counts, lists, filters, labels, businesses, bizCounts, approvalCount, canMonitor,
-  onAdd, onNewList, onApprovals, onMonitor, onFilters,
+  onAdd, onNewList, onApprovals, onMonitor, onFilters, simple = false,
 }) {
+  // Filters and labels are for people who already use the app a lot, so they start folded away.
+  const [showMore, setShowMore] = useState(false);
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -57,7 +59,7 @@ export default function WorkSidebar({
         <Text style={styles.addKey}>Q</Text>
       </AnimatedPressable>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
-        <Heading>My to-dos</Heading>
+        <Heading>My work</Heading>
         <Item icon="today-outline" label="Today" count={counts.today} urgent active={view === 'today'} onPress={() => onView('today')} />
         <Item icon="calendar-outline" label="Upcoming" active={view === 'upcoming'} onPress={() => onView('upcoming')} />
         <Item icon="file-tray-outline" label="Inbox" count={counts.inbox} active={view === 'inbox'} onPress={() => onView('inbox')} />
@@ -66,7 +68,7 @@ export default function WorkSidebar({
 
         {businesses.length > 0 && (
           <>
-            <Heading>Business</Heading>
+            <Heading>Businesses</Heading>
             {businesses.map((b) => (
               <Item
                 key={b.id}
@@ -100,6 +102,14 @@ export default function WorkSidebar({
         ))}
         {lists.length === 0 && <Text style={styles.hint}>Group to-dos into lists like Home or Finance.</Text>}
 
+        {!simple && (
+          <AnimatedPressable style={styles.moreRow} onPress={() => setShowMore((v) => !v)}>
+            <Ionicons name={showMore ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.gray[400]} />
+            <Text style={styles.moreText}>Filters and labels</Text>
+          </AnimatedPressable>
+        )}
+        {!simple && showMore && (
+          <View>
         <Heading right={(
           <AnimatedPressable onPress={onFilters} hitSlop={8} accessibilityLabel="All filters">
             <Ionicons name="options-outline" size={16} color={colors.gray[400]} />
@@ -124,6 +134,9 @@ export default function WorkSidebar({
           </>
         )}
 
+          </View>
+        )}
+
         <Heading>Oversight</Heading>
         <Item icon="shield-checkmark-outline" label="Approvals" count={approvalCount} urgent onPress={onApprovals} />
         {canMonitor && <Item icon="speedometer-outline" label="Team monitor" onPress={onMonitor} />}
@@ -146,5 +159,7 @@ const createStyles = (colors) => StyleSheet.create({
     color: '#fff', fontSize: 11, fontWeight: '700', opacity: 0.85, paddingHorizontal: 6, paddingVertical: 1,
     borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
   },
+  moreRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: 4 },
+  moreText: { fontSize: 11, fontWeight: '700', color: colors.gray[400], textTransform: 'uppercase', letterSpacing: 0.8 },
   hint: { fontSize: 12, color: colors.gray[400], paddingHorizontal: spacing.md, paddingVertical: 4, lineHeight: 17 },
 });

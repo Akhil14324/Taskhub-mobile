@@ -45,6 +45,14 @@ import TypingIndicator from '../components/TypingIndicator';
 
 const DELETE_WINDOW_MS = 15 * 60 * 1000;
 const EDIT_WINDOW_MS = 30 * 60 * 1000;
+
+// Reactions are icons, stored as these short keys. Older reactions saved as emoji map to the nearest icon.
+const REACTION_ICONS = {
+  like: 'thumbs-up', love: 'heart', laugh: 'happy', wow: 'alert-circle', sad: 'sad', thanks: 'hand-right',
+};
+const REACTION_KEYS = Object.keys(REACTION_ICONS);
+const LEGACY_REACTIONS = { '👍': 'like', '❤️': 'love', '😂': 'laugh', '😮': 'wow', '😢': 'sad', '🙏': 'thanks' };
+const reactionIcon = (key) => REACTION_ICONS[key] || REACTION_ICONS[LEGACY_REACTIONS[key]] || 'happy-outline';
 const MAX_RECORDING_SECONDS = 5 * 60;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const MAX_IMAGE_SIZE = Math.min(SCREEN_WIDTH * 0.6, 240);
@@ -333,7 +341,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                   <View style={[styles.reactionsRow, isOwn ? styles.reactionsRowOwn : styles.reactionsRowOther]}>
                     {Object.entries(item.reactions).map(([emoji, users]) => (
                       <AnimatedPressable key={emoji} style={[styles.reactionBadge, isOwn && styles.reactionBadgeOwn]} onPress={() => onReact(item.id, emoji)} haptic="light">
-                        <Text style={styles.reactionEmoji}>{emoji}</Text>
+                        <Ionicons name={reactionIcon(emoji)} size={14} color={colors.brand[600]} />
                         <Text style={[styles.reactionCount, isOwn && styles.reactionCountOwn]}>{users.length}</Text>
                       </AnimatedPressable>
                     ))}
@@ -373,7 +381,7 @@ function formatDateLabel(dateStr, lang, t) {
   return msgDay.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export default function ChatThreadScreen() {
+export default function ChatThreadScreen({ conversationId: openId, embedded = false } = {}) {
   const { user } = useAuth();
   const {
     conversations, messages, typingUsers, onlineUsers, connected,
@@ -387,7 +395,7 @@ export default function ChatThreadScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { conversationId } = route.params;
+  const conversationId = openId ?? route.params?.conversationId;
 
   const [text, setText] = useState('');
   const [hasMore, setHasMore] = useState(false);
@@ -1046,9 +1054,11 @@ export default function ChatThreadScreen() {
     <Screen style={styles.container} bottomOffset={-insets.bottom}>
       <View style={styles.inner}>
       <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn} haptic="light">
-          <Ionicons name="arrow-back" size={24} color={colors.gray[700]} />
-        </AnimatedPressable>
+        {!embedded && (
+          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn} haptic="light" accessibilityLabel="Back">
+            <Ionicons name="arrow-back" size={24} color={colors.gray[700]} />
+          </AnimatedPressable>
+        )}
         <View style={styles.headerInfo}>
           <View style={styles.headerTitleRow}>
             {conversation?.type !== 'group' && isOtherOnline && <View style={styles.headerOnlineDot} />}
@@ -1235,6 +1245,14 @@ export default function ChatThreadScreen() {
               placeholderTextColor={colors.gray[400]}
               multiline
               maxLength={5000}
+              // Desktop keyboards: Enter sends, Shift+Enter makes a new line.
+              onKeyPress={(e) => {
+                const k = e.nativeEvent;
+                if (Platform.OS === 'web' && k.key === 'Enter' && !k.shiftKey && !k.isComposing) {
+                  e.preventDefault();
+                  if (editingMessage) { if (text.trim()) handleSaveEdit(); } else if (text.trim()) handleSend();
+                }
+              }}
             />
           </Animated.View>
         )}
@@ -1319,9 +1337,9 @@ export default function ChatThreadScreen() {
 
       <BottomSheet visible={!!reactionTarget} onClose={() => setReactionTarget(null)}>
         <View style={styles.reactionEmojiRow}>
-          {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
-            <AnimatedPressable key={emoji} style={styles.reactionEmojiBtn} onPress={() => handleReact(emoji)} haptic="light">
-              <Text style={styles.reactionEmojiLarge}>{emoji}</Text>
+          {REACTION_KEYS.map((key) => (
+            <AnimatedPressable key={key} style={styles.reactionEmojiBtn} onPress={() => handleReact(key)} haptic="light">
+              <Ionicons name={REACTION_ICONS[key]} size={28} color={colors.brand[600]} />
             </AnimatedPressable>
           ))}
         </View>

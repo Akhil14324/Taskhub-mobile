@@ -17,6 +17,7 @@ import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { PrimaryButton } from '../components/Button';
 import Cat3D from '../components/Cat3D';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { spacing, radius, fontSize } from '../theme/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -25,11 +26,11 @@ const NOT_FOUND_MSG_KEYS = ['oopsCatNotFound1', 'oopsCatNotFound2', 'oopsCatNotF
 const OFFLINE_MSG_KEYS = ['oopsCatOffline1', 'oopsCatOffline2', 'oopsCatOffline3'];
 
 const YARN_BALLS = [
-  { emoji: '🧶', size: 30, top: 90, duration: 9000, delay: 0, drift: 30 },
-  { emoji: '🧶', size: 22, top: 200, duration: 11000, delay: 1500, drift: -25 },
-  { emoji: '🐾', size: 24, top: 420, duration: 10000, delay: 3000, drift: 35 },
-  { emoji: '🧶', size: 18, top: 560, duration: 12000, delay: 4500, drift: -30 },
-  { emoji: '🐾', size: 20, top: 320, duration: 13000, delay: 2000, drift: 22 },
+  { icon: 'ellipse-outline', size: 30, top: 90, duration: 9000, delay: 0, drift: 30 },
+  { icon: 'ellipse-outline', size: 22, top: 200, duration: 11000, delay: 1500, drift: -25 },
+  { icon: 'paw-outline', size: 24, top: 420, duration: 10000, delay: 3000, drift: 35 },
+  { icon: 'ellipse-outline', size: 18, top: 560, duration: 12000, delay: 4500, drift: -30 },
+  { icon: 'paw-outline', size: 20, top: 320, duration: 13000, delay: 2000, drift: 22 },
 ];
 
 const yarnBallStyle = {
@@ -74,7 +75,7 @@ function YarnBall({ config }) {
 
   return (
     <Animated.View style={[yarnBallStyle, { top: config.top }, animStyle]}>
-      <Text style={{ fontSize: config.size }}>{config.emoji}</Text>
+      <Ionicons name={config.icon} size={config.size} color="#a3a3a3" />
     </Animated.View>
   );
 }

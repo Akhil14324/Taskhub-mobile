@@ -63,8 +63,8 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
 
   const save = async () => {
     if (!form.name?.trim()) return showToast({ message: 'Name is required', tone: 'error' });
-    if (creating && !/^[A-Za-z0-9._-]{3,30}$/.test(form.username || '')) {
-      return showToast({ message: 'Username: 3–30 letters, numbers, dot, dash or underscore', tone: 'error' });
+    if (creating && form.username && !/^[a-z0-9._-]{3,30}$/.test(form.username)) {
+      return showToast({ message: 'Username: 3–30 lowercase letters, numbers, dot, dash or underscore', tone: 'error' });
     }
     setSaving(true);
     try {
@@ -115,10 +115,10 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
           <Field label="Username (for login and @mentions)">
             <TextInput
               value={form.username}
-              onChangeText={(username) => set({ username: username.replace(/\s/g, '') })}
+              onChangeText={(username) => set({ username: username.toLowerCase().replace(/\s/g, '') })}
               style={styles.input}
               autoCapitalize="none"
-              placeholder="e.g. ravi"
+              placeholder="Leave empty to make one from the name"
               placeholderTextColor={colors.gray[400]}
             />
           </Field>

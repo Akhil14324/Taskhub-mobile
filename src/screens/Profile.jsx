@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert, Platform } from 'react-nativ
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/kit';
+import PreferencesCard from '../components/PreferencesCard';
 import { invalidateDirectory } from '../hooks/useDirectory';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -192,13 +193,13 @@ export default function Profile() {
 
   const handleEditSave = async () => {
     const trimmed = editName.trim();
-    const handle = editUsername.trim();
+    const handle = editUsername.trim().toLowerCase();
     if (!trimmed) {
       setEditError(t('nameRequired'));
       return;
     }
-    if (!/^[A-Za-z0-9._-]{3,30}$/.test(handle)) {
-      setEditError('Username can use letters, numbers, dot, dash or underscore (3–30 characters, no spaces)');
+    if (!/^[a-z0-9._-]{3,30}$/.test(handle)) {
+      setEditError('Username must be lowercase letters, numbers, dot, dash or underscore (3–30 characters, no spaces)');
       return;
     }
     setEditError('');
@@ -401,6 +402,8 @@ export default function Profile() {
           )}
         </View>
       </Card>
+      <PreferencesCard />
+
       {/* Account Details */}
       <Card style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('accountDetails')}</Text>
@@ -537,7 +540,7 @@ export default function Profile() {
         </AnimatedPressable>
         <Text style={styles.photoHint}>{editPhoto ? 'New photo selected. Save to apply.' : 'Tap the photo to change it'}</Text>
         <Input label={t('name')} value={editName} onChangeText={setEditName} placeholder={t('namePlaceholder')} autoCapitalize="words" />
-        <Input label={t('username')} value={editUsername} onChangeText={setEditUsername} placeholder="Unique username" />
+        <Input label={t('username')} value={editUsername} onChangeText={(v) => setEditUsername(v.toLowerCase().replace(/\s/g, ''))} placeholder="Unique, lowercase username" autoCapitalize="none" />
         <View style={styles.modalActions}>
           <SecondaryButton onPress={() => setEditModalOpen(false)} style={{ flex: 1, marginRight: spacing.sm }}>
             {t('cancel')}
