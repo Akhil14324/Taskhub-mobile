@@ -27,15 +27,14 @@ export function navigateWhenReady(name, params, attempts = 40) {
 
 /**
  * Open whatever a notification points at: a chat, a task, a to-do, approvals…
- * `data` is the push / notification payload ({ type, conversationId, taskId, todoId, approvalId }).
+ * `data` is the push / notification payload ({ type, conversationId, todoId, approvalId }).
  */
 export function openNotificationTarget(data = {}) {
   const conversationId = Number(data.conversationId);
-  const taskId = Number(data.taskId);
-  const todoId = Number(data.todoId);
+  // Old notifications may still carry a taskId; the migration rewrote them to todoId, but be safe.
+  const todoId = Number(data.todoId) || Number(data.taskId);
   if (conversationId) return navigateWhenReady('ChatThread', { conversationId });
   if (data.approvalId || data.type === 'approval_request') return navigateWhenReady('Approvals');
-  if (taskId) return navigateWhenReady('TaskDetail', { taskId });
   if (todoId) return navigateWhenReady('Main', { screen: 'Todos', params: { highlightId: todoId } });
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');

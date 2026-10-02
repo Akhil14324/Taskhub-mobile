@@ -1,26 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withDelay, withSpring } from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useChat } from '../context/ChatContext';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
-import api from '../api/client';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
-import { IconButton, ProgressRing, TodoCheckbox, DueChip, accent, tint } from '../components/kit';
-import { greeting, todayYmd, toYmd, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
+import { IconButton, ProgressRing, TodoCheckbox, DueChip } from '../components/kit';
+import useIsDesktop from '../hooks/useBreakpoint';
+import { greeting, todayYmd, toYmd, WEEKDAYS, MONTHS_SHORT, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
 import { pushEnvironment } from '../services/webPush';
 import { showToast } from '../utils/events';
 
+/**
+ * Home. Two clearly separate panels: what is mine (personal to-dos) and what belongs to the business
+ * (tasks everyone in it can see). Both are computed from the to-do store, so nothing extra is fetched.
+ */
 export default function HomeScreen() {
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
@@ -28,69 +31,198 @@ export default function HomeScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
-  const { todos, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
+  const { todos, businesses, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
   const { unreadCount, approvalCount, pushState, enablePush, refreshCounts } = useNotifications();
   const { totalUnread } = useChat();
 
-  const [summary, setSummary] = useState(null);
-  const [businesses, setBusinesses] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [openTodoId, setOpenTodoId] = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [sum, org] = await Promise.all([
-        api.get('/tasks/summary', { __skipOops: true }),
-        user?.is_leader || user?.manages_business_ids?.length ? api.get('/org/structure', { __skipOops: true }) : Promise.resolve(null),
-      ]);
-      setSummary(sum.data);
-      if (org) {
-        const all = org.data.businesses || [];
-        setBusinesses(user?.is_leader ? all : all.filter((b) => user.manages_business_ids.includes(b.id)));
-      }
-    } catch {
-      // offline; keep what we have
-    } finally {
-      setRefreshing(false);
-    }
-  }, [user]);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([load(), fetchTodos(), fetchInsights(), refreshCounts(), refreshUser?.()]);
-  };
+    await Promise.all([fetchTodos(), fetchInsights(), refreshCounts(), refreshUser?.()]);
+    setRefreshing(false);
+  }, [fetchTodos, fetchInsights, refreshCounts, refreshUser]);
 
   const today = todayYmd();
-  const openToday = todos.filter((t) => !t.is_done && t.due_date && t.due_date <= today);
-  const doneToday = todos.filter((t) => t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today);
-  const totalToday = openToday.length + doneToday.length;
-  const percent = totalToday ? Math.round((doneToday.length / totalToday) * 100) : 0;
+  const meId = user?.id;
   const firstName = (user?.name || '').split(' ').find((p) => p.length > 1) || user?.name || '';
   const notPlaced = !user?.is_leader && !(user?.memberships || []).length;
+  const d = new Date();
+
+  // ---- my to-dos -----------------------------------------------------------
+  const personal = useMemo(() => todos.filter((t) => !t.business_id), [todos]);
+  const personalToday = useMemo(
+    () => personal.filter((t) => t.due_date === today || (!t.due_date && t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today)),
+    [personal, today]
+  );
+  const overduePersonal = personal.filter((t) => !t.is_done && t.due_date && t.due_date < today);
+  const dueNow = [...overduePersonal, ...personalToday.filter((t) => !t.is_done)];
+  const doneToday = personalToday.filter((t) => t.is_done).length;
+  const totalToday = dueNow.length + doneToday;
+  const percent = totalToday ? Math.round((doneToday / totalToday) * 100) : 0;
+  const weekMax = Math.max(1, ...(insights?.week || []).map((x) => x.count));
+
+  // ---- business ------------------------------------------------------------
+  const bizStats = useMemo(() => businesses.map((b) => {
+    const items = todos.filter((t) => t.business_id === b.id && !t.parent_id && t.review_state !== 'rejected');
+    const live = items.filter((t) => t.review_state === 'accepted');
+    return {
+      ...b,
+      open: live.filter((t) => !t.is_done).length,
+      overdue: live.filter((t) => !t.is_done && t.due_date && t.due_date < today).length,
+      review: live.filter((t) => t.status === 'in_review' && !t.is_done).length,
+      proposed: items.filter((t) => t.review_state === 'proposed').length,
+      mine: live.filter((t) => !t.is_done && t.assignee_id === meId).length,
+    };
+  }), [businesses, todos, today, meId]);
+  const assignedToMe = useMemo(
+    () => todos
+      .filter((t) => t.business_id && !t.is_done && t.assignee_id === meId && t.review_state === 'accepted')
+      .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999') || a.priority - b.priority)
+      .slice(0, 6),
+    [todos, meId]
+  );
+  const hasBusiness = businesses.length > 0;
 
   const tryEnablePush = async () => {
     const result = await enablePush();
-    if (result === 'granted') showToast({ message: 'Notifications are on 🔔', tone: 'success' });
+    if (result === 'granted') showToast({ message: 'Notifications are on', tone: 'success' });
     else if (result === 'denied') showToast({ message: 'Notifications are blocked in your browser settings', tone: 'error' });
   };
 
-  const weekMax = Math.max(1, ...(insights?.week || []).map((d) => d.count));
+  const openBusiness = (id) => navigation.navigate('Main', { screen: 'Todos', params: { business_id: id } });
+
+  const personalPanel = (
+    <View style={styles.panel}>
+      <View style={styles.panelHead}>
+        <View style={styles.panelTitleRow}>
+          <Ionicons name="person-outline" size={16} color={colors.brand[600]} />
+          <Text style={styles.panelTitle}>Your to-dos</Text>
+        </View>
+        <AnimatedPressable style={styles.addBtn} onPress={() => setAddOpen(true)} accessibilityLabel="Add a to-do">
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Add</Text>
+        </AnimatedPressable>
+      </View>
+
+      <View style={styles.todayRow}>
+        <ProgressRing percent={percent} size={64} stroke={6} color={colors.brand[600]}>
+          <Text style={styles.ringValue}>{doneToday}/{totalToday}</Text>
+        </ProgressRing>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.bigLine}>Today</Text>
+          <Text style={styles.mutedLine}>
+            {totalToday === 0 ? 'Nothing scheduled. Plan your day.'
+              : dueNow.length === 0 ? 'Everything is done.'
+                : `${dueNow.length} left${overduePersonal.length ? `, ${overduePersonal.length} overdue` : ''}`}
+          </Text>
+          {!!insights?.streak && <Text style={styles.streak}>{insights.streak}-day streak</Text>}
+        </View>
+      </View>
+
+      <View style={styles.list}>
+        {dueNow.slice(0, 6).map((t) => (
+          <View key={t.id} style={styles.row}>
+            <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
+            <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
+              <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
+              {t.due_date < today && <DueChip date={t.due_date} compact />}
+            </AnimatedPressable>
+          </View>
+        ))}
+        {dueNow.length > 6 && <Text style={styles.moreText}>{dueNow.length - 6} more</Text>}
+        {dueNow.length === 0 && totalToday === 0 && <Text style={styles.empty}>Press Add to capture your first to-do for today.</Text>}
+      </View>
+
+      <AnimatedPressable onPress={() => navigation.navigate('Todos')} style={styles.linkRow}>
+        <Text style={styles.link}>Open my to-dos</Text>
+        <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
+      </AnimatedPressable>
+
+      {insights?.week && (
+        <View style={styles.week}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.smallHead}>This week</Text>
+            <Text style={styles.mutedLine}>{insights.week.reduce((s, x) => s + x.count, 0)} done</Text>
+          </View>
+          <View style={styles.bars}>
+            {insights.week.map((x) => (
+              <View key={x.day} style={styles.barCol}>
+                <View style={styles.barTrack}>
+                  <View style={[styles.bar, { height: `${Math.max(6, (x.count / weekMax) * 100)}%` }, x.day === insights.today && styles.barToday]} />
+                </View>
+                <Text style={[styles.barLabel, x.day === insights.today && styles.barLabelToday]}>{WEEKDAYS_SHORT[parseYmd(x.day).getDay()][0]}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  const businessPanel = hasBusiness ? (
+    <View style={styles.panel}>
+      <View style={styles.panelHead}>
+        <View style={styles.panelTitleRow}>
+          <Ionicons name="briefcase-outline" size={16} color={colors.brand[600]} />
+          <Text style={styles.panelTitle}>Business tasks</Text>
+        </View>
+        {desktop && <Text style={styles.mutedLine}>Visible to everyone in the business</Text>}
+      </View>
+      {!desktop && <Text style={[styles.mutedLine, { marginTop: -spacing.md, marginBottom: spacing.lg }]}>Visible to everyone in the business</Text>}
+
+      {assignedToMe.length > 0 && (
+        <View style={styles.list}>
+          <Text style={styles.smallHead}>Assigned to you</Text>
+          {assignedToMe.map((t) => (
+            <View key={t.id} style={styles.row}>
+              <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
+              <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
+                <View style={styles.rowMeta}>
+                  <Text style={styles.metaTag}>{t.business_name}</Text>
+                  {!!t.due_date && <DueChip date={t.due_date} compact />}
+                </View>
+              </AnimatedPressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Text style={[styles.smallHead, { marginTop: spacing.lg }]}>{user?.is_leader ? 'All businesses' : 'Your businesses'}</Text>
+      {bizStats.map((b) => (
+        <AnimatedPressable key={b.id} style={styles.biz} onPress={() => openBusiness(b.id)}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bizName} numberOfLines={1}>{b.name}</Text>
+            <Text style={styles.bizMeta} numberOfLines={1}>
+              {b.can_manage ? 'You manage this business' : 'Member'}
+              {b.mine > 0 ? ` · ${b.mine} yours` : ''}
+            </Text>
+          </View>
+          <Stat label="Open" value={b.open} />
+          <Stat label="Overdue" value={b.overdue} hot={b.overdue > 0} />
+          <Stat label={b.can_manage && b.proposed ? 'Proposed' : 'Review'} value={b.can_manage && b.proposed ? b.proposed : b.review} hot={(b.can_manage && b.proposed > 0) || b.review > 0} />
+          <Ionicons name="chevron-forward" size={16} color={colors.gray[300]} />
+        </AnimatedPressable>
+      ))}
+    </View>
+  ) : null;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: desktop ? spacing.lg : insets.top }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.content, desktop && styles.contentDesktop, { paddingBottom: 110 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Greeting */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{greeting()},</Text>
-            <Text style={styles.name} numberOfLines={1}>{firstName} 👋</Text>
+            <Text style={styles.date}>{WEEKDAYS[d.getDay()]}, {d.getDate()} {MONTHS_SHORT[d.getMonth()]}</Text>
+            <Text style={styles.greeting}>{greeting()}</Text>
+            <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
             {!!user?.display_title && (
               <Text style={styles.role} numberOfLines={1}>
                 {user.display_title}
@@ -98,157 +230,62 @@ export default function HomeScreen() {
               </Text>
             )}
           </View>
-          <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />
-          <AnimatedPressable onPress={toggleLang} style={styles.langBtn} haptic="light">
-            <Text style={styles.langText}>{lang === 'en' ? 'తె' : 'EN'}</Text>
-          </AnimatedPressable>
-          <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />
+          {!desktop && <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />}
+          {!desktop && (
+            <AnimatedPressable onPress={toggleLang} style={styles.langBtn}>
+              <Text style={styles.langText}>{lang === 'en' ? 'తె' : 'EN'}</Text>
+            </AnimatedPressable>
+          )}
+          {!desktop && <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />}
         </View>
 
-        {/* Notification permission prompt */}
         {(pushState === 'default' || pushState === 'needs-install') && (
-          <Animated.View entering={FadeInDown.duration(300)} style={styles.pushCard}>
-            <View style={styles.pushIcon}><Ionicons name="notifications" size={22} color="#fff" /></View>
+          <View style={styles.pushCard}>
+            <View style={styles.pushIcon}><Ionicons name="notifications" size={20} color="#fff" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.pushTitle}>Never miss a task</Text>
               <Text style={styles.pushText}>
                 {pushState === 'needs-install'
-                  ? `Add TaskHub to your Home Screen to get alerts: tap ${pushEnvironment.isIOS() ? 'Share → Add to Home Screen' : 'the browser menu → Install app'}, then open it from there.`
-                  : 'Get alerts for new tasks, @mentions, reminders and chats.'}
+                  ? `Add TaskHub to your Home Screen to get alerts: tap ${pushEnvironment.isIOS() ? 'Share, then Add to Home Screen' : 'the browser menu, then Install app'}, and open it from there.`
+                  : 'Get alerts for new tasks, mentions, reminders and chats.'}
               </Text>
             </View>
             {pushState === 'default' && (
-              <AnimatedPressable onPress={tryEnablePush} style={styles.pushBtn} haptic="medium">
+              <AnimatedPressable onPress={tryEnablePush} style={styles.pushBtn}>
                 <Text style={styles.pushBtnText}>Turn on</Text>
               </AnimatedPressable>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {notPlaced && (
-          <View style={[styles.card, styles.infoCard]}>
-            <Ionicons name="hourglass-outline" size={22} color={colors.amber[600]} />
-            <Text style={styles.infoText}>You’re not placed in a business yet. The Chairman or Chief of Staff will add you soon — meanwhile your personal to-dos and chat work as usual.</Text>
+          <View style={[styles.banner, { backgroundColor: colors.brand[50] }]}>
+            <Ionicons name="hourglass-outline" size={20} color={colors.brand[700]} />
+            <Text style={styles.bannerText}>You are not placed in a business yet. The Chairman or Chief of Staff will add you soon. Your personal to-dos and chat work as usual.</Text>
           </View>
         )}
 
         {approvalCount > 0 && (
-          <AnimatedPressable onPress={() => navigation.navigate('Approvals')} haptic="light">
-            <Animated.View entering={FadeInDown.duration(300)} style={[styles.card, styles.approvalCard]}>
-              <Ionicons name="shield-checkmark" size={22} color="#b91c1c" />
-              <Text style={styles.approvalText}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your approval</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b91c1c" />
-            </Animated.View>
+          <AnimatedPressable onPress={() => navigation.navigate('Approvals')}>
+            <View style={[styles.banner, styles.bannerLink]}>
+              <Ionicons name="shield-checkmark" size={20} color={colors.brand[700]} />
+              <Text style={[styles.bannerText, { fontWeight: '700' }]}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your decision</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.brand[700]} />
+            </View>
           </AnimatedPressable>
         )}
 
-        {/* Today */}
-        <Animated.View entering={FadeInDown.delay(60).duration(320)} style={styles.card}>
-          <View style={styles.todayHeader}>
-            <ProgressRing percent={percent} size={64} stroke={6} color="#dc2626">
-              <Text style={styles.ringValue}>{doneToday.length}/{totalToday || 0}</Text>
-            </ProgressRing>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Today</Text>
-              <Text style={styles.cardSub}>
-                {totalToday === 0 ? 'Nothing scheduled — plan your day'
-                  : openToday.length === 0 ? 'All done. Brilliant! 🎉'
-                    : `${openToday.length} to-do${openToday.length > 1 ? 's' : ''} left`}
-              </Text>
-              {!!insights?.streak && (
-                <View style={styles.streak}>
-                  <Text style={styles.streakText}>🔥 {insights.streak}-day streak</Text>
-                </View>
-              )}
-            </View>
-            <AnimatedPressable style={styles.addTodoBtn} onPress={() => setAddOpen(true)} haptic="medium">
-              <Ionicons name="add" size={22} color="#fff" />
-            </AnimatedPressable>
-          </View>
+        <View style={[styles.panels, desktop && styles.panelsDesktop]}>
+          <View style={desktop ? styles.col : undefined}>{personalPanel}</View>
+          {businessPanel && <View style={desktop ? styles.col : undefined}>{businessPanel}</View>}
+        </View>
 
-          {openToday.slice(0, 5).map((t) => (
-            <View key={t.id} style={styles.todoRow}>
-              <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
-              <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
-                <Text style={styles.todoTitle} numberOfLines={1}>{t.title}</Text>
-                {t.due_date < today && <DueChip date={t.due_date} compact />}
-              </AnimatedPressable>
-            </View>
-          ))}
-          {openToday.length > 5 && (
-            <Text style={styles.more}>+{openToday.length - 5} more</Text>
-          )}
-          <AnimatedPressable onPress={() => navigation.navigate('Todos')} style={styles.linkRow} haptic="light">
-            <Text style={styles.link}>Open my to-do list</Text>
-            <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
-          </AnimatedPressable>
-        </Animated.View>
-
-        {/* Week */}
-        {insights?.week && (
-          <Animated.View entering={FadeInDown.delay(120).duration(320)} style={styles.card}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.cardTitle}>This week</Text>
-              <Text style={styles.cardSub}>{insights.week.reduce((s, d) => s + d.count, 0)} things done</Text>
-            </View>
-            <View style={styles.bars}>
-              {insights.week.map((d, i) => (
-                <Bar key={d.day} value={d.count} max={weekMax} index={i} isToday={d.day === insights.today} label={WEEKDAYS_SHORT[parseYmd(d.day).getDay()][0]} />
-              ))}
-            </View>
-          </Animated.View>
-        )}
-
-        {/* Work */}
-        <Animated.View entering={FadeInDown.delay(180).duration(320)} style={styles.statsRow}>
-          <Stat icon="person" label="My open tasks" value={summary?.mine_open ?? '–'} color="#dc2626" onPress={() => navigation.navigate('Tasks')} />
-          <Stat icon="alarm" label="Overdue" value={summary?.overdue ?? '–'} color="#dc2626" onPress={() => navigation.navigate('Tasks')} />
-          <Stat icon="arrow-redo" label="I assigned" value={summary?.delegated_open ?? '–'} color="#b91c1c" onPress={() => navigation.navigate('Tasks')} />
-        </Animated.View>
-
-        {/* Quick actions */}
-        <Animated.View entering={FadeInDown.delay(240).duration(320)} style={styles.quickGrid}>
-          <Quick icon="checkbox-outline" label="Add to-do" color="#dc2626" onPress={() => setAddOpen(true)} />
-          <Quick icon="clipboard-outline" label="New task" color="#dc2626" onPress={() => navigation.navigate('Tasks', { create: true })} />
-          <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} color="#dc2626" onPress={() => navigation.navigate('ChatList')} />
-          {user?.can_monitor && (
-            <Quick icon="speedometer-outline" label="Team monitor" color="#b91c1c" onPress={() => navigation.navigate('TeamMonitor')} />
-          )}
-          <Quick icon="git-network-outline" label="Organisation" color="#b91c1c" onPress={() => navigation.navigate('Organization')} />
-        </Animated.View>
-
-        {/* Businesses at a glance (leaders / managers) */}
-        {businesses.length > 0 && (
-          <View style={{ marginTop: spacing.lg }}>
-            <Text style={styles.sectionTitle}>{user?.is_leader ? 'Businesses at a glance' : 'Your businesses'}</Text>
-            {businesses.map((b, i) => {
-              const total = b.open_tasks + b.done_tasks;
-              const rate = total ? Math.round((b.done_tasks / total) * 100) : 0;
-              return (
-                <Animated.View key={b.id} entering={FadeInDown.delay(300 + i * 60).duration(300)}>
-                  <AnimatedPressable style={styles.bizCard} onPress={() => navigation.navigate('Tasks', { business_id: b.id })} haptic="light">
-                    <View style={[styles.bizStripe, { backgroundColor: accent(b.color) }]} />
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.rowBetween}>
-                        <Text style={styles.bizName} numberOfLines={1}>{b.name}</Text>
-                        {b.overdue_tasks > 0 && (
-                          <View style={styles.overduePill}>
-                            <Ionicons name="alarm" size={11} color={colors.red[600]} />
-                            <Text style={styles.overdueText}>{b.overdue_tasks}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.bizMeta}>
-                        {b.heads.length ? `Head: ${b.heads.map((h) => h.name.split(' ')[0]).join(' & ')} · ` : ''}{b.open_tasks} open · {b.done_tasks} done
-                      </Text>
-                      <View style={styles.track}>
-                        <View style={[styles.fill, { width: `${rate}%`, backgroundColor: accent(b.color) }]} />
-                      </View>
-                    </View>
-                  </AnimatedPressable>
-                </Animated.View>
-              );
-            })}
+        {!desktop && (
+          <View style={styles.quickGrid}>
+            <Quick icon="checkbox-outline" label="Add to-do" onPress={() => setAddOpen(true)} />
+            <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} onPress={() => navigation.navigate('ChatList')} />
+            {user?.can_monitor && <Quick icon="speedometer-outline" label="Team monitor" onPress={() => navigation.navigate('TeamMonitor')} />}
+            <Quick icon="git-network-outline" label="Organisation" onPress={() => navigation.navigate('Organization')} />
           </View>
         )}
       </ScrollView>
@@ -259,53 +296,30 @@ export default function HomeScreen() {
   );
 }
 
-function Bar({ value, max, index, isToday, label }) {
+function Stat({ label, value, hot }) {
   const colors = useColors();
-  const grow = useSharedValue(0);
-  useEffect(() => {
-    grow.value = withDelay(index * 60, withSpring(value / max, { damping: 14, stiffness: 120 }));
-  }, [value, max, index, grow]);
-  const style = useAnimatedStyle(() => ({ height: `${Math.max(4, grow.value * 100)}%` }));
   return (
-    <View style={{ flex: 1, alignItems: 'center' }}>
-      <Text style={{ fontSize: 10, color: colors.gray[400], marginBottom: 3 }}>{value || ''}</Text>
-      <View style={{ height: 70, width: 16, justifyContent: 'flex-end' }}>
-        <Animated.View style={[{ width: 16, borderRadius: 6, backgroundColor: isToday ? '#dc2626' : tint('#dc2626', 0.35) }, style]} />
-      </View>
-      <Text style={{ fontSize: 11, fontWeight: isToday ? '800' : '500', color: isToday ? colors.gray[900] : colors.gray[400], marginTop: 4 }}>{label}</Text>
+    <View style={{ width: 54, alignItems: 'center' }}>
+      <Text style={{ fontSize: fontSize.md, fontWeight: '700', color: hot ? colors.brand[600] : colors.gray[900] }}>{value}</Text>
+      <Text style={{ fontSize: 10, color: colors.gray[500] }}>{label}</Text>
     </View>
   );
 }
 
-function Stat({ icon, label, value, color, onPress }) {
+function Quick({ icon, label, onPress }) {
   const colors = useColors();
   return (
-    <AnimatedPressable onPress={onPress} haptic="light" style={{
-      flex: 1, backgroundColor: colors.white, borderRadius: radius.lg, padding: spacing.md,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
-    }}
+    <AnimatedPressable
+      onPress={onPress}
+      style={{
+        width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md,
+        backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
+      }}
     >
-      <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: tint(color, 0.12), alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={16} color={color} />
+      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand[100], alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={17} color={colors.brand[700]} />
       </View>
-      <Text style={{ fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900], marginTop: spacing.sm }}>{value}</Text>
-      <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }} numberOfLines={1}>{label}</Text>
-    </AnimatedPressable>
-  );
-}
-
-function Quick({ icon, label, color, onPress }) {
-  const colors = useColors();
-  return (
-    <AnimatedPressable onPress={onPress} haptic="light" style={{
-      width: '48%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md,
-      backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
-    }}
-    >
-      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: tint(color, 0.12), alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={18} color={color} />
-      </View>
-      <Text style={{ flex: 1, fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[800] }} numberOfLines={1}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[800] }} numberOfLines={1}>{label}</Text>
     </AnimatedPressable>
   );
 }
@@ -313,75 +327,67 @@ function Quick({ icon, label, color, onPress }) {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.gray[50] },
   content: { padding: spacing.lg },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, marginBottom: spacing.lg },
-  greeting: { fontSize: fontSize.base, color: colors.gray[500], fontWeight: '500' },
-  name: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
-  role: { fontSize: fontSize.sm, color: colors.brand[600], fontWeight: '600', marginTop: 2 },
+  contentDesktop: { paddingHorizontal: spacing.xxxl, maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, marginBottom: spacing.xl },
+  date: { fontSize: fontSize.sm, color: colors.gray[500], fontWeight: '600' },
+  greeting: { fontSize: fontSize.md, color: colors.gray[500], fontWeight: '500', marginTop: 6 },
+  name: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.7, marginTop: 0 },
+  role: { fontSize: fontSize.sm, color: colors.brand[600], fontWeight: '600', marginTop: 4 },
   langBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   langText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[600] },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray[200],
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
-  },
   pushCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.xl,
-    backgroundColor: colors.brand[600],
-    marginBottom: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg,
+    backgroundColor: colors.brand[600], marginBottom: spacing.md,
   },
-  pushIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  pushTitle: { color: colors.white, fontWeight: '800', fontSize: fontSize.base },
-  pushText: { color: colors.white, opacity: 0.9, fontSize: fontSize.xs, marginTop: 2, lineHeight: 16 },
-  pushBtn: { backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full },
-  pushBtnText: { color: colors.brand[600], fontWeight: '800', fontSize: fontSize.sm },
-  infoCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.amber[50] },
-  infoText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[700], lineHeight: 19 },
-  approvalCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: tint('#b91c1c', 0.08), borderColor: tint('#b91c1c', 0.3) },
-  approvalText: { flex: 1, fontSize: fontSize.base, fontWeight: '700', color: '#b91c1c' },
-  todayHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.sm },
+  pushIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  pushTitle: { color: '#fff', fontWeight: '700', fontSize: fontSize.base },
+  pushText: { color: '#fff', opacity: 0.92, fontSize: fontSize.xs, marginTop: 2, lineHeight: 16 },
+  pushBtn: { backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full },
+  pushBtnText: { color: colors.brand[600], fontWeight: '700', fontSize: fontSize.sm },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.md },
+  bannerLink: { backgroundColor: colors.brand[50], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.brand[200] },
+  bannerText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[800], lineHeight: 19 },
+  panels: { gap: spacing.md },
+  panelsDesktop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xl },
+  col: { flex: 1, minWidth: 0 },
+  panel: {
+    backgroundColor: colors.white, borderRadius: radius.xl, padding: spacing.xl,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
+  },
+  panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.lg },
+  panelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  panelTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.gray[900] },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, backgroundColor: colors.brand[600] },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
+  todayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.md },
   ringValue: { fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[800] },
-  cardTitle: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900] },
-  cardSub: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
-  streak: { alignSelf: 'flex-start', marginTop: 6, backgroundColor: colors.amber[50], paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
-  streakText: { fontSize: 11, fontWeight: '800', color: colors.amber[700] },
-  addTodoBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center' },
-  todoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[100] },
-  todoTitle: { fontSize: fontSize.base, color: colors.gray[900] },
-  more: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: 4 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
+  bigLine: { fontSize: fontSize.lg, fontWeight: '700', color: colors.gray[900] },
+  mutedLine: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
+  streak: { fontSize: 12, fontWeight: '700', color: colors.brand[600], marginTop: 6 },
+  list: { gap: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[100] },
+  rowTitle: { fontSize: fontSize.base, color: colors.gray[900], fontWeight: '500' },
+  rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
+  metaTag: { fontSize: 11, color: colors.gray[500], fontWeight: '600' },
+  moreText: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: 6 },
+  empty: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: spacing.md },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.md },
   link: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[600] },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing.md },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.sm },
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900], marginBottom: spacing.sm },
-  bizCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray[200],
+  week: { marginTop: spacing.xl, paddingTop: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[200] },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  smallHead: { fontSize: 11, fontWeight: '700', color: colors.gray[400], textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.md },
+  barCol: { flex: 1, alignItems: 'center' },
+  barTrack: { height: 64, width: '100%', maxWidth: 22, justifyContent: 'flex-end' },
+  bar: { width: '100%', borderRadius: 5, backgroundColor: colors.brand[200] },
+  barToday: { backgroundColor: colors.brand[600] },
+  barLabel: { fontSize: 11, color: colors.gray[400], marginTop: 5 },
+  barLabelToday: { color: colors.gray[900], fontWeight: '700' },
+  biz: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[100],
   },
-  bizStripe: { width: 4, borderRadius: 2 },
-  bizName: { flex: 1, fontSize: fontSize.base, fontWeight: '800', color: colors.gray[900] },
+  bizName: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
   bizMeta: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 2 },
-  overduePill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.red[50], paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full },
-  overdueText: { fontSize: 11, fontWeight: '800', color: colors.red[600] },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.gray[100], marginTop: spacing.sm, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 3 },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.sm, marginTop: spacing.lg },
 });

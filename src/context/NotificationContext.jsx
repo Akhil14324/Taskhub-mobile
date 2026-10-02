@@ -14,7 +14,9 @@ import {
 
 const NotificationContext = createContext(null);
 
-const APPROVAL_TYPES = new Set(['approval_request', 'approval_approved', 'approval_rejected', 'task_approved', 'task_rejected']);
+const APPROVAL_TYPES = new Set([
+  'approval_request', 'approval_approved', 'approval_rejected', 'task_approved', 'task_rejected', 'todo_proposed', 'todo_review',
+]);
 
 const TYPE_ICONS = {
   mention: 'at',
@@ -34,6 +36,11 @@ const TYPE_ICONS = {
   todo_unblocked: 'checkmark-done',
   todo_update: 'document-text',
   todo_question: 'help-circle',
+  todo_proposed: 'git-pull-request',
+  todo_review: 'checkmark-circle',
+  todo_added: 'add-circle',
+  task_rejected: 'arrow-undo',
+  task_deleted: 'trash',
   chat: 'chatbubble',
 };
 
@@ -97,8 +104,8 @@ export function NotificationProvider({ children }) {
       if (APPROVAL_TYPES.has(n.type)) refreshCounts();
       const data = n.data || {};
       const route = getCurrentRoute();
-      const viewingSameTask = route?.name === 'TaskDetail' && Number(route.params?.taskId) === Number(data.taskId);
-      if (viewingSameTask) return;
+      const viewingSame = route?.name === 'Main' && data.todoId && Number(route.params?.highlightId) === Number(data.todoId);
+      if (viewingSame) return;
       showToast({
         title: n.title || 'TaskHub',
         message: n.message,
@@ -108,11 +115,11 @@ export function NotificationProvider({ children }) {
     });
   }, [user, subscribe, refreshCounts]);
 
-  // Task changes can create/resolve reviews.
+  // To-do changes can create/resolve reviews.
   useEffect(() => {
     if (!user) return undefined;
     let timer;
-    const off = subscribe('task:changed', () => {
+    const off = subscribe('todo:changed', () => {
       clearTimeout(timer);
       timer = setTimeout(refreshCounts, 800);
     });

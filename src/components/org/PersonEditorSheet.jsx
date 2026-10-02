@@ -81,7 +81,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
         onClose();
         const pw = res.data.temp_password;
         showDialog({
-          title: `${res.data.person.name.split(' ')[0]} is in! 🎉`,
+          title: `${res.data.person.name.split(' ')[0]} is in`,
           message: `Share these sign-in details:\n\nUsername: ${res.data.person.username}\nTemporary password: ${pw}\n\nThey'll be asked to set their own password on first login.`,
           buttons: [
             { text: 'Copy details', onPress: () => Clipboard.setStringAsync(`TaskHub login\nUsername: ${res.data.person.username}\nPassword: ${pw}`).then(() => showToast({ message: 'Copied', tone: 'success' })) },

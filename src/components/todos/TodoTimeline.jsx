@@ -100,34 +100,40 @@ export default function TodoTimeline({ todo }) {
 
   const activeStatus = todo.is_done ? 'done' : todo.status;
   const assigneeIsMe = todo.assignee_id === user?.id;
+  const perms = todo.permissions || {};
+  const canWork = perms.can_change_status !== false && todo.review_state !== 'proposed' && todo.review_state !== 'rejected';
+  const statusKeys = ['todo', 'in_progress', 'blocked', 'on_hold', 'done'];
 
   return (
     <View>
       <Text style={styles.label}>Status & time</Text>
       <View style={styles.statusRow}>
-        {['todo', 'in_progress', 'blocked', 'done'].map((key) => (
+        {statusKeys.map((key) => (
           <Chip
             key={key}
             icon={STATUS[key].icon}
             label={STATUS[key].label}
             color={key === 'blocked' ? healthColor('red', theme) : key === 'in_progress' ? colors.brand[700] : key === 'done' ? colors.brand[800] : colors.gray[600]}
             active={activeStatus === key}
-            onPress={() => pickStatus(key)}
+            onPress={canWork || (key === 'on_hold' && perms.can_hold) ? () => pickStatus(key) : undefined}
           />
         ))}
+        {activeStatus === 'in_review' && (
+          <Chip icon={STATUS.in_review.icon} label={STATUS.in_review.label} color={colors.brand[700]} active />
+        )}
       </View>
 
       <HealthBanner todo={todo} now={now} />
 
       {/* Who is accountable */}
-      <AnimatedPressable style={styles.assignee} onPress={() => setAssignOpen(true)} haptic="light">
+      <AnimatedPressable style={styles.assignee} onPress={() => (perms.can_assign !== false ? setAssignOpen(true) : null)} haptic="light">
         <Avatar name={todo.assignee_name || todo.created_by_name || '?'} size={30} />
         <View style={{ flex: 1 }}>
           <Text style={styles.assigneeLabel}>Accountable</Text>
-          <Text style={styles.assigneeName}>{assigneeIsMe ? 'You' : todo.assignee_name || 'Nobody'}</Text>
+          <Text style={styles.assigneeName}>{assigneeIsMe ? 'You' : todo.assignee_name || (todo.business_id ? 'Open to the business' : 'Nobody')}</Text>
         </View>
         {!!todo.assigned_at && <Text style={styles.assignedAgo}>since {timeAgo(todo.assigned_at)}</Text>}
-        <Ionicons name="swap-horizontal" size={18} color={colors.gray[400]} />
+        {perms.can_assign !== false && <Ionicons name="swap-horizontal" size={18} color={colors.gray[400]} />}
       </AnimatedPressable>
 
       {/* Open blockers */}
@@ -149,7 +155,7 @@ export default function TodoTimeline({ todo }) {
           </View>
         );
       })}
-      {!todo.is_done && todo.status !== 'blocked' && (
+      {!todo.is_done && todo.status !== 'blocked' && canWork && (
         <AnimatedPressable style={styles.addBlocker} onPress={() => setBlockerOpen(true)} haptic="light">
           <Ionicons name="hand-left-outline" size={17} color={colors.brand[600]} />
           <Text style={styles.addBlockerText}>Raise a blocker — dependency, issue or dead stop</Text>
@@ -157,7 +163,7 @@ export default function TodoTimeline({ todo }) {
       )}
 
       {/* Post an update */}
-      {!todo.is_done && (
+      {!todo.is_done && canWork && (
         <View style={styles.updateBox}>
           <TextInput
             value={updateText}
@@ -198,17 +204,24 @@ export default function TodoTimeline({ todo }) {
 }
 
 /** Pick who is accountable: people already on the to-do first, then anyone in the directory. */
-function AssignSheet({ visible, todo, onClose }) {
+export function AssignSheet({ visible, todo, onClose }) {
   const colors = useColors();
-  const { assignTodoTo } = useTodos();
+  const { assignTodoTo, fetchAssignees } = useTodos();
   const { people } = useDirectory();
   const [query, setQuery] = useState('');
+  const [bizPeople, setBizPeople] = useState([]);
   useEffect(() => { if (visible) setQuery(''); }, [visible]);
+  // Business work can only be given to people who belong to that business (or leadership).
+  useEffect(() => {
+    if (!visible || !todo.business_id) return;
+    fetchAssignees(todo.business_id).then(setBizPeople).catch(() => setBizPeople([]));
+  }, [visible, todo.business_id, fetchAssignees]);
 
   const memberIds = new Set((todo.members || []).map((m) => m.id));
   const q = query.trim();
-  const list = q
-    ? filterPeople(people, q, { limit: 8 })
+  const pool = todo.business_id ? bizPeople : people;
+  const list = q || todo.business_id
+    ? filterPeople(pool, q, { limit: 12 })
     : (todo.members || []);
 
   const pick = async (person) => {
@@ -231,7 +244,7 @@ function AssignSheet({ visible, todo, onClose }) {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search anyone in the organisation"
+          placeholder={todo.business_id ? 'Search people in this business' : 'Search anyone in the organisation'}
           placeholderTextColor={colors.gray[400]}
           style={{ backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: 11, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' }}
         />

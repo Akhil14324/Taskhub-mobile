@@ -36,7 +36,7 @@ export default function ChangePasswordScreen() {
     setSaving(true);
     try {
       await api.put('/users/me/password', { current_password: current, new_password: next });
-      showToast({ message: 'Password set. Welcome aboard! 🎉', tone: 'success' });
+      showToast({ message: 'Password set. Welcome aboard', tone: 'success' });
       await refreshUser();
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not change the password', tone: 'error' });

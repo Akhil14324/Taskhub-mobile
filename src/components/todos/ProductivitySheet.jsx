@@ -31,8 +31,8 @@ export default function ProductivitySheet({ visible, onClose }) {
             <Text style={styles.ringOf}>of {goal}</Text>
           </ProgressRing>
           <View style={{ flex: 1, gap: 6 }}>
-            <Text style={styles.heroTitle}>{today >= goal ? 'Daily goal reached 🎉' : `${goal - today} to go today`}</Text>
-            <Text style={styles.heroSub}>{insights?.streak ? `🔥 ${insights.streak}-day streak` : 'Finish something today to start a streak'}</Text>
+            <Text style={styles.heroTitle}>{today >= goal ? 'Daily goal reached' : `${goal - today} to go today`}</Text>
+            <Text style={styles.heroSub}>{insights?.streak ? `${insights.streak}-day streak` : 'Finish something today to start a streak'}</Text>
             <Text style={styles.heroSub}>{total} completed in the last 7 days</Text>
           </View>
         </View>

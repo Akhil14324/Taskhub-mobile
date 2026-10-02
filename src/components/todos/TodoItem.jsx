@@ -5,7 +5,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   withSequence,
   interpolate,
@@ -15,26 +14,39 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, fontSize } from '../../theme/theme';
-import { TodoCheckbox, DueChip, AvatarStack, accent } from '../kit';
+import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { HealthPill } from './TimeHealth';
-import { daysFromToday, formatDue } from '../../utils/dates';
+import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { formatDuration } from '../../utils/todoMeta';
-import { todoHealth, todoMetrics, formatSecondsShort, HEALTH } from '../../utils/timeline';
+import { todoHealth, todoMetrics, formatSecondsShort, HEALTH, STATUS } from '../../utils/timeline';
 
 const SWIPE_TRIGGER = 90;
+const INDENT = 22;
+
+/** Short text tag for states that are not "just open". */
+function stateTag(todo) {
+  if (todo.review_state === 'proposed') return { label: 'Proposed', icon: 'git-pull-request-outline' };
+  if (todo.review_state === 'rejected') return { label: 'Declined', icon: 'close-circle-outline' };
+  if (todo.status === 'in_review' && !todo.is_done) return { label: 'In review', icon: STATUS.in_review.icon };
+  if (todo.status === 'on_hold' && !todo.is_done) return { label: 'On hold', icon: STATUS.on_hold.icon };
+  return null;
+}
 
 /**
  * One to-do row. Swipe right to complete, swipe left to delete, tap to open.
- * `indent` draws it as a sub-task; `selectMode` turns taps into selection (bulk actions).
+ * `depth` indents it as a sub-task (any level); `selectMode` turns taps into selection (bulk actions);
+ * `active` marks the row open in the desktop detail pane.
  */
 function TodoItem({
-  todo, list, showList, currentUserId, highlighted, onToggle, onOpen, onDelete,
-  progress, indent, parentTitle, selectMode, selected, onSelect, collapsed, onToggleCollapse, dragHandle, now,
+  todo, list, showList, showBusiness, currentUserId, highlighted, active, onToggle, onOpen, onDelete,
+  progress, depth = 0, parentTitle, selectMode, selected, onSelect, collapsed, onToggleCollapse, dragHandle, now,
+  hasChildren,
 }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const translateX = useSharedValue(0);
   const flash = useSharedValue(0);
+  const canTick = todo.permissions ? todo.permissions.can_change_status : true;
 
   useEffect(() => {
     if (highlighted) {
@@ -50,14 +62,14 @@ function TodoItem({
       translateX.value = e.translationX;
     })
     .onEnd((e) => {
-      if (e.translationX > SWIPE_TRIGGER) {
-        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Medium);
+      if (e.translationX > SWIPE_TRIGGER && canTick) {
+        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(onToggle)(todo);
       } else if (e.translationX < -SWIPE_TRIGGER) {
-        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Medium);
+        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(onDelete)(todo);
       }
-      translateX.value = withSpring(0, { damping: 20, stiffness: 260 });
+      translateX.value = withTiming(0, { duration: 160 });
     });
 
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
@@ -70,11 +82,12 @@ function TodoItem({
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value * 0.18 }));
 
   const others = (todo.members || []).filter((m) => m.id !== currentUserId);
-  const fromSomeoneElse = todo.created_by !== currentUserId;
+  const fromSomeoneElse = !todo.business_id && todo.created_by !== currentUserId;
   const labels = todo.labels || [];
   const deadlineDiff = todo.deadline_date ? daysFromToday(todo.deadline_date) : null;
   const deadlineColor = todo.is_done ? colors.gray[400] : deadlineDiff < 0 ? '#991b1b' : deadlineDiff <= 1 ? '#dc2626' : colors.gray[500];
   const hasSubtasks = progress && progress.total > 0;
+  const tag = stateTag(todo);
 
   // Time status: a coloured pill for anything that is blocked, running late or about to be.
   const health = useMemo(() => todoHealth(todo, now || Date.now()), [todo, now]);
@@ -87,28 +100,33 @@ function TodoItem({
       const blocked = todoMetrics(todo, at).status_s.blocked;
       return { level: health.level === 'red' ? 'red' : 'orange', label: `Blocked ${formatSecondsShort(blocked)}`, icon: 'hand-left' };
     }
+    if (todo.status === 'on_hold' || todo.status === 'in_review') return null;
     if (health.level === 'red' || health.level === 'orange') return { level: health.level, label: health.reasons[0] || HEALTH[health.level].label };
     if (todo.status === 'in_progress') {
       return { level: health.level === 'green' ? 'green' : 'none', label: `In progress ${formatSecondsShort(todoMetrics(todo, at).status_s.in_progress)}`, icon: 'play' };
     }
     return null;
   }, [todo, health, now]);
-  const assigneeElsewhere = !!todo.assignee_id && todo.assignee_id !== currentUserId && !!todo.assignee_name;
+
+  const assignee = todo.assignee_id && todo.assignee_id !== currentUserId && todo.assignee_name ? todo : null;
+  const doneLine = todo.is_done && todo.done_at
+    ? `Completed${todo.done_by_name ? ` by ${todo.done_by === currentUserId ? 'you' : todo.done_by_name.split(' ')[0]}` : ''} · ${timeAgo(todo.done_at)}`
+    : null;
 
   return (
-    <View style={[styles.container, indent && styles.indent]}>
+    <View style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }]} dataSet={{ todoRow: String(todo.id) }}>
       <Animated.View style={[styles.swipeBg, styles.swipeLeft, leftBg]}>
-        <Ionicons name={todo.is_done ? 'arrow-undo' : 'checkmark-circle'} size={24} color="#fff" />
+        <Ionicons name={todo.is_done ? 'arrow-undo' : 'checkmark-circle'} size={22} color="#fff" />
         <Text style={styles.swipeText}>{todo.is_done ? 'Undo' : 'Done'}</Text>
       </Animated.View>
       <Animated.View style={[styles.swipeBg, styles.swipeRight, rightBg]}>
-        <Text style={styles.swipeText}>Delete</Text>
-        <Ionicons name="trash" size={22} color="#fff" />
+        <Text style={styles.swipeText}>{todo.business_id && !todo.permissions?.can_delete ? 'Ask to delete' : 'Delete'}</Text>
+        <Ionicons name="trash" size={20} color="#fff" />
       </Animated.View>
 
       {/* touchAction keeps vertical page scrolling working on touch screens (web). */}
       <GestureDetector gesture={pan} touchAction="pan-y">
-        <Animated.View style={[styles.row, selected && styles.rowSelected, rowStyle]}>
+        <Animated.View style={[styles.row, selected && styles.rowSelected, active && styles.rowActive, rowStyle]}>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand[500] }, flashStyle]} />
           {dragHandle}
           <View style={styles.check}>
@@ -121,7 +139,12 @@ function TodoItem({
                 />
               </Pressable>
             ) : (
-              <TodoCheckbox checked={todo.is_done} priority={todo.priority} onPress={() => onToggle(todo)} size={indent ? 19 : 22} />
+              <TodoCheckbox
+                checked={todo.is_done}
+                priority={todo.priority}
+                onPress={() => (canTick ? onToggle(todo) : onOpen(todo))}
+                size={depth > 0 ? 19 : 22}
+              />
             )}
           </View>
           <Pressable style={styles.body} onPress={() => (selectMode ? onSelect?.(todo) : onOpen(todo))}>
@@ -129,14 +152,15 @@ function TodoItem({
               <Text style={styles.parentHint} numberOfLines={1}>in {parentTitle}</Text>
             )}
             <Text
-              style={[styles.title, indent && styles.titleSub, todo.is_done && styles.titleDone]}
+              style={[styles.title, depth > 0 && styles.titleSub, todo.is_done && styles.titleDone]}
               numberOfLines={3}
             >
               {todo.title}
             </Text>
-            {!!todo.notes && (
+            {!!todo.notes && !todo.is_done && (
               <Text style={styles.notes} numberOfLines={1}>{todo.notes}</Text>
             )}
+            {!!doneLine && <Text style={styles.doneLine}>{doneLine}</Text>}
             <View style={styles.metaRow}>
               <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
               {!!todo.deadline_date && (
@@ -165,30 +189,45 @@ function TodoItem({
                   <Text style={styles.metaText}>{todo.comment_count}</Text>
                 </View>
               )}
+              {!!tag && (
+                <View style={styles.tag}>
+                  <Ionicons name={tag.icon} size={11} color={colors.brand[700]} />
+                  <Text style={styles.tagText}>{tag.label}</Text>
+                </View>
+              )}
               {!!timePill && <HealthPill level={timePill.level} label={timePill.label} icon={timePill.icon} compact />}
+              {todo.is_warned && !todo.is_done && (
+                <View style={styles.metaItem}>
+                  <Ionicons name="warning" size={12} color={colors.red[600]} />
+                  <Text style={[styles.metaText, { color: colors.red[600], fontWeight: '600' }]}>Warned</Text>
+                </View>
+              )}
               {fromSomeoneElse && (
                 <View style={styles.metaItem}>
                   <Ionicons name="person-circle-outline" size={12} color={colors.brand[500]} />
                   <Text style={[styles.metaText, { color: colors.brand[500] }]} numberOfLines={1}>from {todo.created_by_name?.split(' ')[0]}</Text>
                 </View>
               )}
-              {assigneeElsewhere && (
+              {!!assignee && (
                 <View style={styles.metaItem}>
-                  <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.gray[500]} />
-                  <Text style={styles.metaText} numberOfLines={1}>{todo.assignee_name.split(' ')[0]}</Text>
+                  <Avatar name={assignee.assignee_name} uri={assignee.assignee_picture} size={16} />
+                  <Text style={styles.metaText} numberOfLines={1}>{assignee.assignee_name.split(' ')[0]}</Text>
                 </View>
-              )}
-              {todo.is_done && todo.done_by && todo.done_by !== currentUserId && (
-                <Text style={styles.metaText}>ticked by {todo.done_by_name?.split(' ')[0]}</Text>
               )}
               <View style={{ flex: 1 }} />
-              {showList && list && (
+              {showBusiness && !!todo.business_name && (
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaText} numberOfLines={1}>{list.emoji || ''} {list.name}</Text>
-                  <View style={[styles.listDot, { backgroundColor: accent(list.color) }]} />
+                  <Ionicons name="briefcase-outline" size={11} color={colors.gray[500]} />
+                  <Text style={styles.metaText} numberOfLines={1}>{todo.business_name}</Text>
                 </View>
               )}
-              {others.length > 0 && <AvatarStack people={others} size={18} />}
+              {showList && list && (
+                <View style={styles.metaItem}>
+                  <ListGlyph list={list} size={11} color={colors.gray[500]} />
+                  <Text style={styles.metaText} numberOfLines={1}>{list.name}</Text>
+                </View>
+              )}
+              {!todo.business_id && others.length > 0 && <AvatarStack people={others} size={18} />}
             </View>
             {labels.length > 0 && (
               <View style={styles.labelRow}>
@@ -199,7 +238,7 @@ function TodoItem({
               </View>
             )}
           </Pressable>
-          {hasSubtasks && onToggleCollapse && !selectMode && (
+          {(hasChildren || hasSubtasks) && onToggleCollapse && !selectMode && (
             <Pressable onPress={() => onToggleCollapse(todo)} hitSlop={10} style={styles.chevron}>
               <Ionicons name={collapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={colors.gray[400]} />
             </Pressable>
@@ -212,18 +251,17 @@ function TodoItem({
 
 const createStyles = (colors) => StyleSheet.create({
   container: { position: 'relative' },
-  indent: { marginLeft: spacing.xl },
   swipeBg: {
     ...StyleSheet.absoluteFillObject,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   swipeLeft: { backgroundColor: '#dc2626', justifyContent: 'flex-start' },
   swipeRight: { backgroundColor: '#dc2626', justifyContent: 'flex-end' },
-  swipeText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
+  swipeText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -235,20 +273,27 @@ const createStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
   },
   rowSelected: { backgroundColor: colors.brand[50] },
+  rowActive: { backgroundColor: colors.brand[50] },
   check: { paddingTop: 1, paddingRight: spacing.md, paddingLeft: spacing.xs },
   body: { flex: 1 },
   parentHint: { fontSize: 11, color: colors.gray[400], marginBottom: 1 },
-  title: { fontSize: fontSize.md, color: colors.gray[900], lineHeight: 21 },
+  title: { fontSize: fontSize.md, color: colors.gray[900], lineHeight: 21, fontWeight: '500' },
   titleSub: { fontSize: fontSize.base },
-  titleDone: { textDecorationLine: 'line-through', color: colors.gray[400] },
+  titleDone: { textDecorationLine: 'line-through', color: colors.gray[400], fontWeight: '400' },
   notes: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
+  doneLine: { fontSize: 11, color: colors.gray[400], marginTop: 2 },
   metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, marginTop: 4, minHeight: 4 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: 160 },
   metaText: { fontSize: 11, color: colors.gray[500] },
-  listDot: { width: 7, height: 7, borderRadius: 4 },
+  tag: {
+    flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 1,
+    borderRadius: 6, backgroundColor: colors.brand[100],
+  },
+  tagText: { fontSize: 11, fontWeight: '600', color: colors.brand[700] },
   labelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 3 },
   label: { fontSize: 11, fontWeight: '600', color: colors.brand[600] },
   chevron: { paddingLeft: spacing.sm, paddingTop: 2 },
 });
 
 export default memo(TodoItem);
+export { INDENT };

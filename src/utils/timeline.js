@@ -38,8 +38,13 @@ export const STATUS = {
   todo: { label: 'To do', icon: 'ellipse-outline' },
   in_progress: { label: 'In progress', icon: 'play-circle' },
   blocked: { label: 'Blocked', icon: 'hand-left' },
+  in_review: { label: 'In review', icon: 'eye' },
+  on_hold: { label: 'On hold', icon: 'pause-circle' },
   done: { label: 'Done', icon: 'checkmark-circle' },
 };
+
+/** Board / grouping order of the statuses. */
+export const STATUS_ORDER = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold', 'done'];
 
 export const BLOCKER_KINDS = {
   dependency: { label: 'Waiting on a to-do', short: 'Dependency', icon: 'git-merge-outline', hint: 'It cannot start or finish until another to-do is done.' },
@@ -89,7 +94,7 @@ const secs = (a, b) => Math.max(0, Math.round((b - a) / 1000));
 const RANK = { none: 0, green: 1, orange: 2, red: 3 };
 
 export function statusSeconds(todo, now = Date.now()) {
-  const acc = { todo: 0, in_progress: 0, blocked: 0, ...(todo.status_seconds || {}) };
+  const acc = { todo: 0, in_progress: 0, blocked: 0, in_review: 0, on_hold: 0, ...(todo.status_seconds || {}) };
   for (const k of Object.keys(acc)) acc[k] = Math.round(Number(acc[k]) || 0);
   if (!todo.is_done && acc[todo.status] !== undefined && todo.status_since) acc[todo.status] += secs(ms(todo.status_since), now);
   return acc;
@@ -108,7 +113,7 @@ export function todoMetrics(todo, now = Date.now()) {
     response_s: started ? secs(assigned, started) : null,
     cycle_s: cycle,
     blocked_s: st.blocked,
-    active_s: Math.max(0, cycle - st.blocked),
+    active_s: Math.max(0, cycle - st.blocked - st.on_hold - st.in_review),
     status_s: st,
     estimate_s: todo.duration_minutes ? todo.duration_minutes * 60 : null,
   };
@@ -195,6 +200,15 @@ export function describeEntry(entry, who = 'Someone') {
     case 'completed': return { icon: 'checkmark-circle', title: `${who} completed it`, detail: e.meta?.recurring ? 'Repeats — next round started' : null, tone: 'good' };
     case 'reopened': return { icon: 'refresh-circle', title: `${who} reopened it`, detail: e.note, tone: 'warn' };
     case 'left': return { icon: 'exit', title: `${who} left this to-do`, tone: 'warn' };
+    case 'edited': return { icon: 'create', title: `${who} edited it`, detail: e.note, tone: 'neutral' };
+    case 'submitted': return { icon: 'eye', title: `${who} finished it and sent it for review`, tone: 'neutral' };
+    case 'approved': return { icon: 'ribbon', title: `${who} approved the work`, detail: e.note, tone: 'good' };
+    case 'changes_requested': return { icon: 'arrow-undo', title: `${who} asked for changes`, detail: e.note, tone: 'warn' };
+    case 'proposal_accepted': return { icon: 'checkmark-circle', title: `${who} accepted it`, detail: e.note, tone: 'good' };
+    case 'proposal_rejected': return { icon: 'close-circle', title: `${who} declined it`, detail: e.note, tone: 'bad' };
+    case 'warning': return { icon: 'warning', title: `${who} sent a warning`, detail: e.note, tone: 'bad' };
+    case 'delete_requested': return { icon: 'trash-outline', title: `${who} asked to delete it`, detail: e.note, tone: 'warn' };
+    case 'delete_rejected': return { icon: 'shield-checkmark', title: `${who} declined the deletion`, detail: e.note, tone: 'neutral' };
     case 'deleted': return { icon: 'trash', title: `${who} deleted it`, tone: 'bad' };
     case 'question': return { icon: 'help-circle', title: `${who} asked`, detail: e.note, tone: 'question' };
     case 'comment': return { icon: 'chatbubble', title: `${who} commented`, detail: e.note, tone: 'neutral' };

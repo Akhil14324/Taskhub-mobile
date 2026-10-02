@@ -6,7 +6,7 @@ import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import { PRIORITY } from './kit';
-import { statusMeta } from '../utils/taskMeta';
+import { STATUS } from '../utils/timeline';
 import { formatDue } from '../utils/dates';
 
 /**
@@ -24,7 +24,9 @@ function SharedTaskCard({ meta, isOwn }) {
   return (
     <View style={{ gap: spacing.xs }}>
       {tasks.map((task) => {
-        const status = statusMeta(task.status);
+        // Cards shared before tasks became to-dos carry the old status names.
+        const key = task.status === 'pending' ? 'todo' : task.status === 'completed' ? 'done' : task.status;
+        const status = { ...(STATUS[key] || STATUS.todo), color: colors.brand[600] };
         const priority = PRIORITY[task.priority];
         return (
           <View key={task.id} style={styles.card}>
@@ -53,7 +55,7 @@ function SharedTaskCard({ meta, isOwn }) {
                 </View>
               )}
             </View>
-            <AnimatedPressable onPress={() => navigation.navigate('TaskDetail', { taskId: task.id })} haptic="medium" style={styles.openBtn}>
+            <AnimatedPressable onPress={() => navigation.navigate('Main', { screen: 'Todos', params: { highlightId: task.id } })} haptic="medium" style={styles.openBtn}>
               <Text style={styles.openText}>Open task</Text>
               <Ionicons name="arrow-forward" size={14} color={isOwn ? colors.brand[600] : colors.white} />
             </AnimatedPressable>

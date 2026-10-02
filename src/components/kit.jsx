@@ -197,8 +197,8 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
   useEffect(() => {
     fill.value = withTiming(checked ? 1 : 0, { duration: 180 });
     if (checked) {
-      pop.value = 0.7;
-      pop.value = withSpring(1, { damping: 8, stiffness: 320, mass: 0.5 });
+      pop.value = 0.92;
+      pop.value = withTiming(1, { duration: 140 });
     }
   }, [checked, fill, pop]);
 
@@ -209,7 +209,7 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
   const checkStyle = useAnimatedStyle(() => ({ opacity: fill.value, transform: [{ scale: 0.6 + fill.value * 0.4 }] }));
 
   return (
-    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.85}>
+    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.94}>
       <Animated.View style={[{
         width: size,
         height: size,
@@ -235,9 +235,9 @@ export function Fab({ onPress, icon = 'add', bottom = 24, color, label }) {
   const { theme } = useTheme();
   const enter = useSharedValue(0);
   useEffect(() => {
-    enter.value = withDelay(150, withSpring(1, { damping: 12, stiffness: 180, mass: 0.7 }));
+    enter.value = withDelay(100, withTiming(1, { duration: 160 }));
   }, [enter]);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: enter.value }] }));
+  const style = useAnimatedStyle(() => ({ opacity: enter.value, transform: [{ scale: 0.92 + enter.value * 0.08 }] }));
   const bg = color || (theme === 'dark' ? '#dc2626' : '#dc2626');
   return (
     <Animated.View style={[{ position: 'absolute', right: spacing.xl, bottom }, style]}>
@@ -308,9 +308,9 @@ export function SectionHeader({ title, count, right, color, style }) {
 /** Friendly empty state with a bouncing icon. */
 export function EmptyHero({ icon = 'sparkles', title, message, color, action }) {
   const colors = useColors();
-  const bounce = useSharedValue(0.6);
+  const bounce = useSharedValue(0.9);
   useEffect(() => {
-    bounce.value = withSpring(1, { damping: 7, stiffness: 140, mass: 0.8 });
+    bounce.value = withTiming(1, { duration: 200 });
   }, [bounce]);
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: bounce.value }], opacity: Math.min(1, bounce.value) }));
   const tone = color || colors.brand[500];
@@ -370,4 +370,22 @@ export function ProgressRing({ percent = 0, size = 44, stroke = 5, color, childr
       {children}
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// List icons. A list stores one of these keys in its `emoji` column (older lists may still hold an
+// emoji character; those fall back to the plain list icon so no emoji is ever drawn).
+// ---------------------------------------------------------------------------
+export const LIST_ICONS = [
+  'list', 'home', 'briefcase', 'cart', 'cash', 'construct', 'restaurant', 'medkit', 'laptop', 'call', 'flag', 'star',
+];
+
+export function listIconName(list) {
+  const key = list?.emoji;
+  return LIST_ICONS.includes(key) ? key : 'list';
+}
+
+export function ListGlyph({ list, size = 14, color }) {
+  const colors = useColors();
+  return <Ionicons name={listIconName(list)} size={size} color={color || colors.gray[500]} />;
 }

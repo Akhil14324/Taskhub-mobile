@@ -8,18 +8,18 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
-const SPRING_CONFIG = { damping: 18, stiffness: 350, mass: 0.6, overshootClamping: true };
-const SCALE_DOWN = 0.96;
+const SPRING_CONFIG = { damping: 30, stiffness: 500, mass: 0.5, overshootClamping: true };
+const SCALE_DOWN = 0.985;
 
 /**
  * Drop-in replacement for TouchableOpacity with a spring scale-down on press.
- * - Scales to 0.96 on press-in, springs back on press-out
+ * - Scales very slightly on press-in and eases back on press-out (no bounce)
  * - Optional haptic feedback on press
  * - Works with all TouchableOpacity props (onPress, disabled, style, hitSlop, etc.)
  *
  * Props:
  * - haptic: boolean | 'light' | 'medium' | 'heavy' (default: false)
- * - scale: number (default: 0.96) — how much to scale down on press
+ * - scale: number (default: 0.985) — how much to scale down on press
  * - ...all Pressable props
  */
 function AnimatedPressable({
@@ -110,7 +110,7 @@ function WebPressable({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
-      style={[style, { transform: [{ scale: pressed ? scale : 1 }] }]}
+      style={[style, { transform: [{ scale: pressed ? scale : 1 }], transitionProperty: 'transform', transitionDuration: '90ms', transitionTimingFunction: 'ease-out' }]}
       {...rest}
     >
       {children}

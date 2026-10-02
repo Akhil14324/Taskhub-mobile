@@ -81,7 +81,7 @@ export default function TodoComments({ todo }) {
               </View>
               <Text style={[styles.body, c.kind === 'question' && styles.questionBody]}>{c.body}</Text>
             </View>
-            {(mine || todo.created_by === user?.id) && (
+            {(mine || todo.created_by === user?.id || todo.permissions?.can_edit) && (
               <AnimatedPressable onPress={() => remove(c)} hitSlop={8} haptic="light">
                 <Ionicons name="close" size={16} color={colors.gray[400]} />
               </AnimatedPressable>

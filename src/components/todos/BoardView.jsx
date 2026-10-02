@@ -1,112 +1,275 @@
-import { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
-import { TodoCheckbox, DueChip } from '../kit';
+import { TodoCheckbox, DueChip, Avatar, PRIORITY } from '../kit';
 import { formatDuration } from '../../utils/todoMeta';
+import { STATUS } from '../../utils/timeline';
+import { makeDraggable } from '../../hooks/useWebReorder';
 
-const COLUMN_WIDTH = 270;
+const COLUMN_WIDTH = 288;
+const MARK_TOP = 'inset 0 3px 0 #dc2626';
 
 /**
- * Kanban board of one list: a column per section. Tap a card to open it, tick it with the
- * checkbox, or use the arrows icon to move it to another column.
- * columns = [{ key, title, section?, items }]; progressOf(todo) → { done, total }.
+ * Kanban board. A column is { key, title, icon?, items, accepts?, canAdd?, section? }; cards are
+ * to-dos. Drag a card to another column (desktop) or use its move button (touch): onMove(todo, column)
+ * decides what that means (change status, assignee, priority or section). Dragging inside a column
+ * reorders it; onReorder(ids) gets that column's new order of ids, which is saved for the viewer.
  */
-export default function BoardView({ columns, progressOf, onOpen, onToggle, onMove, onAdd, onAddSection, onEditSection }) {
+export default function BoardView({
+  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn, selectedId,
+  currentUserId, emptyText = 'Nothing here',
+}) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const rootRef = useRef(null);
+  const handlers = useRef({ onDrop, onReorder });
+  handlers.current = { onDrop, onReorder };
+
+  // Drag and drop (desktop browsers).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    const root = rootRef.current;
+    if (!root || typeof root.addEventListener !== 'function') return undefined;
+    let dragId = null;
+    let fromCol = null;
+    let mark = null;
+    let hoverCol = null;
+
+    const cardOf = (el) => (el && el.closest ? el.closest('[data-board-card]') : null);
+    const colOf = (el) => (el && el.closest ? el.closest('[data-board-col]') : null);
+    const clear = () => {
+      if (mark) mark.style.boxShadow = '';
+      if (hoverCol) hoverCol.style.outline = '';
+      mark = null;
+      hoverCol = null;
+    };
+    /** The card the dragged one would land before (null = at the end of the column). */
+    const beforeCard = (col, y) => {
+      const cards = [...col.querySelectorAll('[data-board-card]')].filter((c) => c.dataset.boardCard !== String(dragId));
+      return cards.find((c) => {
+        const r = c.getBoundingClientRect();
+        return y < r.top + r.height / 2;
+      }) || null;
+    };
+
+    const onDragStart = (e) => {
+      const card = cardOf(e.target);
+      if (!card) return;
+      dragId = Number(card.dataset.boardCard);
+      fromCol = card.dataset.col;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragId));
+      card.style.opacity = '0.45';
+    };
+    const onDragOver = (e) => {
+      if (dragId == null) return;
+      const col = colOf(e.target);
+      if (!col) return;
+      e.preventDefault();
+      clear();
+      hoverCol = col;
+      col.style.outline = '2px dashed #dc2626';
+      col.style.outlineOffset = '-2px';
+      const before = beforeCard(col, e.clientY);
+      if (before) {
+        mark = before;
+        before.style.boxShadow = MARK_TOP;
+      }
+    };
+    const onDropEvent = (e) => {
+      if (dragId == null) return;
+      const col = colOf(e.target);
+      if (!col) return;
+      e.preventDefault();
+      const before = beforeCard(col, e.clientY);
+      const ids = [...col.querySelectorAll('[data-board-card]')]
+        .map((c) => Number(c.dataset.boardCard))
+        .filter((id) => id !== dragId);
+      const at = before ? ids.indexOf(Number(before.dataset.boardCard)) : ids.length;
+      ids.splice(at, 0, dragId);
+      const toCol = col.dataset.boardCol;
+      const id = dragId;
+      clear();
+      if (toCol === fromCol) handlers.current.onReorder?.(ids, toCol);
+      else handlers.current.onDrop?.(id, toCol, ids);
+    };
+    const onDragEnd = (e) => {
+      const card = cardOf(e.target);
+      if (card) card.style.opacity = '';
+      clear();
+      dragId = null;
+      fromCol = null;
+    };
+    root.addEventListener('dragstart', onDragStart);
+    root.addEventListener('dragover', onDragOver);
+    root.addEventListener('drop', onDropEvent);
+    root.addEventListener('dragend', onDragEnd);
+    return () => {
+      root.removeEventListener('dragstart', onDragStart);
+      root.removeEventListener('dragover', onDragOver);
+      root.removeEventListener('drop', onDropEvent);
+      root.removeEventListener('dragend', onDragEnd);
+    };
+  }, []);
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.board} keyboardShouldPersistTaps="handled">
-      {columns.map((col) => (
-        <View key={col.key} style={styles.column}>
-          <View style={styles.columnHead}>
-            <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
-            <Text style={styles.columnCount}>{col.items.length}</Text>
-            <View style={{ flex: 1 }} />
-            {col.section && (
-              <AnimatedPressable onPress={() => onEditSection(col.section)} hitSlop={8} haptic="light">
-                <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[400]} />
-              </AnimatedPressable>
-            )}
-            <AnimatedPressable onPress={() => onAdd(col)} hitSlop={8} haptic="light">
-              <Ionicons name="add" size={22} color={colors.gray[500]} />
-            </AnimatedPressable>
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.board} keyboardShouldPersistTaps="handled">
+      <View ref={rootRef} style={styles.boardInner}>
+        {columns.map((col) => (
+          <View key={col.key} style={styles.column} dataSet={{ boardCol: String(col.key) }}>
+            <View style={styles.columnHead}>
+              {!!col.icon && <Ionicons name={col.icon} size={15} color={colors.gray[500]} />}
+              <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
+              <Text style={styles.columnCount}>{col.items.length}</Text>
+              <View style={{ flex: 1 }} />
+              {!!col.section && onEditColumn && (
+                <AnimatedPressable onPress={() => onEditColumn(col.section)} hitSlop={8}>
+                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[400]} />
+                </AnimatedPressable>
+              )}
+              {col.canAdd !== false && onAdd && (
+                <AnimatedPressable onPress={() => onAdd(col)} hitSlop={8}>
+                  <Ionicons name="add" size={22} color={colors.gray[500]} />
+                </AnimatedPressable>
+              )}
+            </View>
+            <View style={styles.cards}>
+              {col.items.map((t) => (
+                <Card
+                  key={t.id}
+                  todo={t}
+                  colKey={col.key}
+                  progress={progressOf?.(t)}
+                  selected={selectedId === t.id}
+                  currentUserId={currentUserId}
+                  onOpen={onOpen}
+                  onToggle={onToggle}
+                  onMove={onMove}
+                  styles={styles}
+                />
+              ))}
+              {col.items.length === 0 && <Text style={styles.empty}>{emptyText}</Text>}
+            </View>
           </View>
-          {col.items.map((t) => {
-            const progress = progressOf(t);
-            return (
-              <Pressable key={t.id} style={styles.card} onPress={() => onOpen(t)}>
-                <View style={styles.cardTop}>
-                  <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => onToggle(t)} size={20} />
-                  <Text style={[styles.cardTitle, t.is_done && styles.cardDone]} numberOfLines={3}>{t.title}</Text>
-                </View>
-                <View style={styles.cardMeta}>
-                  <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
-                  {!!t.duration_minutes && (
-                    <View style={styles.metaItem}>
-                      <Ionicons name="time-outline" size={11} color={colors.gray[500]} />
-                      <Text style={styles.metaText}>{formatDuration(t.duration_minutes)}</Text>
-                    </View>
-                  )}
-                  {progress.total > 0 && (
-                    <View style={styles.metaItem}>
-                      <Ionicons name="git-branch-outline" size={11} color={colors.gray[500]} />
-                      <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
-                    </View>
-                  )}
-                  {t.comment_count > 0 && (
-                    <View style={styles.metaItem}>
-                      <Ionicons name="chatbubble-outline" size={11} color={colors.gray[500]} />
-                      <Text style={styles.metaText}>{t.comment_count}</Text>
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }} />
-                  <AnimatedPressable onPress={() => onMove(t)} hitSlop={8} haptic="light">
-                    <Ionicons name="swap-horizontal" size={18} color={colors.gray[400]} />
-                  </AnimatedPressable>
-                </View>
-                {(t.labels || []).length > 0 && (
-                  <View style={styles.labels}>
-                    {t.labels.slice(0, 3).map((l) => <Text key={l} style={styles.label}>+{l}</Text>)}
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-          {col.items.length === 0 && <Text style={styles.empty}>Nothing here</Text>}
-        </View>
-      ))}
-      <AnimatedPressable style={styles.addColumn} onPress={onAddSection} haptic="light">
-        <Ionicons name="add" size={20} color={colors.brand[600]} />
-        <Text style={styles.addColumnText}>Add section</Text>
-      </AnimatedPressable>
+        ))}
+        {onAddColumn && (
+          <AnimatedPressable style={styles.addColumn} onPress={onAddColumn}>
+            <Ionicons name="add" size={20} color={colors.brand[600]} />
+            <Text style={styles.addColumnText}>Add section</Text>
+          </AnimatedPressable>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
+function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onToggle, onMove, styles }) {
+  const colors = useColors();
+  const canTick = t.permissions ? t.permissions.can_change_status : true;
+  const tag = t.review_state === 'proposed' ? 'Proposed'
+    : t.status === 'in_review' && !t.is_done ? 'In review'
+      : t.status === 'blocked' && !t.is_done ? 'Blocked'
+        : t.status === 'on_hold' && !t.is_done ? 'On hold' : null;
+  return (
+    <View ref={makeDraggable} dataSet={{ boardCard: String(t.id), col: String(colKey) }} style={styles.cardWrap}>
+      <Pressable style={[styles.card, selected && styles.cardSelected]} onPress={() => onOpen(t)}>
+        <View style={styles.cardTop}>
+          <TodoCheckbox
+            checked={t.is_done}
+            priority={t.priority}
+            onPress={() => (canTick ? onToggle(t) : onOpen(t))}
+            size={20}
+          />
+          <Text style={[styles.cardTitle, t.is_done && styles.cardDone]} numberOfLines={3}>{t.title}</Text>
+        </View>
+        <View style={styles.cardMeta}>
+          <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
+          {t.priority < 4 && !t.is_done && (
+            <View style={styles.metaItem}>
+              <Ionicons name="flag" size={11} color={PRIORITY[t.priority].color} />
+              <Text style={[styles.metaText, { color: PRIORITY[t.priority].color, fontWeight: '700' }]}>{PRIORITY[t.priority].short}</Text>
+            </View>
+          )}
+          {!!t.duration_minutes && (
+            <View style={styles.metaItem}>
+              <Ionicons name="time-outline" size={11} color={colors.gray[500]} />
+              <Text style={styles.metaText}>{formatDuration(t.duration_minutes)}</Text>
+            </View>
+          )}
+          {!!progress && progress.total > 0 && (
+            <View style={styles.metaItem}>
+              <Ionicons name="git-branch-outline" size={11} color={colors.gray[500]} />
+              <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
+            </View>
+          )}
+          {t.comment_count > 0 && (
+            <View style={styles.metaItem}>
+              <Ionicons name="chatbubble-outline" size={11} color={colors.gray[500]} />
+              <Text style={styles.metaText}>{t.comment_count}</Text>
+            </View>
+          )}
+          {!!tag && (
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          )}
+          <View style={{ flex: 1 }} />
+          {!!t.assignee_name && t.assignee_id !== currentUserId && (
+            <Avatar name={t.assignee_name} uri={t.assignee_picture} size={20} />
+          )}
+          {onMove && (
+            <AnimatedPressable onPress={() => onMove(t)} hitSlop={8} accessibilityLabel="Move to another column">
+              <Ionicons name="swap-horizontal" size={17} color={colors.gray[400]} />
+            </AnimatedPressable>
+          )}
+        </View>
+        {(t.labels || []).length > 0 && (
+          <View style={styles.labels}>
+            {t.labels.slice(0, 3).map((l) => <Text key={l} style={styles.label}>+{l}</Text>)}
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+export const BOARD_STATUS_COLUMNS = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold', 'done'].map((key) => ({
+  key,
+  title: STATUS[key].label,
+  icon: STATUS[key].icon,
+}));
+
 const createStyles = (colors) => StyleSheet.create({
-  board: { gap: spacing.md, paddingBottom: spacing.xl, paddingRight: spacing.lg },
-  column: { width: COLUMN_WIDTH, backgroundColor: colors.gray[100], borderRadius: radius.xl, padding: spacing.sm, alignSelf: 'flex-start' },
+  board: { paddingBottom: spacing.xl, paddingRight: spacing.lg, minHeight: 320 },
+  boardInner: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  column: {
+    width: COLUMN_WIDTH, backgroundColor: colors.gray[100], borderRadius: radius.xl, padding: spacing.sm,
+    minHeight: 120,
+  },
   columnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[800], maxWidth: 150 },
+  columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[800], maxWidth: 160 },
   columnCount: { fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '600' },
+  cards: { minHeight: 40 },
+  cardWrap: { marginBottom: spacing.sm, borderRadius: radius.lg },
   card: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
     padding: spacing.md,
-    marginBottom: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
   },
+  cardSelected: { borderColor: colors.brand[500], borderWidth: 1.5 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  cardTitle: { flex: 1, fontSize: fontSize.base, color: colors.gray[900], lineHeight: 19 },
-  cardDone: { textDecorationLine: 'line-through', color: colors.gray[400] },
+  cardTitle: { flex: 1, fontSize: fontSize.base, color: colors.gray[900], lineHeight: 19, fontWeight: '500' },
+  cardDone: { textDecorationLine: 'line-through', color: colors.gray[400], fontWeight: '400' },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 11, color: colors.gray[500] },
+  tag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.brand[100] },
+  tagText: { fontSize: 11, fontWeight: '600', color: colors.brand[700] },
   labels: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
   label: { fontSize: 11, fontWeight: '600', color: colors.brand[600] },
   empty: { fontSize: fontSize.sm, color: colors.gray[400], textAlign: 'center', paddingVertical: spacing.lg },
@@ -121,7 +284,6 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.gray[300],
-    alignSelf: 'flex-start',
   },
   addColumnText: { color: colors.brand[600], fontWeight: '600', fontSize: fontSize.sm },
 });

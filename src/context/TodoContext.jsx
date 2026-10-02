@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast } from '../utils/events';
 import { formatDue } from '../utils/dates';
-import { labelsFrom } from '../utils/todoMeta';
+import { labelsFrom, descendantsOf } from '../utils/todoMeta';
 
 const TodoContext = createContext(null);
 const DELETE_UNDO_MS = 4000;
@@ -30,6 +30,7 @@ export function TodoProvider({ children }) {
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);
   const [filters, setFilters] = useState([]);
+  const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState(null);
   const pendingDeletes = useRef(new Map());
@@ -43,6 +44,7 @@ export function TodoProvider({ children }) {
       setLists(res.data.lists || []);
       setSections(res.data.sections || []);
       setFilters(res.data.filters || []);
+      setBusinesses(res.data.businesses || []);
     } catch (err) {
       console.warn('[todos] fetch failed:', err.message);
     } finally {
@@ -65,6 +67,7 @@ export function TodoProvider({ children }) {
       setLists([]);
       setSections([]);
       setFilters([]);
+      setBusinesses([]);
       setInsights(null);
       setLoading(true);
       return;
@@ -97,8 +100,11 @@ export function TodoProvider({ children }) {
     if (res.data.todo.parent_id) fetchTodos();
     if (!silent) {
       const due = res.data.todo.due_date ? ` · ${formatDue(res.data.todo.due_date)}` : '';
-      const shared = (res.data.todo.members || []).length > 1 ? ' · shared' : '';
-      showToast({ message: `Added${due}${shared}`, tone: 'success', icon: 'checkmark-circle' });
+      const t = res.data.todo;
+      const where = t.review_state === 'proposed' ? ' · sent for review'
+        : t.business_id ? ` · ${t.business_name}`
+          : (t.members || []).length > 1 ? ' · shared' : '';
+      showToast({ message: `Added${due}${where}`, tone: 'success', icon: 'checkmark-circle' });
     }
     return res.data.todo;
   }, [upsert, fetchTodos]);
@@ -120,22 +126,35 @@ export function TodoProvider({ children }) {
   const toggleTodo = useCallback(async (todo, { silent = false } = {}) => {
     // Optimistic: flip immediately so the check animation feels instant. Ticking a parent
     // ticks its sub-tasks; reopening a sub-task reopens a finished parent.
-    const completing = !todo.is_done;
-    setTodos((prev) => prev.map((t) => {
-      if (t.id === todo.id) return { ...t, is_done: completing, _justToggled: Date.now() };
-      if (completing && !todo.recurrence && t.parent_id === todo.id) return { ...t, is_done: true };
-      if (!completing && todo.parent_id && t.id === todo.parent_id) return { ...t, is_done: false };
-      return t;
-    }));
+    const completing = !todo.is_done && todo.status !== 'in_review';
+    // Work that needs a review does not close on the spot: wait for the server's answer.
+    const needsReview = !!todo.business_id && todo.requires_approval && !todo.permissions?.can_edit && !todo.is_done;
+    if (!needsReview) {
+      setTodos((prev) => {
+        const below = completing && !todo.recurrence ? new Set(descendantsOf(todo.id, prev).map((t) => t.id)) : null;
+        const above = new Set();
+        if (!completing && todo.is_done) {
+          const byId = new Map(prev.map((t) => [t.id, t]));
+          for (let p = byId.get(todo.parent_id); p; p = byId.get(p.parent_id)) above.add(p.id);
+        }
+        return prev.map((t) => {
+          if (t.id === todo.id) return { ...t, is_done: !todo.is_done, _justToggled: Date.now() };
+          if (below?.has(t.id)) return { ...t, is_done: true };
+          if (above.has(t.id)) return { ...t, is_done: false };
+          return t;
+        });
+      });
+    }
     try {
       const res = await api.post(`/todos/${todo.id}/toggle`);
       const updated = res.data.todo;
       // Let the strike-through play before the item re-sorts.
       setTimeout(() => upsert(updated), 450);
       fetchInsights();
-      if (!silent && completing) {
+      if (!silent && (completing || updated.status === 'in_review')) {
         showToast({
-          message: res.data.rolled_to ? `Done · next on ${formatDue(res.data.rolled_to)}` : 'Completed',
+          message: updated.status === 'in_review' ? 'Sent for review'
+            : res.data.rolled_to ? `Done · next on ${formatDue(res.data.rolled_to)}` : 'Completed',
           tone: 'success',
           icon: res.data.rolled_to ? 'repeat' : 'checkmark-circle',
           actionLabel: res.data.rolled_to ? undefined : 'Undo',
@@ -155,7 +174,11 @@ export function TodoProvider({ children }) {
   /** Delete with a short undo window, like Todoist. */
   const deleteTodo = useCallback((todo) => {
     const isCreator = todo.created_by === user?.id;
-    setTodos((prev) => prev.filter((t) => t.id !== todo.id && t.parent_id !== todo.id));
+    const hide = new Set([todo.id]);
+    setTodos((prev) => {
+      descendantsOf(todo.id, prev).forEach((t) => hide.add(t.id));
+      return prev.filter((t) => !hide.has(t.id));
+    });
     const timer = setTimeout(async () => {
       pendingDeletes.current.delete(todo.id);
       try {
@@ -166,7 +189,7 @@ export function TodoProvider({ children }) {
     }, DELETE_UNDO_MS);
     pendingDeletes.current.set(todo.id, timer);
     showToast({
-      message: isCreator ? 'To-do deleted' : 'Removed from your list',
+      message: isCreator || todo.business_id ? 'Deleted' : 'Removed from your list',
       icon: 'trash',
       actionLabel: 'Undo',
       duration: DELETE_UNDO_MS - 200,
@@ -181,7 +204,10 @@ export function TodoProvider({ children }) {
   /** Delete several at once (bulk select): no per-item undo, one refresh at the end. */
   const deleteTodos = useCallback(async (list) => {
     const ids = new Set(list.map((t) => t.id));
-    setTodos((prev) => prev.filter((t) => !ids.has(t.id) && !ids.has(t.parent_id)));
+    setTodos((prev) => {
+      list.forEach((t) => descendantsOf(t.id, prev).forEach((d) => ids.add(d.id)));
+      return prev.filter((t) => !ids.has(t.id));
+    });
     await Promise.all(list.map((t) => api.delete(`/todos/${t.id}`).catch(() => null)));
     showToast({ message: `Deleted ${list.length}`, icon: 'trash' });
     fetchTodos();
@@ -215,6 +241,17 @@ export function TodoProvider({ children }) {
     setTodos((prev) => prev.map((t) => (order.has(t.id) ? { ...t, sort_order: order.get(t.id) } : t)));
     try {
       await api.post('/todos/reorder', { ids });
+    } catch {
+      fetchTodos();
+    }
+  }, [fetchTodos]);
+
+  // The order of cards on a board is mine alone (the same business task may sit elsewhere for someone else).
+  const saveBoardOrder = useCallback(async (ids) => {
+    const order = new Map(ids.map((id, i) => [id, i + 1]));
+    setTodos((prev) => prev.map((t) => (order.has(t.id) ? { ...t, board_pos: order.get(t.id) } : t)));
+    try {
+      await api.post('/todos/board-order', { ids });
     } catch {
       fetchTodos();
     }
@@ -364,6 +401,44 @@ export function TodoProvider({ children }) {
     return res.data.todo;
   }, [upsert]);
 
+  // ---- business governance: review, approval, warnings, deletion requests ----------
+  const reviewTodo = useCallback(async (todoId, decision, note) => {
+    const res = await api.post(`/todos/${todoId}/review`, { decision, note });
+    upsert(res.data.todo);
+    fetchTodos();
+    return res.data.todo;
+  }, [upsert, fetchTodos]);
+
+  const approveTodo = useCallback(async (todoId, note) => {
+    const res = await api.post(`/todos/${todoId}/approve`, { note });
+    upsert(res.data.todo);
+    fetchInsights();
+    return res.data.todo;
+  }, [upsert, fetchInsights]);
+
+  const rejectTodo = useCallback(async (todoId, note) => {
+    const res = await api.post(`/todos/${todoId}/reject`, { note });
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const warnTodo = useCallback(async (todoId, message) => {
+    const res = await api.post(`/todos/${todoId}/warn`, { message });
+    upsert(res.data.todo);
+    return res.data.todo;
+  }, [upsert]);
+
+  const requestDelete = useCallback(async (todoId, reason) => {
+    const res = await api.post(`/todos/${todoId}/request-delete`, { reason });
+    fetchTodos();
+    return res.data.approval;
+  }, [fetchTodos]);
+
+  const fetchAssignees = useCallback(async (businessId) => {
+    const res = await api.get('/todos/assignees', { params: { business_id: businessId }, __skipOops: true });
+    return res.data.users || [];
+  }, []);
+
   const labels = useMemo(() => labelsFrom(todos), [todos]);
 
   const value = useMemo(() => ({
@@ -371,6 +446,7 @@ export function TodoProvider({ children }) {
     lists,
     sections,
     filters,
+    businesses,
     labels,
     loading,
     insights,
@@ -385,6 +461,7 @@ export function TodoProvider({ children }) {
     mergeTodos,
     removeMember,
     reorderTodos,
+    saveBoardOrder,
     createList,
     updateList,
     deleteList,
@@ -404,10 +481,16 @@ export function TodoProvider({ children }) {
     raiseBlocker,
     resolveBlocker,
     postUpdate,
+    reviewTodo,
+    approveTodo,
+    rejectTodo,
+    warnTodo,
+    requestDelete,
+    fetchAssignees,
     shareTodos,
     importTodos,
-  }), [todos, lists, sections, filters, labels, loading, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
-    toggleTodo, deleteTodo, deleteTodos, duplicateTodo, mergeTodos, removeMember, reorderTodos, createList, updateList, deleteList,
+  }), [todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
+    toggleTodo, deleteTodo, deleteTodos, duplicateTodo, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
     createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,
     shareTodos, importTodos]);

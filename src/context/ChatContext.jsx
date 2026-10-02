@@ -9,13 +9,13 @@ import { useAuth } from './AuthContext';
 const ChatContext = createContext(null);
 
 // Non-chat realtime events other parts of the app can subscribe to (see `subscribe`).
-const RELAYED_EVENTS = ['todo:changed', 'task:changed', 'notification:new'];
+const RELAYED_EVENTS = ['todo:changed', 'notification:new'];
 
 function previewFromMeta(meta) {
-  if (meta?.kind === 'task') return `🗂️ Task: ${meta.task?.title || ''}`;
+  if (meta?.kind === 'task') return `Task: ${meta.task?.title || ''}`;
   if (meta?.kind !== 'todos') return null;
   const count = meta.items?.length || 0;
-  return count === 1 ? `📋 To-do: ${meta.items[0].title}` : `📋 Shared ${count} to-dos`;
+  return count === 1 ? `To-do: ${meta.items[0].title}` : `Shared ${count} to-dos`;
 }
 
 export function ChatProvider({ children }) {
@@ -36,7 +36,7 @@ export function ChatProvider({ children }) {
   const listenersRef = useRef(new Map());
   const seenMessageIdsRef = useRef(new Set());
 
-  /** Listen to a relayed realtime event ('todo:changed' | 'task:changed' | 'notification:new'). */
+  /** Listen to a relayed realtime event ('todo:changed' | 'notification:new'). */
   const subscribe = useCallback((event, handler) => {
     if (!listenersRef.current.has(event)) listenersRef.current.set(event, new Set());
     listenersRef.current.get(event).add(handler);

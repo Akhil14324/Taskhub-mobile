@@ -50,14 +50,15 @@ export function labelsFrom(todos) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-tasks
+// Sub-tasks (any depth)
 // ---------------------------------------------------------------------------
 /**
- * Nest sub-tasks under their parent when both are in `items`. A sub-task whose parent is
- * not in the list (different day, shared only the sub-task, …) stays a normal row and is
- * marked `orphan` so it can show where it belongs.
+ * Nest to-dos under their parent when both are in `items`, at any depth. A to-do whose parent
+ * is not in the list (different day, filtered out, shared on its own, ...) becomes a root row and
+ * carries `parent` so it can show where it belongs.
+ * → [{ todo, children: [node...], parent }]
  */
-export function groupWithSubtasks(items, allTodos = items) {
+export function buildTree(items, allTodos = items) {
   const ids = new Set(items.map((t) => t.id));
   const byParent = new Map();
   for (const t of items) {
@@ -67,20 +68,50 @@ export function groupWithSubtasks(items, allTodos = items) {
     }
   }
   const parents = new Map(allTodos.map((t) => [t.id, t]));
-  return items
-    .filter((t) => !(t.parent_id && ids.has(t.parent_id)))
-    .map((t) => ({
-      todo: t,
-      subtasks: byParent.get(t.id) || [],
-      parent: t.parent_id ? parents.get(t.parent_id) || null : null,
-    }));
+  const node = (t) => ({
+    todo: t,
+    children: (byParent.get(t.id) || []).map(node),
+    parent: t.parent_id ? parents.get(t.parent_id) || null : null,
+  });
+  return items.filter((t) => !(t.parent_id && ids.has(t.parent_id))).map(node);
 }
 
-/** Sub-task progress, counted from the loaded sub-tasks (falls back to the server counts). */
+/** Every to-do below one (children, their children, ...), in tree order. */
+export function descendantsOf(id, allTodos) {
+  const out = [];
+  const walk = (parentId) => {
+    for (const t of allTodos) {
+      if (t.parent_id === parentId) {
+        out.push(t);
+        walk(t.id);
+      }
+    }
+  };
+  walk(id);
+  return out;
+}
+
+/** Number of levels between a to-do and the root (a root is 0). */
+export function depthOf(todo, byId) {
+  let depth = 0;
+  let cur = todo;
+  while (cur?.parent_id && byId.get(cur.parent_id) && depth < 20) {
+    cur = byId.get(cur.parent_id);
+    depth += 1;
+  }
+  return depth;
+}
+
+/** Progress over everything below a to-do (falls back to the server's direct counts). */
 export function subtaskProgress(todo, allTodos) {
-  const children = allTodos.filter((t) => t.parent_id === todo.id);
-  if (children.length) return { done: children.filter((c) => c.is_done).length, total: children.length };
+  const below = descendantsOf(todo.id, allTodos);
+  if (below.length) return { done: below.filter((c) => c.is_done).length, total: below.length };
   return { done: todo.subtask_done_count || 0, total: todo.subtask_count || 0 };
+}
+
+/** The business a to-do belongs to, or null for a personal one. */
+export function isBusinessTodo(todo) {
+  return !!todo?.business_id;
 }
 
 /** Manually ordered to-dos first (by sort_order), the rest keep their existing order. */

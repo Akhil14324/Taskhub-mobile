@@ -359,7 +359,7 @@ export default function Profile() {
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
           {pushState === 'default' && (
-            <PrimaryButton onPress={async () => { const r = await enablePush(); if (r === 'granted') showToast({ message: 'Notifications are on 🔔', tone: 'success' }); }} style={{ flex: 1 }}>
+            <PrimaryButton onPress={async () => { const r = await enablePush(); if (r === 'granted') showToast({ message: 'Notifications are on', tone: 'success' }); }} style={{ flex: 1 }}>
               Turn on notifications
             </PrimaryButton>
           )}

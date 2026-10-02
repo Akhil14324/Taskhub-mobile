@@ -223,7 +223,8 @@ function TodoRow({ todo, personId, now, onPress }) {
         {todo.is_done && <Text style={{ fontSize: 11, color: colors.gray[500] }}>took {formatSecondsShort(m.cycle_s)}</Text>}
         {!mine && !!todo.assignee_name && <Text style={{ fontSize: 11, color: colors.gray[500] }}>→ {todo.assignee_name.split(' ')[0]}</Text>}
         {mine && todo.members?.length > 1 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>shared</Text>}
-        {todo.comment_count > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>💬 {todo.comment_count}</Text>}
+        {todo.comment_count > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{todo.comment_count} comments</Text>}
+        {!!todo.business_name && <Text style={{ fontSize: 11, color: colors.gray[500], fontWeight: '600' }}>{todo.business_name}</Text>}
       </View>
     </AnimatedPressable>
   );

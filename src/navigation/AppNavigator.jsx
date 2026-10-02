@@ -21,6 +21,8 @@ import { useNotifications } from '../context/NotificationContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import AnimatedPressable from '../components/AnimatedPressable';
+import AppSidebar from '../components/AppSidebar';
+import useIsDesktop from '../hooks/useBreakpoint';
 import { MoreMenu } from '../components/UI';
 import { addNotificationResponseListener } from '../services/notifications';
 import { openNotificationTarget } from './navigationRef';
@@ -30,13 +32,11 @@ import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
 import HomeScreen from '../screens/HomeScreen';
 import TodosScreen from '../screens/TodosScreen';
-import TaskDetailScreen from '../screens/TaskDetailScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import TasksScreen from '../screens/Tasks';
 import NotificationsScreen from '../screens/Notifications';
 import ProfileScreen from '../screens/Profile';
 import ChatListScreen from '../screens/ChatListScreen';
@@ -45,35 +45,67 @@ import GroupInfoScreen from '../screens/GroupInfoScreen';
 import LegalScreen from '../screens/Legal';
 import OopsScreen from '../screens/Oops';
 
+/**
+ * On a wide window pages that were designed as a single column (profile, chat thread, approvals, ...)
+ * sit in a centred column instead of stretching across the screen. Phones are untouched.
+ */
+function framed(Component, maxWidth = 920) {
+  function Framed(props) {
+    const desktop = useIsDesktop();
+    if (!desktop) return <Component {...props} />;
+    return (
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <View style={{ flex: 1, width: '100%', maxWidth }}>
+          <Component {...props} />
+        </View>
+      </View>
+    );
+  }
+  Framed.displayName = `Framed(${Component.displayName || Component.name || 'Screen'})`;
+  return Framed;
+}
+
+const FramedLogin = framed(LoginScreen, 480);
+const FramedSignup = framed(SignupScreen, 480);
+const FramedChangePassword = framed(ChangePasswordScreen, 480);
+const FramedChatThread = framed(ChatThreadScreen, 980);
+const FramedChatList = framed(ChatListScreen, 760);
+const FramedGroupInfo = framed(GroupInfoScreen, 760);
+const FramedApprovals = framed(ApprovalsScreen);
+const FramedOrganization = framed(OrganizationScreen, 1080);
+const FramedTeamMonitor = framed(TeamMonitorScreen, 1080);
+const FramedPersonMonitor = framed(PersonMonitorScreen, 1080);
+const FramedNotifications = framed(NotificationsScreen, 760);
+const FramedProfile = framed(ProfileScreen, 760);
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const ICON_SPRING = { damping: 14, stiffness: 300, mass: 0.5, overshootClamping: false };
+const ICON_EASE = { duration: 140 };
 
 /**
  * Animated tab bar icon — scales up with a spring when focused.
  */
 function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
-  const scale = useSharedValue(focused ? 1.15 : 1);
+  const scale = useSharedValue(focused ? 1.06 : 1);
   const badgeScale = useSharedValue(badge ? 1 : 0);
   const prevBadgeRef = useRef(badge);
 
   useEffect(() => {
-    scale.value = withSpring(focused ? 1.15 : 1, ICON_SPRING);
-    if (focused) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scale.value = withTiming(focused ? 1.06 : 1, ICON_EASE);
   }, [focused, scale]);
 
   // Badge pop animation when count changes
   useEffect(() => {
     if (badge && prevBadgeRef.current !== badge) {
       badgeScale.value = withSequence(
-        withTiming(1.3, { duration: 120 }),
-        withSpring(1, { damping: 12, stiffness: 300, mass: 0.5 }),
+        withTiming(1.12, { duration: 90 }),
+        withTiming(1, { duration: 110 }),
       );
     } else if (badge) {
-      badgeScale.value = withSpring(1, { damping: 14, stiffness: 300, mass: 0.5 });
+      badgeScale.value = withTiming(1, { duration: 120 });
     } else {
-      badgeScale.value = withSpring(0, { damping: 16, stiffness: 300, mass: 0.5 });
+      badgeScale.value = withTiming(0, { duration: 120 });
     }
     prevBadgeRef.current = badge;
   }, [badge, badgeScale]);
@@ -121,10 +153,11 @@ function MainTabs() {
   const { unreadCount, approvalCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const desktop = useIsDesktop();
   const [moreVisible, setMoreVisible] = useState(false);
 
   const today = todayYmd();
-  const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today).length;
+  const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
   const moreItems = [
     { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
@@ -146,6 +179,7 @@ function MainTabs() {
   return (
     <>
       <Tab.Navigator
+        tabBar={desktop ? () => null : undefined}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.brand[600],
@@ -184,23 +218,13 @@ function MainTabs() {
           options={{
             tabBarLabel: 'To-do',
             tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Tasks"
-          component={TasksScreen}
-          options={{
-            tabBarLabel: t('tasks'),
-            tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'clipboard' : 'clipboard-outline'} focused={focused} color={color} badge={approvalCount} />
+              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge + approvalCount} />
             ),
           }}
         />
         <Tab.Screen
           name="ChatList"
-          component={ChatListScreen}
+          component={FramedChatList}
           options={{
             tabBarLabel: t('chat'),
             tabBarIcon: ({ focused, color }) => (
@@ -305,7 +329,9 @@ const tabStyles = StyleSheet.create({
 export default function AppNavigator() {
   const { user, loading } = useAuth();
   const colors = useColors();
+  const desktop = useIsDesktop();
   const notificationListenerRef = useRef(null);
+  const [routeName, setRouteName] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -331,8 +357,14 @@ export default function AppNavigator() {
     );
   }
 
+  const showShell = desktop && !!user && !user.must_change_password;
+  const syncRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name || null);
+
   return (
-    <NavigationContainer ref={navigationRef}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.gray[50] }}>
+      {showShell && <AppSidebar routeName={routeName} />}
+      <View style={{ flex: 1, minWidth: 0 }}>
+    <NavigationContainer ref={navigationRef} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -341,28 +373,29 @@ export default function AppNavigator() {
       >
         {!user ? (
           <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="Login" component={FramedLogin} />
+            <Stack.Screen name="Signup" component={FramedSignup} />
           </>
         ) : user.must_change_password ? (
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+          <Stack.Screen name="ChangePassword" component={FramedChangePassword} />
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
-            <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
-            <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
-            <Stack.Screen name="Approvals" component={ApprovalsScreen} />
-            <Stack.Screen name="Organization" component={OrganizationScreen} />
-            <Stack.Screen name="TeamMonitor" component={TeamMonitorScreen} />
-            <Stack.Screen name="PersonMonitor" component={PersonMonitorScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="ChatThread" component={FramedChatThread} />
+            <Stack.Screen name="GroupInfo" component={FramedGroupInfo} />
+            <Stack.Screen name="Approvals" component={FramedApprovals} />
+            <Stack.Screen name="Organization" component={FramedOrganization} />
+            <Stack.Screen name="TeamMonitor" component={FramedTeamMonitor} />
+            <Stack.Screen name="PersonMonitor" component={FramedPersonMonitor} />
+            <Stack.Screen name="Notifications" component={FramedNotifications} />
+            <Stack.Screen name="Profile" component={FramedProfile} />
           </>
         )}
         <Stack.Screen name="Legal" component={LegalScreen} />
         <Stack.Screen name="Oops" component={OopsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
+      </View>
+    </View>
   );
 }
