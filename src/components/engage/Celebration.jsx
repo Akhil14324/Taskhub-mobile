@@ -8,6 +8,7 @@ import { useColors } from '../../context/ThemeContext';
 import { useEngage } from '../../context/EngageContext';
 import { spacing, fontSize } from '../../theme/theme';
 import BadgeMedal from './BadgeMedal';
+import useBackClose from '../../hooks/useBackClose';
 import { feedback, celebrationsOn, motionReduced } from '../../utils/feedback';
 import * as SecureStore from '../../utils/secureStorage';
 
@@ -140,6 +141,8 @@ export default function Celebration() {
       } catch (e) { /* offline: try again on the next change */ }
     })();
   }, [user, myDay, enqueue]);
+
+  useBackClose(!!current, next);
 
   if (!current) return null;
   return (

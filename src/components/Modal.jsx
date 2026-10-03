@@ -13,6 +13,7 @@ import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import useIsDesktop from '../hooks/useBreakpoint';
+import useBackClose from '../hooks/useBackClose';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SPRING_CONFIG = { damping: 24, stiffness: 280, mass: 0.8, overshootClamping: true };
@@ -50,6 +51,8 @@ export default function Modal({ open, onClose, title, children, width = 460 }) {
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
   }));
+
+  useBackClose(open, onClose);
 
   if (!open) return null;
 

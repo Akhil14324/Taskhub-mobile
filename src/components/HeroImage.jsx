@@ -13,6 +13,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image as ExpoImage } from 'expo-image';
 import { useColors } from '../context/ThemeContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import useBackClose from '../hooks/useBackClose';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -122,6 +123,8 @@ function HeroImage({ source, thumbStyle, contentFit = 'cover', recyclingKey }) {
       setShouldRenderFullscreen(false);
     }, 300);
   }, [measuredLayout, translateX, translateY, scale, opacity, bgOpacity]);
+
+  useBackClose(fullscreen, closeFullscreen);
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 

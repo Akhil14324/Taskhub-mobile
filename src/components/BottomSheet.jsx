@@ -15,6 +15,7 @@ import { useColors } from '../context/ThemeContext';
 import { spacing, radius } from '../theme/theme';
 import useKeyboardInset from '../hooks/useKeyboardInset';
 import useIsDesktop from '../hooks/useBreakpoint';
+import useBackClose from '../hooks/useBackClose';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SPRING_CONFIG = { damping: 28, stiffness: 280, mass: 0.8, overshootClamping: true };
@@ -74,6 +75,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   }, [visible, maxHeight, hiddenY, translateY, overlayOpacity]);
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
+
+  useBackClose(visible, onClose);
 
   // Esc closes the sheet (keyboard use).
   useEffect(() => {

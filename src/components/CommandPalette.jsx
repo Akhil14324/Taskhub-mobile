@@ -9,6 +9,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import { navigationRef, openNotificationTarget } from '../navigation/navigationRef';
 import { openQuickAdd, openTemplates, openShortcuts } from '../utils/events';
 import { formatDue } from '../utils/dates';
+import useBackClose from '../hooks/useBackClose';
 
 const go = (name, params) => {
   if (!navigationRef.isReady()) return;
@@ -97,6 +98,8 @@ export default function CommandPalette({ visible, onClose }) {
     else if (key === 'ArrowUp') { e.preventDefault?.(); setIndex((i) => Math.max(0, i - 1)); }
     else if (key === 'Escape') onClose();
   };
+
+  useBackClose(visible, onClose);
 
   if (!visible) return null;
   let lastGroup = null;

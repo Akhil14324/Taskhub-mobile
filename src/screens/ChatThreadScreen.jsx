@@ -35,6 +35,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import { Screen } from '../components/UI';
 import SmartImage from '../components/SmartImage';
 import BottomSheet from '../components/BottomSheet';
+import BackCloser from '../components/BackCloser';
 import HeroImage from '../components/HeroImage';
 import SharedTodosCard from '../components/SharedTodosCard';
 import SharedTaskCard from '../components/SharedTaskCard';
@@ -1313,6 +1314,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
         </AnimatedPressable>
       </BottomSheet>
 
+      <BackCloser active={confirmScope !== null} onClose={() => setConfirmScope(null)} />
       <Modal
         visible={confirmScope !== null}
         transparent

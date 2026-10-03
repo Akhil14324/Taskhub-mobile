@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, Pressable, ScrollView, TextInput } from 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import useBackClose from '../hooks/useBackClose';
 import {
   ACTIONS, FIXED, actionById, chordOf, chordKeys, splitCombo, effective, isCustomised, setCombos, resetAction, resetAll,
   findClash, stealCombo, useShortcutVersion,
@@ -105,6 +106,8 @@ export default function ShortcutsSheet({ visible, onClose }) {
     });
     return out;
   }, [q]);
+
+  useBackClose(visible, onClose);
 
   if (!visible) return null;
   const customised = ACTIONS.some((a) => isCustomised(a.id));

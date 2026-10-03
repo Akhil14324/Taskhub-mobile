@@ -4,12 +4,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
+import useBackClose from '../hooks/useBackClose';
 
 export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const selectedItem = items.find((item) => item.value === selectedValue);
+  useBackClose(open, () => setOpen(false));
 
   return (
     <>

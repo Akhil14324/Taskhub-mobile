@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { ActivityIndicator, Text, View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
+import { syncNavigationBack } from '../utils/backStack';
 import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -380,7 +381,10 @@ export default function AppNavigator() {
   }
 
   const showShell = desktop && !!user && !user.must_change_password;
-  const syncRoute = () => setRouteName(navigationRef.getCurrentRoute()?.name || null);
+  const syncRoute = () => {
+    setRouteName(navigationRef.getCurrentRoute()?.name || null);
+    syncNavigationBack();
+  };
 
   return (
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.gray[50] }}>

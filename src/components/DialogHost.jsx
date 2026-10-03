@@ -5,6 +5,7 @@ import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import { on, showDialog } from '../utils/events';
+import useBackClose from '../hooks/useBackClose';
 
 // react-native-web's Alert.alert does nothing, which silently broke every confirm
 // dialog in the PWA. Route it to the themed dialog below instead.
@@ -53,6 +54,8 @@ export default function DialogHost() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [confirmKey, close]);
+
+  useBackClose(!!current, () => { current?.onDismiss?.(); close(current?.buttons?.find((b) => b.style === 'cancel')); });
 
   if (!current) return null;
   const buttons = current.buttons && current.buttons.length ? current.buttons : [{ text: 'OK' }];

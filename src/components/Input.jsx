@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
+import useBackClose from '../hooks/useBackClose';
 
 export const Input = memo(function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, style, onFocus }) {
   const colors = useColors();
@@ -71,6 +72,8 @@ export function DateInput({ label, value, onChangeText, placeholder }) {
   const initialDate = parseLocalDate(value);
   const [viewDate, setViewDate] = useState(initialDate);
   const [selectedDate, setSelectedDate] = useState(value ? initialDate : null);
+
+  useBackClose(show, () => setShow(false));
 
   const onOpen = () => {
     const base = parseLocalDate(value);
