@@ -18,7 +18,7 @@ import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoTreeList from '../components/todos/TodoTreeList';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailSheet';
-import InfoRail from '../components/todos/InfoRail';
+import InlineQuickAdd from '../components/todos/InlineQuickAdd';
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
@@ -120,7 +120,8 @@ export default function TodosScreen() {
   const [scope, setScope] = useState(() => (route.params?.business_id ? 'business' : 'mine'));
   const now = useNowTick(60000);
   const scrollRef = useRef(null);
-  const simpleView = user?.preferences?.viewMode !== 'full';
+  const inlineAddRef = useRef(null);
+  const simpleView = user?.preferences?.viewMode === 'simple';
   const listAreaRef = useRef(null);
   const meId = user?.id;
   const today = todayYmd();
@@ -659,7 +660,7 @@ export default function TodosScreen() {
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
 
   useShortcuts({
-    'todo.quickAdd': () => setAddOpen(true),
+    'todo.quickAdd': () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
     'todo.new': () => setAddOpen(true),
     'todo.search': () => { setSearching(true); },
     'todo.sidebar': () => setSidebarHidden((v) => !v),
@@ -1039,27 +1040,21 @@ export default function TodosScreen() {
 
       {view !== 'done' && !desktop && (
         <Text style={styles.tip}>
-          Swipe right to complete, left to delete.
+          Swipe right to complete, left to delete. Type @name to share, +label to tag, for 2h to estimate.
         </Text>
       )}
     </ScrollView>
   );
 
-  // A wide screen has room beside the list: show how the day is going and what is next.
-  const showRail = desktop && windowWidth >= 1280 && !(wide && openTodoId) && !business && effectiveLayout === 'list'
-    && !search && ['today', 'upcoming', 'inbox', 'shared', 'assigned'].includes(view);
-
   const main = (
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
+      {desktop && view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
+        <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} />
+      )}
       {mobileNav}
-      {showRail ? (
-        <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>{body}</View>
-          <InfoRail todos={mine} today={today} meId={meId} onOpen={openTodo} onAssigned={() => setView('assigned')} />
-        </View>
-      ) : body}
+      {body}
       {selectMode ? (
         <BulkBar
           count={selected.size}

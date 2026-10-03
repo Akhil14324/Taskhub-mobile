@@ -108,7 +108,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
     if (todo.done_by && todo.done_by !== user?.id) return { id: todo.done_by, name: todo.done_by_name || 'them' };
     return null;
   })();
-  const simple = user?.preferences?.viewMode !== 'full';
+  const simple = user?.preferences?.viewMode === 'simple';
   const suggestions = personQuery !== null
     ? filterPeople(people, personQuery, { excludeIds: members.map((m) => m.id), limit: 6 })
     : [];
@@ -224,7 +224,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
         <GovernancePanel todo={todo} />
 
         <View style={styles.tabs}>
-          {TABS.filter((t) => !simple || t.key !== 'activity').map((t) => (
+          {TABS.map((t) => (
             <AnimatedPressable key={t.key} style={[styles.tab, tab === t.key && styles.tabActive]} onPress={() => setTab(t.key)}>
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>
                 {t.label}{t.key === 'comments' && todo.comment_count > 0 ? ` · ${todo.comment_count}` : ''}
