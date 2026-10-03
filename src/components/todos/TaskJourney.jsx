@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTodos } from '../../context/TodoContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import { useNowTick } from './TimeHealth';
+import StatusFlow from './StatusFlow';
 import { STATUS, BLOCKER_KINDS, describeEntry, formatSeconds, healthColor, healthTint } from '../../utils/timeline';
 
 const ms = (v) => new Date(v).getTime();
@@ -137,6 +138,9 @@ export default function TaskJourney({ todo }) {
           </Text>
         </View>
       </View>
+
+      <Text style={styles.heading}>Flow</Text>
+      <StatusFlow todo={todo} entries={data.entries} now={now} />
 
       <View style={styles.stats}>
         {[
