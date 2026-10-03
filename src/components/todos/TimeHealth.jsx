@@ -79,29 +79,18 @@ export function MetricsGrid({ todo, now, reschedules = 0 }) {
   const colors = useColors();
   const { theme } = useTheme();
   const m = useMemo(() => todoMetrics(todo, now), [todo, now]);
-  const ratio = m.estimate_s ? m.active_s / m.estimate_s : null;
-  const ratioLevel = ratio === null ? 'none' : ratio > 1 ? 'red' : ratio >= 0.8 ? 'orange' : 'green';
+  // Plain words only: how long it has taken, and anything that held it up.
   const cells = [
-    { label: 'Lead time', value: formatSeconds(m.lead_s), hint: 'created → ' + (todo.is_done ? 'done' : 'now') },
-    { label: 'Response', value: formatSeconds(m.response_s), hint: 'assigned → started' },
-    { label: 'Cycle', value: formatSeconds(m.cycle_s), hint: 'started → ' + (todo.is_done ? 'done' : 'now') },
-    { label: 'Stuck', value: formatSeconds(m.blocked_s), hint: 'time stuck', level: m.blocked_s > 0 ? (m.blocked_s >= 86400 ? 'red' : 'orange') : 'none' },
-    { label: 'Active', value: formatSeconds(m.active_s), hint: 'cycle − blocked' },
-    {
-      label: 'Estimate',
-      value: m.estimate_s ? `${formatSeconds(m.active_s)} / ${formatSeconds(m.estimate_s)}` : '–',
-      hint: ratio === null ? 'none set' : `${formatRatio(ratio)} used`,
-      level: ratioLevel,
-    },
+    { label: todo.is_done ? 'Took' : 'Open for', value: formatSeconds(m.lead_s) },
   ];
-  if (reschedules > 0) cells.push({ label: 'Moved', value: `${reschedules}×`, hint: 'due date changed', level: reschedules >= 3 ? 'red' : 'orange' });
+  if (m.blocked_s > 0) cells.push({ label: 'Time stuck', value: formatSeconds(m.blocked_s), level: m.blocked_s >= 86400 ? 'red' : 'orange' });
+  if (reschedules > 0) cells.push({ label: 'Date changed', value: `${reschedules}×`, level: reschedules >= 3 ? 'red' : 'orange' });
   return (
     <View style={styles.grid}>
       {cells.map((c) => (
         <View key={c.label} style={[styles.cell, { backgroundColor: colors.gray[100] }]}>
           <Text style={[styles.cellLabel, { color: colors.gray[500] }]}>{c.label}</Text>
           <Text style={[styles.cellValue, { color: c.level && c.level !== 'none' ? healthColor(c.level, theme) : colors.gray[900] }]} numberOfLines={1}>{c.value}</Text>
-          <Text style={[styles.cellHint, { color: colors.gray[400] }]} numberOfLines={1}>{c.hint}</Text>
         </View>
       ))}
     </View>

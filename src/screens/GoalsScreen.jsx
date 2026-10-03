@@ -98,7 +98,7 @@ function GoalCard({ goal, onKeyResult, onStatus, onDelete }) {
   );
 }
 
-export default function GoalsScreen() {
+export default function GoalsScreen({ embedded = false }) {
   const colors = useColors();
   const pageStyles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -153,11 +153,13 @@ export default function GoalsScreen() {
   }, [data, filter]);
 
   return (
-    <View style={[pageStyles.container, { paddingTop: insets.top }]}>
-      <View style={pageStyles.header}>
-        <BackTitle title="Goals" style={pageStyles.title} />
-        <Text style={pageStyles.subtitle}>What the company, your business and you are aiming for</Text>
-      </View>
+    <View style={[pageStyles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && (
+        <View style={pageStyles.header}>
+          <BackTitle title="Goals" style={pageStyles.title} />
+          <Text style={pageStyles.subtitle}>What the company, your business and you are aiming for</Text>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}

@@ -62,10 +62,12 @@ export function playSound(name) {
   } catch (e) { /* no audio available */ }
 }
 
+/** Only the main moments vibrate (a finished to-do, a finished day, a badge); button taps ('light'/'medium') stay silent. */
 export function haptic(kind = 'light') {
+  if (kind !== 'success' && kind !== 'heavy') return;
   if (!settings.haptics || Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.vibrate) return;
   try {
-    navigator.vibrate(kind === 'heavy' ? 24 : kind === 'medium' ? 16 : kind === 'success' ? [12, 40, 18] : 8);
+    navigator.vibrate(kind === 'heavy' ? 24 : [12, 40, 18]);
   } catch (e) { /* vibration blocked */ }
 }
 

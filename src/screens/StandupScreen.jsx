@@ -90,7 +90,7 @@ function PostCard({ post, onNudge }) {
   );
 }
 
-export default function StandupScreen() {
+export default function StandupScreen({ embedded = false }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -173,11 +173,13 @@ export default function StandupScreen() {
   const empty = !lists.done.length && !lists.doing.length && !lists.blockers.length && !note.trim();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <BackTitle title="Stand-up" style={styles.title} />
-        <Text style={styles.subtitle}>What got done, what is next, what is in the way. One tap.</Text>
-      </View>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && (
+        <View style={styles.header}>
+          <BackTitle title="Stand-up" style={styles.title} />
+          <Text style={styles.subtitle}>What got done, what is next, what is in the way. One tap.</Text>
+        </View>
+      )}
       <View style={styles.tabs}>
         <Chip icon="person" label="My stand-up" active={tab === 'mine'} onPress={() => setTab('mine')} />
         <Chip icon="people" label={`Team${feed?.posts?.length ? ` · ${feed.posts.length}` : ''}`} active={tab === 'team'} onPress={() => setTab('team')} />

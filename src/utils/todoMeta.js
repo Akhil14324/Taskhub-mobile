@@ -22,8 +22,6 @@ export function formatDuration(minutes) {
 // Reminders (minutes before the due time; the at-time reminder always fires)
 // ---------------------------------------------------------------------------
 export const REMINDER_CHOICES = [
-  { minutes: 10, label: '10 min before' },
-  { minutes: 30, label: '30 min before' },
   { minutes: 60, label: '1 hour before' },
   { minutes: 1440, label: '1 day before' },
 ];

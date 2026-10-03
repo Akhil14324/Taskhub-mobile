@@ -5,7 +5,7 @@ import { useColors, useTheme } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import { Avatar, Chip, PRIORITY } from '../kit';
-import { STATUS, healthColor, healthTint, formatSeconds } from '../../utils/timeline';
+import { STATUS, healthColor, formatSeconds } from '../../utils/timeline';
 import { formatDue, MONTHS_SHORT } from '../../utils/dates';
 
 const DAY = 24 * 3600 * 1000;
@@ -14,15 +14,14 @@ const GROUP_ROW = 32;
 const HEAD_MONTH = 22;
 const HEAD_DAY = 30;
 const HEAD = HEAD_MONTH + HEAD_DAY;
-const LABEL_W = 230;
+const LABEL_W = 220;
+const LABEL_W_NARROW = 108; // phones: names get a slim column so the bars keep the room
 const BAR_H = 22;
 const BAR_TOP = 13;
 const TAIL_PX = 190; // room after the last bar for its "finished in" label
 const ZOOMS = [
-  { key: 'fit', label: 'Fit', px: 0 },
-  { key: 'day', label: 'Days', px: 48 },
-  { key: 'week', label: 'Weeks', px: 20 },
-  { key: 'month', label: 'Months', px: 8 },
+  { key: 'day', label: 'Days', px: 44 },
+  { key: 'week', label: 'Weeks', px: 18 },
 ];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const STATUS_KEYS = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold'];
@@ -56,7 +55,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const colors = useColors();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [zoom, setZoom] = useState('fit');
+  const [zoom, setZoom] = useState('fit'); // 'fit' until the person picks Days or Weeks
   const [focusId, setFocusId] = useState(selectedId || null);
   const [viewW, setViewW] = useState(0);
   const scrollRef = useRef(null);
@@ -86,10 +85,13 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
     return { from, spanDays };
   }, [data, todayMs]);
 
-  const avail = Math.max(320, viewW - LABEL_W);
-  const fitPx = Math.max(14, Math.min(72, Math.floor((avail - TAIL_PX) / span.spanDays)));
+  const narrow = viewW > 0 && viewW < 640;
+  const labelW = narrow ? LABEL_W_NARROW : LABEL_W;
+  const tail = narrow ? 120 : TAIL_PX;
+  const avail = Math.max(200, viewW - labelW);
+  const fitPx = Math.max(narrow ? 22 : 14, Math.min(72, Math.floor((avail - tail) / span.spanDays)));
   const px = zoom === 'fit' ? fitPx : ZOOMS.find((z) => z.key === zoom).px;
-  const days = span.spanDays + Math.ceil(TAIL_PX / px);
+  const days = span.spanDays + Math.ceil(tail / px);
   const fromMs = span.from;
   const toMs = fromMs + days * DAY;
   const width = days * px;
@@ -161,19 +163,6 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
     return { cells, months };
   }, [days, fromMs]);
 
-  // Numbers across everything on the chart.
-  const stats = useMemo(() => {
-    const items = data?.items || [];
-    const done = items.filter((i) => i.is_done);
-    const open = items.filter((i) => !i.is_done);
-    const overdue = open.filter((i) => i.due_at && ms(i.due_at) < nowMs);
-    const stuck = open.filter((i) => i.status === 'blocked');
-    const hold = open.filter((i) => i.status === 'on_hold');
-    const avg = done.length ? done.reduce((n, i) => n + secsBetween(ms(i.start), ms(i.end)), 0) / done.length : 0;
-    const handoffs = items.reduce((n, i) => n + (i.handoffs?.length || 0), 0);
-    return { total: items.length, done: done.length, open: open.length, overdue: overdue.length, stuck: stuck.length, hold: hold.length, avg, handoffs };
-  }, [data, nowMs]);
-
   const jumpToToday = () => {
     scrollRef.current?.scrollTo?.({ x: Math.max(0, x(todayMs) - 240), animated: true });
   };
@@ -185,39 +174,17 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const focus = focusId ? (data.items || []).find((i) => i.id === focusId) : null;
   const open = (id) => { setFocusId(id); onOpen?.(id); };
 
-  const tiles = [
-    { icon: 'play-circle-outline', label: 'Open', value: stats.open },
-    { icon: 'checkmark-circle-outline', label: 'Finished', value: stats.done },
-    { icon: 'hand-left-outline', label: 'Stuck / on hold', value: stats.stuck + stats.hold, warn: stats.stuck > 0 },
-    { icon: 'flame-outline', label: 'Past deadline', value: stats.overdue, bad: stats.overdue > 0 },
-    { icon: 'timer-outline', label: 'Avg. to finish', value: stats.avg ? formatSeconds(stats.avg) : '-' },
-  ];
   const usedStatuses = STATUS_KEYS.filter((s) => (data.items || []).some((i) => i.segments.some((g) => g.status === s)));
-  const anyHandoff = stats.handoffs > 0;
 
   return (
     <View style={styles.wrap} onLayout={(e) => setViewW(e.nativeEvent.layout.width)}>
-      <View style={styles.tiles}>
-        {tiles.map((t) => (
-          <View key={t.label} style={[styles.tile, t.bad && { borderColor: red }]}>
-            <View style={[styles.tileIcon, t.bad && { backgroundColor: healthTint('red', theme, 0.16) }, t.warn && { backgroundColor: healthTint('orange', theme, 0.18) }]}>
-              <Ionicons name={t.icon} size={15} color={t.bad ? red : t.warn ? amber : colors.brand[600]} />
-            </View>
-            <View>
-              <Text style={[styles.tileValue, t.bad && { color: red }]}>{t.value}</Text>
-              <Text style={styles.tileLabel}>{t.label}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
       <View style={styles.toolbar}>
         <Ionicons name="calendar-outline" size={14} color={colors.gray[500]} />
         <Text style={styles.range}>{formatDue(data.from)} to {formatDue(data.to)}</Text>
         <View style={{ flex: 1 }} />
         <Chip small icon="locate-outline" label="Today" onPress={jumpToToday} />
         {ZOOMS.map((z) => (
-          <Chip key={z.key} small label={z.label} active={zoom === z.key} onPress={() => setZoom(z.key)} />
+          <Chip key={z.key} small label={z.label} active={zoom === z.key} onPress={() => setZoom(zoom === z.key ? 'fit' : z.key)} />
         ))}
       </View>
 
@@ -232,13 +199,6 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
           <Ionicons name="flag" size={11} color={colors.gray[600]} />
           <Text style={styles.legendText}>Deadline</Text>
         </View>
-        {anyHandoff && (
-          <View style={styles.legendItem}>
-            <Ionicons name="swap-horizontal" size={12} color={colors.gray[600]} />
-            <Text style={styles.legendText}>Hand-over</Text>
-          </View>
-        )}
-        <Text style={styles.legendHint}>Click a row for the full breakdown</Text>
       </View>
 
       {empty ? (
@@ -250,9 +210,9 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
       ) : (
         <View style={styles.chart}>
           {/* Names */}
-          <View style={{ width: LABEL_W }}>
+          <View style={{ width: labelW }}>
             <View style={[styles.cornerHead, { height: HEAD }]}>
-              <Text style={styles.headText}>{grouped ? 'Person and task' : 'Task'}</Text>
+              <Text style={styles.headText}>{narrow ? 'Task' : grouped ? 'Person and task' : 'Task'}</Text>
             </View>
             {rows.map((r) => {
               if (r.type === 'group') {
@@ -263,7 +223,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                       ? <Avatar name={r.person.name} uri={r.person.profile_picture} size={22} />
                       : <Ionicons name="people-outline" size={18} color={colors.gray[500]} />}
                     <Text style={styles.groupName} numberOfLines={1}>{r.person ? r.person.name : 'Open to the business'}</Text>
-                    <Text style={styles.groupCount}>{openCount} open · {r.list.length - openCount} done</Text>
+                    {!narrow && <Text style={styles.groupCount}>{openCount} open</Text>}
                   </View>
                 );
               }
@@ -274,9 +234,9 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                 <AnimatedPressable
                   key={it.id}
                   onPress={() => open(it.id)}
-                  style={[styles.nameRow, { height: ROW, paddingLeft: spacing.md + r.depth * 16 }, focusId === it.id && styles.rowSelected]}
+                  style={[styles.nameRow, { height: ROW, paddingLeft: (narrow ? spacing.sm : spacing.md) + r.depth * (narrow ? 10 : 16) }, focusId === it.id && styles.rowSelected]}
                 >
-                  {r.depth > 0 && <View style={[styles.elbow, { left: spacing.md + (r.depth - 1) * 16 + 4 }]} />}
+                  {r.depth > 0 && <View style={[styles.elbow, { left: (narrow ? spacing.sm : spacing.md) + (r.depth - 1) * (narrow ? 10 : 16) + 4 }]} />}
                   {pr && it.priority < 4 && <View style={[styles.prioBar, { backgroundColor: pr.color }]} />}
                   <View style={styles.nameTop}>
                     <Ionicons
@@ -284,13 +244,13 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                       size={14}
                       color={it.is_done ? colors.brand[700] : statusColor(it.status)}
                     />
-                    <Text style={[styles.itemTitle, it.is_done && styles.itemDone]} numberOfLines={1}>{it.title}</Text>
+                    <Text style={[styles.itemTitle, it.is_done && styles.itemDone]} numberOfLines={narrow ? 2 : 1}>{it.title}</Text>
                   </View>
-                  <Text style={[styles.itemMeta, lateRow && { color: red }]} numberOfLines={1}>
+                  {!narrow && <Text style={[styles.itemMeta, lateRow && { color: red }]} numberOfLines={1}>
                     {it.is_done ? 'Done' : (STATUS[it.status]?.label || 'Open')}
                     {!grouped && it.assignee_id && people.get(it.assignee_id) ? ` · ${firstName(people.get(it.assignee_id))}` : ''}
                     {it.due_date ? ` · due ${formatDue(it.due_date)}` : ''}
-                  </Text>
+                  </Text>}
                 </AnimatedPressable>
               );
             })}
@@ -409,22 +369,6 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                         )}
                       </AnimatedPressable>
 
-                      {it.handoffs.map((h, i) => {
-                        const to = people.get(h.to);
-                        const from = people.get(h.from);
-                        return (
-                          <View
-                            key={i}
-                            ref={web ? setTitle(`Handed over${from ? ` from ${from.name}` : ''}${to ? ` to ${to.name}` : ''}\n${fmtStamp(ms(h.at))}`) : undefined}
-                            style={[styles.handoff, { left: x(ms(h.at)) - 10 }]}
-                          >
-                            {to
-                              ? <Avatar name={to.name} uri={to.profile_picture} size={16} />
-                              : <Ionicons name="swap-horizontal" size={11} color={colors.gray[700]} />}
-                          </View>
-                        );
-                      })}
-
                       {dueX !== null && (
                         <View pointerEvents="none" style={[styles.due, { left: dueX - 6 }]}>
                           <View style={[styles.dueStem, { backgroundColor: late ? red : colors.gray[400] }]} />
@@ -433,9 +377,9 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                       )}
 
                       <View pointerEvents="none" style={[styles.caption, { left: captionLeft }]}>
-                        <Text style={styles.captionText} numberOfLines={1}>
+                        <Text style={[styles.captionText, { width: tail }]} numberOfLines={1}>
                           <Text style={styles.captionStrong}>{formatSeconds(total)}</Text>
-                          {owner ? `  ${firstName(owner)}` : ''}
+                          {owner && !narrow ? `  ${firstName(owner)}` : ''}
                           {late ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(lateBy)} late`}</Text> : null}
                           {afterDue ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(afterDue)} after deadline`}</Text> : null}
                         </Text>
@@ -520,29 +464,11 @@ function FocusCard({ it, people, statusColor, colors, theme, nowMs, onClose, onO
           color={late ? red : undefined}
           colors={colors}
         />
-        <Fact label="Hand-overs" value={String(it.handoffs.length)} colors={colors} />
-      </View>
-
-      <Text style={styles.focusHeading}>Time in each status</Text>
-      <View style={styles.split}>
-        {Object.keys(byStatus).map((k) => (
-          <View key={k} style={{ flex: Math.max(byStatus[k], total * 0.02), backgroundColor: statusColor(k), height: 12 }} />
-        ))}
-      </View>
-      <View style={styles.legendRow}>
-        {Object.keys(byStatus).map((k) => (
-          <View key={k} style={styles.legendItem}>
-            <View style={[styles.swatch, { backgroundColor: statusColor(k) }]} />
-            <Text style={styles.focusLegend}>
-              {STATUS[k]?.label || k} {formatSeconds(byStatus[k])} ({Math.round((byStatus[k] / total) * 100)}%)
-            </Text>
-          </View>
-        ))}
       </View>
 
       {personRows.length > 0 && (
         <>
-          <Text style={styles.focusHeading}>Who held it</Text>
+          <Text style={styles.focusHeading}>Who worked on it</Text>
           {personRows.map(([id, secs]) => {
             const p = people.get(id);
             return (
@@ -559,40 +485,6 @@ function FocusCard({ it, people, statusColor, colors, theme, nowMs, onClose, onO
         </>
       )}
 
-      <Text style={styles.focusHeading}>Every stretch</Text>
-      {stretches.map((s, i) => (
-        <View key={i} style={styles.stretch}>
-          <View style={[styles.stretchDot, { backgroundColor: statusColor(s.status) }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.stretchTitle}>
-              {STATUS[s.status]?.label || s.status}{s.person ? ` with ${s.person.name}` : ''}
-            </Text>
-            <Text style={styles.stretchTime}>
-              {fmtStamp(s.fromMs)} to {s.to ? fmtStamp(s.toMs) : (it.is_done ? fmtStamp(endMs) : 'now')}
-            </Text>
-          </View>
-          <Text style={styles.stretchSecs}>{formatSeconds(s.secs)}</Text>
-        </View>
-      ))}
-
-      {it.handoffs.length > 0 && (
-        <>
-          <Text style={styles.focusHeading}>Hand-overs</Text>
-          {it.handoffs.map((h, i) => {
-            const from = people.get(h.from);
-            const to = people.get(h.to);
-            return (
-              <View key={i} style={styles.stretch}>
-                <Ionicons name="swap-horizontal" size={16} color={colors.gray[600]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.stretchTitle}>{from ? from.name : 'Nobody'} to {to ? to.name : 'nobody'}</Text>
-                  <Text style={styles.stretchTime}>{fmtStamp(ms(h.at))}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </>
-      )}
     </View>
   );
 }

@@ -132,17 +132,7 @@ export default function PersonMonitorScreen() {
             </View>
             <HealthBar health={stats.health} height={10} />
             <View style={styles.avgRow}>
-              <Avg label="Avg cycle" value={formatSeconds(stats.avg_cycle_s)} />
-              <Avg label="Avg response" value={formatSeconds(stats.avg_response_s)} />
-              <Avg label="Avg blocked" value={formatSeconds(stats.avg_blocked_s)} />
-            </View>
-            <View style={styles.avgRow}>
               <Avg label="On time" value={stats.on_time_rate === null ? '–' : `${stats.on_time_rate}%`} level={stats.on_time_rate === null ? null : stats.on_time_rate >= 80 ? 'green' : stats.on_time_rate >= 50 ? 'orange' : 'red'} />
-              <Avg
-                label="Estimate used"
-                value={formatRatio(stats.estimate_ratio)}
-                level={stats.estimate_ratio === null ? null : stats.estimate_ratio <= 1 ? 'green' : stats.estimate_ratio <= 1.5 ? 'orange' : 'red'}
-              />
               <Avg label="Due dates moved" value={stats.reschedules} level={stats.reschedules >= 5 ? 'red' : stats.reschedules >= 2 ? 'orange' : null} />
             </View>
             <View style={styles.bars}>
@@ -219,9 +209,7 @@ function TodoRow({ todo, personId, now, onPress }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
         {!!pill && <HealthPill level={pill.level} label={pill.label} icon={pill.icon} compact />}
         <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
-        {!todo.is_done && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{formatSecondsShort(m.cycle_s)} so far</Text>}
-        {todo.is_done && <Text style={{ fontSize: 11, color: colors.gray[500] }}>took {formatSecondsShort(m.cycle_s)}</Text>}
-        {!mine && !!todo.assignee_name && <Text style={{ fontSize: 11, color: colors.gray[500] }}>→ {todo.assignee_name.split(' ')[0]}</Text>}
+                {!mine && !!todo.assignee_name && <Text style={{ fontSize: 11, color: colors.gray[500] }}>→ {todo.assignee_name.split(' ')[0]}</Text>}
         {mine && todo.members?.length > 1 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>shared</Text>}
         {todo.comment_count > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{todo.comment_count} comments</Text>}
         {!!todo.business_name && <Text style={{ fontSize: 11, color: colors.gray[500], fontWeight: '600' }}>{todo.business_name}</Text>}

@@ -34,9 +34,9 @@ export function openNotificationTarget(data = {}) {
   // Old notifications may still carry a taskId; the migration rewrote them to todoId, but be safe.
   const todoId = Number(data.todoId) || Number(data.taskId);
   if (conversationId) return navigateWhenReady('ChatThread', { conversationId });
-  if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('MyDay');
-  if (data.type === 'goal_new') return navigateWhenReady('Goals');
-  if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Standup');
+  if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('Progress', { tab: 'today' });
+  if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
+  if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
   if (data.approvalId || data.type === 'approval_request') return navigateWhenReady('Approvals');
   if (todoId) return navigateWhenReady('Main', { screen: 'Todos', params: { highlightId: todoId } });

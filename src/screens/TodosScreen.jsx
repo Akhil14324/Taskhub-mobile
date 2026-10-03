@@ -542,9 +542,11 @@ export default function TodosScreen() {
                 : open).filter((t) => !t.parent_id);
       const recent = addDays(today, -14);
       const doneAll = mine.filter((t) => t.is_done && !t.parent_id && (!t.done_at || toYmd(new Date(t.done_at)) >= recent));
-      const doneRecent = view === 'today' ? doneAll.filter((t) => t.due_date === today)
+      // The Done column always keeps what was finished lately (struck out), so a card dropped there stays visible.
+      const doneRecent = view === 'today' ? doneAll.filter((t) => !t.due_date || t.due_date <= today || (t.done_at && toYmd(new Date(t.done_at)) === today))
         : labelName ? doneAll.filter((t) => (t.labels || []).includes(labelName))
-          : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1) : [];
+          : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1)
+            : doneAll;
       return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
         key: st,
         title: STATUS[st].label,
@@ -670,6 +672,7 @@ export default function TodosScreen() {
 
   // ---- overflow menu -------------------------------------------------------
   const menuOptions = [
+    { key: 'filters', label: 'Filters and shared with me', icon: 'funnel-outline' },
     { key: 'templates', label: 'Start from a template', icon: 'copy-outline' },
     { key: 'select', label: 'Select to-dos', icon: 'checkbox-outline' },
     { key: 'productivity', label: 'Productivity and daily goal', icon: 'stats-chart-outline' },
@@ -679,7 +682,8 @@ export default function TodosScreen() {
     ...(typeof activeFilter?.id === 'number' ? [{ key: 'editFilter', label: 'Edit filter', icon: 'create-outline' }] : []),
   ];
   const onMenu = (key) => {
-    if (key === 'templates') openTemplates({ business_id: bizId || undefined });
+    if (key === 'filters') setFiltersOpen(true);
+    else if (key === 'templates') openTemplates({ business_id: bizId || undefined });
     else if (key === 'select') setSelectMode(true);
     else if (key === 'productivity') setProductivityOpen(true);
     else if (key === 'share') (shareVisibleIds.length ? setShareOpen(true) : showToast({ message: 'Nothing to share here yet' }));
@@ -825,8 +829,9 @@ export default function TodosScreen() {
             <ViewTab label="Today" icon="today-outline" count={counts.today} active={view === 'today'} onPress={() => setView('today')} />
             <ViewTab label="Upcoming" icon="calendar-outline" active={view === 'upcoming'} onPress={() => setView('upcoming')} />
             <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
-            <ViewTab label="Shared" icon="people-outline" count={counts.shared} active={view === 'shared'} onPress={() => setView('shared')} />
-            <ViewTab label={inFilterView ? viewTitle : 'Filters'} icon="funnel-outline" active={inFilterView} onPress={() => setFiltersOpen(true)} />
+            {(view === 'shared' || inFilterView) && (
+              <ViewTab label={inFilterView ? viewTitle : 'Shared'} icon={inFilterView ? 'funnel-outline' : 'people-outline'} active onPress={() => {}} />
+            )}
             <ViewTab label="Completed" icon="checkmark-done-outline" active={view === 'done'} onPress={() => setView('done')} />
             {lists.map((l) => (
               <ViewTab

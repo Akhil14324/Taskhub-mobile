@@ -277,7 +277,7 @@ export default function HomeScreen() {
           </AnimatedPressable>
         )}
 
-        <AnimatedPressable onPress={() => navigation.navigate('MyDay')}>
+        <AnimatedPressable onPress={() => navigation.navigate('Progress')}>
           <View style={styles.dayCard}>
             <View style={styles.dayIcon}><Ionicons name="sunny" size={22} color="#fff" /></View>
             <View style={{ flex: 1 }}>

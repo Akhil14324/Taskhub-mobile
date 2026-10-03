@@ -34,16 +34,12 @@ import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
 import ForgotPasswordScreen from '../screens/ForgotPassword';
 import HomeScreen from '../screens/HomeScreen';
-import MyDayScreen from '../screens/MyDayScreen';
+import ProgressScreen from '../screens/ProgressScreen';
 import RecapScreen from '../screens/RecapScreen';
 import TodosScreen from '../screens/TodosScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
-import InsightsScreen from '../screens/InsightsScreen';
-import GoalsScreen from '../screens/GoalsScreen';
-import StandupScreen from '../screens/StandupScreen';
-import WinsScreen from '../screens/WinsScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import NotificationsScreen from '../screens/Notifications';
@@ -90,14 +86,10 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
-const FramedInsights = framed(InsightsScreen, WIDE);
-const FramedGoals = framed(GoalsScreen, WIDE);
-const FramedStandup = framed(StandupScreen, WIDE);
-const FramedWins = framed(WinsScreen, WIDE);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
 const FramedNotifications = framed(NotificationsScreen, 1100);
 const FramedProfile = framed(ProfileScreen, 1000);
-const FramedMyDay = framed(MyDayScreen, WIDE);
+const FramedProgress = framed(ProgressScreen, WIDE);
 const FramedRecap = framed(RecapScreen, 920);
 
 const Stack = createNativeStackNavigator();
@@ -182,11 +174,7 @@ function MainTabs() {
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
   const moreItems = [
-    { label: 'My Day', icon: 'sunny-outline', route: 'MyDay' },
-    { label: 'Stand-up', icon: 'megaphone-outline', route: 'Standup' },
-    { label: 'Wins and badges', icon: 'trophy-outline', route: 'Wins' },
-    { label: 'Goals', icon: 'flag-outline', route: 'Goals' },
-    { label: 'Insights', icon: 'pulse-outline', route: 'Insights' },
+    { label: 'Progress', icon: 'sunny-outline', route: 'Progress' },
     { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
@@ -422,13 +410,9 @@ export default function AppNavigator() {
             <Stack.Screen name="Organization" component={FramedOrganization} />
             <Stack.Screen name="TeamMonitor" component={FramedTeamMonitor} />
             <Stack.Screen name="PersonMonitor" component={FramedPersonMonitor} />
-            <Stack.Screen name="Insights" component={FramedInsights} />
-            <Stack.Screen name="Goals" component={FramedGoals} />
-            <Stack.Screen name="Standup" component={FramedStandup} />
-            <Stack.Screen name="Wins" component={FramedWins} />
             <Stack.Screen name="Notifications" component={FramedNotifications} />
             <Stack.Screen name="Profile" component={FramedProfile} />
-            <Stack.Screen name="MyDay" component={FramedMyDay} />
+            <Stack.Screen name="Progress" component={FramedProgress} />
             <Stack.Screen name="Recap" component={FramedRecap} />
           </>
         )}

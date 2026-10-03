@@ -11,16 +11,14 @@ import Animated, {
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useEngage } from '../../context/EngageContext';
 import { spacing, fontSize } from '../../theme/theme';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
-import { HealthPill } from './TimeHealth';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
-import { formatDuration, deadlineState } from '../../utils/todoMeta';
-import { todoHealth, todoMetrics, formatSecondsShort, HEALTH, STATUS } from '../../utils/timeline';
+import { deadlineState } from '../../utils/todoMeta';
+import { STATUS } from '../../utils/timeline';
 
 const SWIPE_TRIGGER = 90;
 const INDENT = 22;
@@ -68,10 +66,8 @@ function TodoItem({
     })
     .onEnd((e) => {
       if (e.translationX > SWIPE_TRIGGER && canTick) {
-        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(onToggle)(todo);
       } else if (e.translationX < -SWIPE_TRIGGER) {
-        runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
         runOnJS(onDelete)(todo);
       }
       translateX.value = withTiming(0, { duration: 160 });
@@ -93,25 +89,6 @@ function TodoItem({
   const deadlineColor = todo.is_done ? colors.gray[400] : near ? near.color : colors.gray[500];
   const hasSubtasks = progress && progress.total > 0;
   const tag = stateTag(todo);
-
-  // Time status: a coloured pill for anything that is blocked, running late or about to be.
-  const health = useMemo(() => todoHealth(todo, now || Date.now()), [todo, now]);
-  const timePill = useMemo(() => {
-    const at = now || Date.now();
-    if (todo.is_done) {
-      return health.level === 'red' || health.level === 'orange' ? { level: health.level, label: health.reasons[0] } : null;
-    }
-    if (todo.status === 'blocked') {
-      const blocked = todoMetrics(todo, at).status_s.blocked;
-      return { level: health.level === 'red' ? 'red' : 'orange', label: `Stuck ${formatSecondsShort(blocked)}`, icon: 'hand-left' };
-    }
-    if (todo.status === 'on_hold' || todo.status === 'in_review') return null;
-    if (health.level === 'red' || health.level === 'orange') return { level: health.level, label: health.reasons[0] || HEALTH[health.level].label };
-    if (todo.status === 'in_progress') {
-      return { level: health.level === 'green' ? 'green' : 'none', label: `In progress ${formatSecondsShort(todoMetrics(todo, at).status_s.in_progress)}`, icon: 'play' };
-    }
-    return null;
-  }, [todo, health, now]);
 
   const assignee = todo.assignee_id && todo.assignee_id !== currentUserId && todo.assignee_name ? todo : null;
   const doneLine = todo.is_done && todo.done_at
@@ -168,26 +145,12 @@ function TodoItem({
             {!!doneLine && <Text style={styles.doneLine}>{doneLine}</Text>}
             <View style={styles.metaRow}>
               <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
-              {!simple && !todo.due_date && !todo.deadline_date && !todo.is_done && (
-                <View style={styles.metaItem}>
-                  <Ionicons name="hourglass-outline" size={12} color={colors.gray[500]} />
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    No deadline · open {formatSecondsShort(Math.max(0, ((now || Date.now()) - new Date(todo.created_at).getTime()) / 1000))}
-                  </Text>
-                </View>
-              )}
               {!!todo.deadline_date && (
                 <View style={styles.metaItem}>
                   <Ionicons name="alert-circle-outline" size={12} color={deadlineColor} />
                   <Text style={[styles.metaText, { color: deadlineColor, fontWeight: near ? '800' : '600' }]} numberOfLines={1}>
                     {near ? near.label : `Deadline ${formatDue(todo.deadline_date)}`}
                   </Text>
-                </View>
-              )}
-              {!simple && !!todo.duration_minutes && (
-                <View style={styles.metaItem}>
-                  <Ionicons name="time-outline" size={12} color={colors.gray[500]} />
-                  <Text style={styles.metaText}>{formatDuration(todo.duration_minutes)}</Text>
                 </View>
               )}
               {hasSubtasks && (
@@ -208,7 +171,6 @@ function TodoItem({
                   <Text style={styles.tagText}>{tag.label}</Text>
                 </View>
               )}
-              {!!timePill && <HealthPill level={timePill.level} label={timePill.label} icon={timePill.icon} compact />}
               {!todo.is_done && waitingIds.has(todo.id) && (
                 <View style={styles.waiting}>
                   <Ionicons name="hourglass" size={10} color="#fff" />
@@ -248,11 +210,6 @@ function TodoItem({
               )}
               {!todo.business_id && others.length > 0 && <AvatarStack people={others} size={18} />}
             </View>
-            {hasSubtasks && !todo.is_done && (
-              <View style={styles.progressTrack} accessibilityLabel={`${progress.done} of ${progress.total} sub-tasks done`}>
-                <View style={[styles.progressFill, { width: `${Math.round((progress.done / progress.total) * 100)}%` }]} />
-              </View>
-            )}
             {!simple && labels.length > 0 && (
               <View style={styles.labelRow}>
                 {labels.slice(0, 4).map((l) => (

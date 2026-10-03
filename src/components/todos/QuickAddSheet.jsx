@@ -343,12 +343,6 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
                 <Chip icon="eye-outline" label="Needs review when done" active={review === true} onPress={() => setReview(review === true ? null : true)} />
               )}
             </View>
-            <View style={styles.menuRow}>
-              <Chip label="No estimate" active={!duration} onPress={() => setOverride((o) => ({ ...o, duration_minutes: false }))} />
-              {DURATION_PRESETS.map((m) => (
-                <Chip key={m} icon="time-outline" label={formatDuration(m)} active={duration === m} onPress={() => setOverride((o) => ({ ...o, duration_minutes: m }))} />
-              ))}
-            </View>
           </View>
         )}
         {menu === 'label' && (

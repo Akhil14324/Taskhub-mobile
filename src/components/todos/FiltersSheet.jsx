@@ -25,7 +25,8 @@ export default function FiltersSheet({ visible, onClose, onPick, onEdit }) {
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight={640}>
       <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>Filters</Text>
+        <Row icon="people-outline" title="Shared with me" count={todos.filter((t) => !t.is_done && !t.business_id && (t.members || []).length > 1).length} onPress={() => onPick('shared')} />
+        <Text style={[styles.heading, { marginTop: spacing.lg }]}>Filters</Text>
         {BUILTIN_FILTERS.map((f) => (
           <Row key={f.id} icon={f.icon} title={f.name} count={countOf(f.config)} onPress={() => onPick(`filter:${f.id}`)} />
         ))}

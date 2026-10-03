@@ -180,7 +180,7 @@ function BadgesTab({ data }) {
   );
 }
 
-export default function WinsScreen() {
+export default function WinsScreen({ embedded = false }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -214,11 +214,13 @@ export default function WinsScreen() {
   useFocusEffect(useCallback(() => { loadWall(week); loadBadges(); }, [loadWall, loadBadges, week]));
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <BackTitle title="Wins" style={styles.title} />
-        <Text style={styles.subtitle}>What the company finished, and the milestones you have earned</Text>
-      </View>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && (
+        <View style={styles.header}>
+          <BackTitle title="Wins" style={styles.title} />
+          <Text style={styles.subtitle}>What the company finished, and the milestones you have earned</Text>
+        </View>
+      )}
       <View style={styles.tabs}>
         <Chip icon="trophy" label="Done this week" active={tab === 'week'} onPress={() => setTab('week')} />
         <Chip icon="ribbon" label="My badges" active={tab === 'badges'} onPress={() => setTab('badges')} />

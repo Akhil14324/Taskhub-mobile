@@ -15,7 +15,6 @@ import { SaveTemplateSheet } from './TemplatesSheet';
 import SubtaskTree from './SubtaskTree';
 import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
-import TaskJourney from './TaskJourney';
 import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
 import PromptSheet from './PromptSheet';
@@ -30,7 +29,6 @@ const TABS = [
   { key: 'details', label: 'Details' },
   { key: 'comments', label: 'Comments' },
   { key: 'activity', label: 'Activity' },
-  { key: 'journey', label: 'History' },
 ];
 
 /**
@@ -342,7 +340,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
               <AnimatedPressable style={styles.moreToggle} onPress={() => setMore((v) => !v)}>
                 <Ionicons name={more ? 'chevron-down' : 'chevron-forward'} size={15} color={colors.gray[500]} />
                 <Text style={styles.moreText}>Date & reminders</Text>
-                <Text style={styles.moreHint}>deadline, time estimate, repeat, reminders{business && !todo.parent_id ? ', review' : ''}</Text>
+                <Text style={styles.moreHint}>deadline, repeat, reminder{business && !todo.parent_id ? ', review' : ''}</Text>
               </AnimatedPressable>
             )}
             {editable && !simple && more && (
@@ -361,31 +359,6 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
                     </AnimatedPressable>
                   )}
                 </AnimatedPressable>
-
-                <Text style={styles.label}>Time estimate</Text>
-                <View style={styles.chipRow}>
-                  <Chip label="None" active={!todo.duration_minutes} onPress={() => save({ duration_minutes: null })} />
-                  {DURATION_PRESETS.map((m) => (
-                    <Chip key={m} icon="time-outline" label={formatDuration(m)} active={todo.duration_minutes === m} onPress={() => save({ duration_minutes: m })} />
-                  ))}
-                  {!!todo.duration_minutes && !DURATION_PRESETS.includes(todo.duration_minutes) && (
-                    <Chip icon="time-outline" label={formatDuration(todo.duration_minutes)} active />
-                  )}
-                  {customDuration ? (
-                    <TextInput
-                      autoFocus
-                      value={durationText}
-                      onChangeText={setDurationText}
-                      onSubmitEditing={applyCustomDuration}
-                      onBlur={applyCustomDuration}
-                      placeholder="e.g. 45m or 3h"
-                      placeholderTextColor={colors.gray[400]}
-                      style={styles.inlineInput}
-                    />
-                  ) : (
-                    <Chip icon="create-outline" label="Custom" onPress={() => setCustomDuration(true)} />
-                  )}
-                </View>
 
                 <Text style={styles.label}>Repeat</Text>
                 <View style={styles.chipRow}>
@@ -476,7 +449,6 @@ No deadline. Open since ${timeAgo(todo.created_at)}, last update ${timeAgo(todo.
 
         {tab === 'comments' && <TodoComments todo={todo} />}
         {tab === 'activity' && <TodoTimeline todo={todo} />}
-        {tab === 'journey' && <TaskJourney todo={todo} />}
 
         <View style={styles.actions}>
           {variant !== 'panel' && <ActionButton icon="paper-plane-outline" label="Share" onPress={() => setShareOpen(true)} />}

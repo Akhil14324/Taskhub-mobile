@@ -46,7 +46,7 @@ function rank(t, today, waiting) {
  * your streak and the thanks you have received. Everything is computed from the to-do store plus one
  * small `/engage/myday` call, so it opens instantly.
  */
-export default function MyDayScreen() {
+export default function MyDayScreen({ embedded = false }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -302,12 +302,12 @@ export default function MyDayScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: desktop ? spacing.lg : insets.top }]}>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : desktop ? spacing.lg : insets.top }]}>
       <ScrollView
         contentContainerStyle={[styles.content, desktop && styles.contentDesktop, { paddingBottom: 110 + insets.bottom }]}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {!desktop && <BackTitle title="My Day" style={styles.screenTitle} />}
+        {!desktop && !embedded && <BackTitle title="My Day" style={styles.screenTitle} />}
         {hero}
         <View style={[styles.cols, desktop && styles.colsDesktop]}>
           <View style={desktop ? { flex: 3, minWidth: 0 } : undefined}>{left}</View>

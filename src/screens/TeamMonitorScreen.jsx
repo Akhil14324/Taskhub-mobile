@@ -116,9 +116,6 @@ export default function TeamMonitorScreen() {
               ))}
             </View>
             <View style={styles.avgRow}>
-              <Avg label="Avg cycle" value={formatSeconds(team.avg_cycle_s)} />
-              <Avg label="Avg response" value={formatSeconds(team.avg_response_s)} />
-              <Avg label="Avg blocked" value={formatSeconds(team.avg_blocked_s)} />
               <Avg label="On time" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} level={team.on_time_rate === null ? null : team.on_time_rate >= 80 ? 'green' : team.on_time_rate >= 50 ? 'orange' : 'red'} />
             </View>
           </View>
@@ -179,7 +176,6 @@ function PersonRow({ person, onPress }) {
         {s.overdue > 0 && <Mini label="overdue" value={s.overdue} color={healthColor('red', theme)} />}
         {s.blocked > 0 && <Mini label="blocked" value={s.blocked} color={healthColor('orange', theme)} />}
         <Mini label="done" value={s.completed} color={s.completed ? healthColor('green', theme) : undefined} />
-        {s.avg_cycle_s !== null && <Mini label="avg cycle" value={formatSeconds(s.avg_cycle_s)} />}
         {s.on_time_rate !== null && <Mini label="on time" value={`${s.on_time_rate}%`} />}
       </View>
     </AnimatedPressable>
