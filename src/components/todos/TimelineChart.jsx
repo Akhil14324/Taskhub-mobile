@@ -9,15 +9,17 @@ import { STATUS, healthColor, healthTint, formatSeconds } from '../../utils/time
 import { formatDue, MONTHS_SHORT } from '../../utils/dates';
 
 const DAY = 24 * 3600 * 1000;
-const ROW = 58;
-const GROUP_ROW = 36;
-const HEAD_MONTH = 24;
-const HEAD_DAY = 34;
+const ROW = 48;
+const GROUP_ROW = 32;
+const HEAD_MONTH = 22;
+const HEAD_DAY = 30;
 const HEAD = HEAD_MONTH + HEAD_DAY;
-const LABEL_W = 260;
-const BAR_H = 24;
-const BAR_TOP = 9;
+const LABEL_W = 230;
+const BAR_H = 22;
+const BAR_TOP = 13;
+const TAIL_PX = 190; // room after the last bar for its "finished in" label
 const ZOOMS = [
+  { key: 'fit', label: 'Fit', px: 0 },
   { key: 'day', label: 'Days', px: 48 },
   { key: 'week', label: 'Weeks', px: 20 },
   { key: 'month', label: 'Months', px: 8 },
@@ -54,19 +56,43 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const colors = useColors();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [zoom, setZoom] = useState('week');
+  const [zoom, setZoom] = useState('fit');
   const [focusId, setFocusId] = useState(selectedId || null);
+  const [viewW, setViewW] = useState(0);
   const scrollRef = useRef(null);
-  const px = ZOOMS.find((z) => z.key === zoom).px;
   useEffect(() => { if (selectedId) setFocusId(selectedId); }, [selectedId]);
 
   const people = useMemo(() => new Map((data?.people || []).map((p) => [p.id, p])), [data]);
-  const fromMs = useMemo(() => new Date(`${data?.from || '1970-01-01'}T00:00:00`).getTime(), [data]);
-  const toMs = useMemo(() => new Date(`${data?.to || '1970-01-02'}T23:59:59`).getTime(), [data]);
-  const days = Math.max(1, Math.ceil((toMs - fromMs) / DAY));
-  const width = days * px;
   const todayMs = data?.today ? new Date(`${data.today}T12:00:00`).getTime() : Date.now();
   const nowMs = Date.now();
+
+  // Only the stretch of time the work actually covers (not the whole requested window), so bars are
+  // wide enough to read. The requested window is the outer limit.
+  const span = useMemo(() => {
+    const limitFrom = new Date(`${data?.from || '1970-01-01'}T00:00:00`).getTime();
+    const limitTo = new Date(`${data?.to || '1970-01-02'}T23:59:59`).getTime();
+    const items = data?.items || [];
+    let lo = todayMs;
+    let hi = todayMs;
+    items.forEach((i) => {
+      lo = Math.min(lo, ms(i.start));
+      hi = Math.max(hi, ms(i.end));
+      if (i.due_at) { lo = Math.min(lo, ms(i.due_at)); hi = Math.max(hi, ms(i.due_at)); }
+    });
+    const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    const from = Math.max(limitFrom, dayStart(lo) - DAY);
+    const to = Math.min(limitTo, dayStart(hi) + 2 * DAY);
+    const spanDays = Math.max(7, Math.ceil((to - from) / DAY));
+    return { from, spanDays };
+  }, [data, todayMs]);
+
+  const avail = Math.max(320, viewW - LABEL_W);
+  const fitPx = Math.max(14, Math.min(72, Math.floor((avail - TAIL_PX) / span.spanDays)));
+  const px = zoom === 'fit' ? fitPx : ZOOMS.find((z) => z.key === zoom).px;
+  const days = span.spanDays + Math.ceil(TAIL_PX / px);
+  const fromMs = span.from;
+  const toMs = fromMs + days * DAY;
+  const width = days * px;
   const x = (t) => Math.max(0, Math.min(width, ((t - fromMs) / DAY) * px));
 
   const red = healthColor('red', theme);
@@ -160,17 +186,17 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
   const open = (id) => { setFocusId(id); onOpen?.(id); };
 
   const tiles = [
-    { icon: 'layers-outline', label: 'On the chart', value: stats.total },
     { icon: 'play-circle-outline', label: 'Open', value: stats.open },
     { icon: 'checkmark-circle-outline', label: 'Finished', value: stats.done },
-    { icon: 'hand-left-outline', label: 'Stuck or on hold', value: stats.stuck + stats.hold, warn: stats.stuck > 0 },
+    { icon: 'hand-left-outline', label: 'Stuck / on hold', value: stats.stuck + stats.hold, warn: stats.stuck > 0 },
     { icon: 'flame-outline', label: 'Past deadline', value: stats.overdue, bad: stats.overdue > 0 },
-    { icon: 'swap-horizontal', label: 'Hand-overs', value: stats.handoffs },
-    { icon: 'timer-outline', label: 'Average to finish', value: stats.avg ? formatSeconds(stats.avg) : '-' },
+    { icon: 'timer-outline', label: 'Avg. to finish', value: stats.avg ? formatSeconds(stats.avg) : '-' },
   ];
+  const usedStatuses = STATUS_KEYS.filter((s) => (data.items || []).some((i) => i.segments.some((g) => g.status === s)));
+  const anyHandoff = stats.handoffs > 0;
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} onLayout={(e) => setViewW(e.nativeEvent.layout.width)}>
       <View style={styles.tiles}>
         {tiles.map((t) => (
           <View key={t.label} style={[styles.tile, t.bad && { borderColor: red }]}>
@@ -196,28 +222,23 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
       </View>
 
       <View style={styles.legend}>
-        {STATUS_KEYS.map((s) => (
+        {usedStatuses.map((s) => (
           <View key={s} style={styles.legendItem}>
             <View style={[styles.swatch, { backgroundColor: statusColor(s) }]} />
             <Text style={styles.legendText}>{STATUS[s].label}</Text>
           </View>
         ))}
         <View style={styles.legendItem}>
-          <View style={[styles.swatch, { backgroundColor: red }]} />
-          <Text style={styles.legendText}>Past deadline</Text>
-        </View>
-        <View style={styles.legendItem}>
           <Ionicons name="flag" size={11} color={colors.gray[600]} />
           <Text style={styles.legendText}>Deadline</Text>
         </View>
-        <View style={styles.legendItem}>
-          <Ionicons name="swap-horizontal" size={12} color={colors.gray[600]} />
-          <Text style={styles.legendText}>Handed over (face = new owner)</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <Ionicons name="checkmark-circle" size={12} color={colors.brand[700]} />
-          <Text style={styles.legendText}>Finished</Text>
-        </View>
+        {anyHandoff && (
+          <View style={styles.legendItem}>
+            <Ionicons name="swap-horizontal" size={12} color={colors.gray[600]} />
+            <Text style={styles.legendText}>Hand-over</Text>
+          </View>
+        )}
+        <Text style={styles.legendHint}>Click a row for the full breakdown</Text>
       </View>
 
       {empty ? (
@@ -267,7 +288,6 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                   </View>
                   <Text style={[styles.itemMeta, lateRow && { color: red }]} numberOfLines={1}>
                     {it.is_done ? 'Done' : (STATUS[it.status]?.label || 'Open')}
-                    {pr ? ` · ${pr.short}` : ''}
                     {!grouped && it.assignee_id && people.get(it.assignee_id) ? ` · ${firstName(people.get(it.assignee_id))}` : ''}
                     {it.due_date ? ` · due ${formatDue(it.due_date)}` : ''}
                   </Text>
@@ -281,7 +301,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
             ref={scrollRef}
             horizontal
             showsHorizontalScrollIndicator
-            contentOffset={{ x: Math.max(0, todayX - 240), y: 0 }}
+            contentOffset={{ x: zoom === 'fit' ? 0 : Math.max(0, todayX - 240), y: 0 }}
             style={{ flex: 1 }}
           >
             <View style={{ width }}>
@@ -339,7 +359,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                     + `\nStarted ${fmtStamp(startMs)}${it.is_done ? `\nFinished ${fmtStamp(endMs)}` : ''}`
                     + `${it.due_date ? `\nDue ${formatDue(it.due_date)}` : ''}`
                     + `${late ? `\nLate by ${formatSeconds(lateBy)}` : ''}`;
-                  const captionLeft = Math.max(0, Math.min(startX, width - 300));
+                  const captionLeft = Math.max(endX, dueX !== null ? dueX : 0) + 16;
                   return (
                     <View key={it.id} style={[styles.barRow, { height: ROW }, focusId === it.id && styles.rowSelected]}>
                       <AnimatedPressable
@@ -414,14 +434,10 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
 
                       <View pointerEvents="none" style={[styles.caption, { left: captionLeft }]}>
                         <Text style={styles.captionText} numberOfLines={1}>
-                          {it.is_done ? 'Finished in ' : 'Open for '}
                           <Text style={styles.captionStrong}>{formatSeconds(total)}</Text>
-                          {owner ? `  ·  ${firstName(owner)}` : ''}
-                          {it.segments.length > 1 ? `  ·  ${it.segments.length} stages` : ''}
-                          {it.handoffs.length ? `  ·  ${it.handoffs.length} hand-over${it.handoffs.length > 1 ? 's' : ''}` : ''}
-                          {it.due_date ? `  ·  due ${formatDue(it.due_date)}` : ''}
-                          {late ? <Text style={{ color: red, fontWeight: '700' }}>{`  ·  ${formatSeconds(lateBy)} late`}</Text> : null}
-                          {afterDue ? <Text style={{ color: red, fontWeight: '700' }}>{`  ·  finished ${formatSeconds(afterDue)} after the deadline`}</Text> : null}
+                          {owner ? `  ${firstName(owner)}` : ''}
+                          {late ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(lateBy)} late`}</Text> : null}
+                          {afterDue ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(afterDue)} after deadline`}</Text> : null}
                         </Text>
                       </View>
                     </View>
@@ -594,7 +610,7 @@ const createStyles = (colors) => StyleSheet.create({
   wrap: { flex: 1 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm },
   tile: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexGrow: 1, flexBasis: 128, paddingVertical: 10, paddingHorizontal: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexGrow: 1, flexBasis: 100, paddingVertical: 8, paddingHorizontal: spacing.sm,
     backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200],
   },
   tileIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand[50] },
@@ -671,8 +687,9 @@ const createStyles = (colors) => StyleSheet.create({
   due: { position: 'absolute', top: BAR_TOP - 2, height: BAR_H + 4, zIndex: 4 },
   dueStem: { position: 'absolute', left: 6, top: 4, bottom: 0, width: 1.5, opacity: 0.8 },
   dueFlag: { position: 'absolute', left: 6, top: -3 },
-  caption: { position: 'absolute', top: BAR_TOP + BAR_H + 6, zIndex: 1 },
-  captionText: { fontSize: 10.5, color: colors.gray[500], width: 520 },
+  caption: { position: 'absolute', top: BAR_TOP + 4, zIndex: 1 },
+  captionText: { fontSize: 11, color: colors.gray[500], width: TAIL_PX },
+  legendHint: { fontSize: 11, color: colors.gray[400], marginLeft: 'auto' },
   captionStrong: { fontWeight: '800', color: colors.gray[800] },
   empty: { alignItems: 'center', paddingVertical: spacing.xxxl, gap: 6 },
   emptyTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.gray[700] },
