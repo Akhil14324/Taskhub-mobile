@@ -57,6 +57,9 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const [bizAssignee, setBizAssignee] = useState(null); // user id, null = open to the business
   const [bizPeople, setBizPeople] = useState([]);
   const [review, setReview] = useState(null); // null = server default
+  // "Assign": a personal to-do handed to someone below me. It goes to their list and stays off mine.
+  const [giveTo, setGiveTo] = useState(null);
+  const [giveQuery, setGiveQuery] = useState('');
 
   const isSubtask = !!defaults.parent_id;
   const businessId = override.business_id !== undefined ? override.business_id : (defaults.business_id ?? null);
@@ -71,6 +74,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       setAssignId(null);
       setBizAssignee(defaults.assign_to ?? null);
       setReview(null);
+      setGiveTo(null);
+      setGiveQuery('');
       setDelegateOff(false);
       setMenu(null);
       setTimeout(() => inputRef.current?.focus(), Platform.OS === 'web' ? 50 : 250);
@@ -102,7 +107,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const recurrence = pick('recurrence');
   const deadline = pick('deadline_date');
   const duration = pick('duration_minutes');
-  const listId = businessId ? null : (override.list_id !== undefined ? override.list_id : (parsed.list?.id ?? defaults.list_id ?? null));
+  const listId = businessId || giveTo ? null : (override.list_id !== undefined ? override.list_id : (parsed.list?.id ?? defaults.list_id ?? null));
   const list = lists.find((l) => l.id === listId);
   // A default section only applies while the list is still the default one.
   const sectionId = (listId ?? null) === (defaults.list_id ?? null) ? defaults.section_id ?? null : null;
@@ -126,6 +131,9 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const effectiveAssignId = delegateHere && assignId === null ? delegateHere.id : assignId;
   const effectiveBizAssignee = bizAssignee || (delegate && businessId ? delegate.person.id : null);
   const assignee = bizPeople.find((p) => p.id === effectiveBizAssignee) || null;
+  const assignable = useMemo(() => people.filter((p) => p.id !== user?.id), [people, user]);
+  const giveToPerson = giveTo ? assignable.find((p) => p.id === giveTo) || null : null;
+  const giveMatches = useMemo(() => filterPeople(assignable, giveQuery.replace(/^@/, ''), { limit: 30 }), [assignable, giveQuery]);
   const proposing = !!business && !business.can_manage && !isSubtask;
 
   const submit = async () => {
@@ -145,13 +153,15 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         business_id: businessId || undefined,
         assign_to: businessId
           ? (effectiveBizAssignee || undefined)
-          : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),
+          : giveToPerson ? undefined : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),
         requires_approval: businessId && review !== null ? review : undefined,
         labels: allLabels,
         deadline_date: deadline,
         duration_minutes: duration,
-        mention_ids: mentionedPeople.map((p) => p.id),
+        mention_ids: giveToPerson ? [] : mentionedPeople.map((p) => p.id),
+        delegate_to: giveToPerson && !businessId ? giveToPerson.id : undefined,
       });
+      setGiveTo(null);
       setAssignId(null);
       setDelegateOff(false);
       setText('');
@@ -301,7 +311,10 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           {allLabels.map((l) => (
             <Chip key={l} small icon="pricetag" label={l} onRemove={() => removeLabel(l)} />
           ))}
-          {mentionedPeople.map((p) => (
+          {!!giveToPerson && !businessId && (
+            <Chip small active icon="person-add" label={`Assigned to ${giveToPerson.name.split(' ')[0]} · not on your list`} onRemove={() => setGiveTo(null)} />
+          )}
+          {!giveToPerson && mentionedPeople.map((p) => (
             <Chip
               key={p.id}
               small
@@ -378,6 +391,31 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             ))}
           </ScrollView>
         )}
+        {menu === 'give' && !businessId && (
+          <View>
+            <TextInput
+              value={giveQuery}
+              onChangeText={setGiveQuery}
+              placeholder="Search a name or @username"
+              placeholderTextColor={colors.gray[400]}
+              style={styles.giveSearch}
+              autoCapitalize="none"
+            />
+            <ScrollView style={{ maxHeight: 190 }} keyboardShouldPersistTaps="always">
+              {giveMatches.length === 0 && <Text style={styles.note}>Nobody matches.</Text>}
+              {giveMatches.map((p) => (
+                <AnimatedPressable key={p.id} style={styles.personRow} onPress={() => { setGiveTo(giveTo === p.id ? null : p.id); setMenu(null); inputRef.current?.focus(); }}>
+                  <Avatar name={p.name} uri={p.profile_picture} size={26} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personNameOnly}>{p.name}</Text>
+                    {!!p.display_title && <Text style={styles.personSub}>{p.display_title} · @{p.username}</Text>}
+                  </View>
+                  {giveTo === p.id && <Ionicons name="checkmark" size={18} color={colors.brand[600]} />}
+                </AnimatedPressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
         {menu === 'assignee' && !!businessId && (
           <ScrollView style={{ maxHeight: 190 }} keyboardShouldPersistTaps="always">
             <AnimatedPressable style={styles.personRow} onPress={() => { setBizAssignee(null); setMenu(null); }}>
@@ -402,7 +440,10 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             {!!businessId && !isSubtask && (
               <ToolButton icon="person-outline" label="Assign" active={!!bizAssignee} onPress={() => setMenu(menu === 'assignee' ? null : 'assignee')} />
             )}
-            {!businessId && !isSubtask && (
+            {!businessId && !isSubtask && assignable.length > 0 && (
+              <ToolButton icon="person-add-outline" label="Assign" active={!!giveToPerson} onPress={() => setMenu(menu === 'give' ? null : 'give')} />
+            )}
+            {!businessId && !isSubtask && !giveTo && (
               <ToolButton icon="albums-outline" label="List" active={!!list} onPress={() => setMenu(menu === 'where' ? null : 'where')} />
             )}
             <ToolButton icon="pricetag-outline" label="Label" active={allLabels.length > 0} onPress={() => setMenu(menu === 'label' ? null : 'label')} />
@@ -488,7 +529,10 @@ const createStyles = (colors) => StyleSheet.create({
   chips: { gap: spacing.xs, paddingVertical: spacing.sm, minHeight: 36 },
   menuRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.sm },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 8, paddingHorizontal: spacing.xs },
+  personSub: { fontSize: fontSize.sm, color: colors.gray[500] },
+  giveSearch: { fontSize: fontSize.base, color: colors.gray[900], paddingVertical: spacing.sm, outlineStyle: 'none', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] },
   personName: { flex: 1, fontSize: fontSize.base, color: colors.gray[900] },
+  personNameOnly: { fontSize: fontSize.base, color: colors.gray[900] },
   openIcon: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.brand[100], alignItems: 'center', justifyContent: 'center' },
   toolbar: {
     flexDirection: 'row',

@@ -18,7 +18,7 @@ import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoTreeList from '../components/todos/TodoTreeList';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailSheet';
-import InlineQuickAdd from '../components/todos/InlineQuickAdd';
+import InfoRail from '../components/todos/InfoRail';
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
@@ -120,8 +120,7 @@ export default function TodosScreen() {
   const [scope, setScope] = useState(() => (route.params?.business_id ? 'business' : 'mine'));
   const now = useNowTick(60000);
   const scrollRef = useRef(null);
-  const inlineAddRef = useRef(null);
-  const simpleView = user?.preferences?.viewMode === 'simple';
+  const simpleView = user?.preferences?.viewMode !== 'full';
   const listAreaRef = useRef(null);
   const meId = user?.id;
   const today = todayYmd();
@@ -174,8 +173,9 @@ export default function TodosScreen() {
     today: open.filter((t) => t.due_date && t.due_date <= today).length,
     inbox: openPersonal.filter((t) => !t.list_id && !t.parent_id).length,
     shared: openPersonal.filter((t) => (t.members || []).length > 1).length,
+    assigned: openPersonal.filter((t) => t.created_by !== meId && !t.parent_id).length,
     lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
-  }), [open, openPersonal, lists, today]);
+  }), [open, openPersonal, lists, today, meId]);
 
   const bizCounts = useMemo(() => {
     const out = {};
@@ -217,6 +217,7 @@ export default function TodosScreen() {
       : view === 'upcoming' ? 'Upcoming'
         : view === 'inbox' ? 'Inbox'
           : view === 'shared' ? 'Shared with me'
+            : view === 'assigned' ? 'Assigned to me'
             : view === 'done' ? 'Completed'
               : activeFilter ? activeFilter.name
                 : labelName ? `+${labelName}`
@@ -350,6 +351,17 @@ export default function TodosScreen() {
       if (mineShared.length) sectionsOut.push({ key: 'mine', title: 'I shared with others', items: mineShared });
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
       done = personal.filter((t) => t.is_done && (t.members || []).length > 1);
+    } else if (view === 'assigned') {
+      const fromOthers = openPersonal.filter((t) => t.created_by !== meId && match(t));
+      const byPerson = new Map();
+      fromOthers.forEach((t) => {
+        const key = t.created_by_name || 'Someone';
+        if (!byPerson.has(key)) byPerson.set(key, []);
+        byPerson.get(key).push(t);
+      });
+      byPerson.forEach((items, name) => sectionsOut.push({ key: `from:${name}`, title: `From ${name}`, items }));
+      if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
+      done = personal.filter((t) => t.is_done && t.created_by !== meId);
     } else if (currentList) {
       manualOrder = true;
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
@@ -476,7 +488,7 @@ export default function TodosScreen() {
   ) : null;
 
   const rowProps = useMemo(() => ({
-    showList: view === 'today' || view === 'upcoming' || view === 'shared' || !!search || !!activeFilter || !!labelName,
+    showList: view === 'today' || view === 'upcoming' || view === 'shared' || view === 'assigned' || !!search || !!activeFilter || !!labelName,
     showBusiness: !business,
     currentUserId: meId,
     highlightId,
@@ -508,6 +520,7 @@ export default function TodosScreen() {
         ? { icon: 'trophy', title: 'All done for today', message: `${todayDone} completed. Enjoy the rest of your day.` }
         : { icon: 'sunny', title: 'A clear day', message: 'Add what you want to get done today. Try “Call supplier 4pm p1”.' };
     }
+    if (view === 'assigned') return { icon: 'person-add', title: 'Nothing assigned to you', message: 'When someone above you assigns you a to-do, it shows up here.' };
     if (view === 'shared') return { icon: 'people', title: 'Nothing shared yet', message: 'Type @name while adding a to-do and it lands in their list too.' };
     if (view === 'upcoming') return { icon: 'calendar', title: 'Your schedule is clear', message: 'Plan ahead. Add a to-do with a date.' };
     if (activeFilter) return { icon: 'funnel', title: 'No matches', message: 'Nothing open fits this filter right now.' };
@@ -534,7 +547,8 @@ export default function TodosScreen() {
     }
     if (!business) {
       // Today, Upcoming, filters and labels: the same work laid out by where it stands.
-      const pool = (view === 'shared' ? openPersonal.filter((t) => (t.members || []).length > 1)
+      const pool = (view === 'assigned' ? openPersonal.filter((t) => t.created_by !== meId)
+        : view === 'shared' ? openPersonal.filter((t) => (t.members || []).length > 1)
         : activeFilter ? applyFilter(open, activeFilter.config, { userId: meId, today })
           : labelName ? open.filter((t) => (t.labels || []).includes(labelName))
             : view === 'today' ? mine.filter((t) => !t.is_done && t.due_date && t.due_date <= today)
@@ -546,7 +560,8 @@ export default function TodosScreen() {
       const doneRecent = view === 'today' ? doneAll.filter((t) => !t.due_date || t.due_date <= today || (t.done_at && toYmd(new Date(t.done_at)) === today))
         : labelName ? doneAll.filter((t) => (t.labels || []).includes(labelName))
           : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1)
-            : doneAll;
+            : view === 'assigned' ? doneAll.filter((t) => t.created_by !== meId)
+              : doneAll;
       return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
         key: st,
         title: STATUS[st].label,
@@ -588,6 +603,7 @@ export default function TodosScreen() {
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
     if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
     if (view === 'shared') return personal.filter((t) => (t.members || []).length > 1 && notNested(t));
+    if (view === 'assigned') return personal.filter((t) => t.created_by !== meId && notNested(t));
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
     if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
     return mine.filter(notNested);
@@ -643,7 +659,7 @@ export default function TodosScreen() {
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
 
   useShortcuts({
-    'todo.quickAdd': () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
+    'todo.quickAdd': () => setAddOpen(true),
     'todo.new': () => setAddOpen(true),
     'todo.search': () => { setSearching(true); },
     'todo.sidebar': () => setSidebarHidden((v) => !v),
@@ -829,6 +845,9 @@ export default function TodosScreen() {
             <ViewTab label="Today" icon="today-outline" count={counts.today} active={view === 'today'} onPress={() => setView('today')} />
             <ViewTab label="Upcoming" icon="calendar-outline" active={view === 'upcoming'} onPress={() => setView('upcoming')} />
             <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
+            {counts.assigned > 0 || view === 'assigned' ? (
+              <ViewTab label="Assigned" icon="person-add-outline" count={counts.assigned} active={view === 'assigned'} onPress={() => setView('assigned')} />
+            ) : null}
             {(view === 'shared' || inFilterView) && (
               <ViewTab label={inFilterView ? viewTitle : 'Shared'} icon={inFilterView ? 'funnel-outline' : 'people-outline'} active onPress={() => {}} />
             )}
@@ -1020,21 +1039,27 @@ export default function TodosScreen() {
 
       {view !== 'done' && !desktop && (
         <Text style={styles.tip}>
-          Swipe right to complete, left to delete. Type @name to share, +label to tag, for 2h to estimate.
+          Swipe right to complete, left to delete.
         </Text>
       )}
     </ScrollView>
   );
 
+  // A wide screen has room beside the list: show how the day is going and what is next.
+  const showRail = desktop && windowWidth >= 1280 && !(wide && openTodoId) && !business && effectiveLayout === 'list'
+    && !search && ['today', 'upcoming', 'inbox', 'shared', 'assigned'].includes(view);
+
   const main = (
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
-      {desktop && view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
-        <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} />
-      )}
       {mobileNav}
-      {body}
+      {showRail ? (
+        <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>{body}</View>
+          <InfoRail todos={mine} today={today} meId={meId} onOpen={openTodo} onAssigned={() => setView('assigned')} />
+        </View>
+      ) : body}
       {selectMode ? (
         <BulkBar
           count={selected.size}

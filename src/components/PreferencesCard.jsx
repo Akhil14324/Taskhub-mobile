@@ -9,7 +9,7 @@ import { Card } from './UI';
 import { configureFeedback, playSound } from '../utils/feedback';
 
 const CHOICES = [
-  { key: 'viewMode', icon: 'leaf-outline', label: 'How much to show', hint: 'Simple hides labels, estimates, filters, calendar and timeline. Full shows everything.', fallback: 'full',
+  { key: 'viewMode', icon: 'leaf-outline', label: 'How much to show', hint: 'Simple hides labels, estimates, filters, calendar and timeline. Full shows everything.', fallback: 'simple',
     options: [['simple', 'Simple'], ['full', 'Full']] },
   { key: 'theme', icon: 'contrast-outline', label: 'Appearance', hint: 'Light, dark, or follow your device', fallback: 'light',
     options: [['system', 'Device'], ['light', 'Light'], ['dark', 'Dark']] },

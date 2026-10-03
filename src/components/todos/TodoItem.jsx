@@ -46,7 +46,7 @@ function TodoItem({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: me } = useAuth();
   const { waitingIds } = useEngage();
-  const simple = me?.preferences?.viewMode === 'simple'; // Simple view: only title, date, owner and progress
+  const simple = me?.preferences?.viewMode !== 'full'; // Simple view: only title, date, owner and progress
   const translateX = useSharedValue(0);
   const flash = useSharedValue(0);
   const canTick = todo.permissions ? todo.permissions.can_change_status : true;

@@ -96,6 +96,11 @@ export function TodoProvider({ children }) {
 
   const createTodo = useCallback(async (payload, { silent = false } = {}) => {
     const res = await api.post('/todos', payload);
+    // An assigned to-do goes to the other person's list, so there is nothing to add to mine.
+    if (!res.data.todo) {
+      if (!silent) showToast({ message: `Assigned to ${res.data.assigned_to?.name?.split(' ')[0] || 'them'}`, tone: 'success', icon: 'person-add' });
+      return null;
+    }
     upsert(res.data.todo);
     // A new sub-task changes its parent's counts.
     if (res.data.todo.parent_id) fetchTodos();
