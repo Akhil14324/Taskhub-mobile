@@ -13,6 +13,7 @@ import * as SecureStore from './secureStorage';
  */
 export const ACTIONS = [
   { id: 'app.palette', group: 'Search and commands', label: 'Open the command palette', scope: 'global', combos: ['mod+k'] },
+  { id: 'app.sidebar', group: 'Search and commands', label: 'Collapse or expand the main sidebar', scope: 'global', combos: ['mod+b'] },
   { id: 'app.help', group: 'Search and commands', label: 'Show the keyboard shortcuts', scope: 'global', combos: ['?'] },
   { id: 'nav.home', group: 'Go to', label: 'Home', scope: 'global', combos: ['g h'] },
   { id: 'nav.progress', group: 'Go to', label: 'Progress', scope: 'global', combos: ['g d'] },

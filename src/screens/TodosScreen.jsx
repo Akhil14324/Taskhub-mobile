@@ -42,6 +42,9 @@ import {
 import { STATUS } from '../utils/timeline';
 import { showToast, confirmDialog } from '../utils/events';
 import { glass } from '../theme/glass';
+import { Reveal } from '../components/Reveal';
+import SlidingSegment from '../components/SlidingSegment';
+import { Panel, PaneHandle, usePanel } from '../components/Panel';
 
 const BOARD_GROUPS = [
   { key: 'status', label: 'Status', icon: 'git-commit-outline' },
@@ -117,7 +120,11 @@ export default function TodosScreen() {
   const [weeks, setWeeks] = useState(6);
   const [deletePrompt, setDeletePrompt] = useState(null);
   const [priorityFor, setPriorityFor] = useState(null);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const sidebar = usePanel('todos.sidebar'); // the lists panel; remembered, and closes like a drawer
+  // Quick add grows out of the floating capsule: its window rect, what was typed, and whether the capsule is covered.
+  const [addOrigin, setAddOrigin] = useState(null);
+  const [addText, setAddText] = useState('');
+  const [capsuleHidden, setCapsuleHidden] = useState(false);
   const [scope, setScope] = useState(() => (route.params?.business_id ? 'business' : 'mine'));
   const now = useNowTick(60000);
   const scrollRef = useRef(null);
@@ -210,6 +217,14 @@ export default function TodosScreen() {
   const effectiveLayout = layout === 'board' && canBoard ? 'board'
     : layout === 'calendar' && canCalendar ? 'calendar'
       : layout === 'timeline' && canTimeline ? 'timeline' : 'list';
+  // Which way the layout changed (list, board, calendar, timeline are in that order): the new one slides in from that side.
+  const layoutIdx = LAYOUTS.indexOf(effectiveLayout);
+  const prevLayoutIdx = useRef(layoutIdx);
+  const layoutDir = useMemo(() => {
+    const d = layoutIdx === prevLayoutIdx.current ? 0 : layoutIdx > prevLayoutIdx.current ? 1 : -1;
+    prevLayoutIdx.current = layoutIdx;
+    return d;
+  }, [layoutIdx]);
   const onBoard = effectiveLayout === 'board' && !search;
   const onCalendar = effectiveLayout === 'calendar' && !search;
   const onTimeline = effectiveLayout === 'timeline';
@@ -664,7 +679,7 @@ export default function TodosScreen() {
     'todo.quickAdd': () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
     'todo.new': () => setAddOpen(true),
     'todo.search': () => { setSearching(true); },
-    'todo.sidebar': () => setSidebarHidden((v) => !v),
+    'todo.sidebar': () => sidebar.toggle(),
     'todo.next': () => stepFocus(1),
     'todo.prev': () => stepFocus(-1),
     'todo.open': () => { if (focused) openTodo(focused); else return false; return undefined; },
@@ -767,12 +782,20 @@ export default function TodosScreen() {
   const sectionsWithRight = sections.map((s) => ({ ...s, color: s.overdue ? colors.brand[600] : undefined, right: sectionRight(s) }));
 
   const layoutSwitch = (canBoard || canCalendar || canTimeline) ? (
-    <View style={styles.layoutSwitch}>
-      <LayoutButton icon="list" label="List" active={effectiveLayout === 'list'} onPress={() => chooseLayout('list')} />
-      {canBoard && <LayoutButton icon="grid" label="Board" active={effectiveLayout === 'board'} onPress={() => chooseLayout('board')} />}
-      {canCalendar && <LayoutButton icon="calendar" label="Calendar" active={effectiveLayout === 'calendar'} onPress={() => chooseLayout('calendar')} />}
-      {canTimeline && <LayoutButton icon="analytics" label="Timeline" active={effectiveLayout === 'timeline'} onPress={() => chooseLayout('timeline')} />}
-    </View>
+    <SlidingSegment
+      style={styles.layoutSwitch}
+      pillStyle={{ top: 3, bottom: 3, borderRadius: radius.md }}
+      value={effectiveLayout}
+      items={[
+        { key: 'list', icon: 'list', label: 'List', ok: true },
+        { key: 'board', icon: 'grid', label: 'Board', ok: canBoard },
+        { key: 'calendar', icon: 'calendar', label: 'Calendar', ok: canCalendar },
+        { key: 'timeline', icon: 'analytics', label: 'Timeline', ok: canTimeline },
+      ].filter((l) => l.ok).map((l) => ({
+        key: l.key,
+        content: <LayoutButton icon={l.icon} label={l.label} active={effectiveLayout === l.key} onPress={() => chooseLayout(l.key)} />,
+      }))}
+    />
   ) : null;
 
   // ---- parts ---------------------------------------------------------------
@@ -820,22 +843,28 @@ export default function TodosScreen() {
   const mobileNav = !desktop ? (
     <View>
       {showScopeSwitch && (
-        <View style={styles.segment}>
-          {[{ key: 'mine', label: 'My to-dos', icon: 'person-outline' }, { key: 'business', label: 'Business', icon: 'briefcase-outline' }].map((s) => (
-            <AnimatedPressable
-              key={s.key}
-              style={[styles.segmentBtn, scope === s.key && styles.segmentOn]}
-              onPress={() => {
-                setScope(s.key);
-                if (s.key === 'business' && !bizId) setView(`biz:${businesses[0].id}`);
-                if (s.key === 'mine' && bizId) setView('today');
-              }}
-            >
-              <Ionicons name={s.icon} size={15} color={scope === s.key ? colors.brand[700] : colors.gray[500]} />
-              <Text style={[styles.segmentText, scope === s.key && styles.segmentTextOn]}>{s.label}</Text>
-            </AnimatedPressable>
-          ))}
-        </View>
+        <SlidingSegment
+          style={styles.segment}
+          pillStyle={{ top: 3, bottom: 3, borderRadius: radius.md }}
+          value={scope}
+          items={[{ key: 'mine', label: 'My to-dos', icon: 'person-outline' }, { key: 'business', label: 'Business', icon: 'briefcase-outline' }].map((s) => ({
+            key: s.key,
+            style: { flex: 1 },
+            content: (
+              <AnimatedPressable
+                style={styles.segmentBtn}
+                onPress={() => {
+                  setScope(s.key);
+                  if (s.key === 'business' && !bizId) setView(`biz:${businesses[0].id}`);
+                  if (s.key === 'mine' && bizId) setView('today');
+                }}
+              >
+                <Ionicons name={s.icon} size={15} color={scope === s.key ? colors.brand[700] : colors.gray[500]} />
+                <Text style={[styles.segmentText, scope === s.key && styles.segmentTextOn]}>{s.label}</Text>
+              </AnimatedPressable>
+            ),
+          }))}
+        />
       )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsWrap}>
         {scope === 'business' && hasBusiness ? (
@@ -1052,10 +1081,17 @@ export default function TodosScreen() {
       {header}
       {searchBox}
       {mobileNav}
-      {body}
+      <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>
       {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
         <View pointerEvents="box-none" style={[styles.composer, { bottom: desktop ? 20 : 12 }]}>
-          <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} onMore={() => setAddOpen(true)} />
+          <InlineQuickAdd
+            ref={inlineAddRef}
+            defaults={quickAddDefaults}
+            lists={lists}
+            hidden={capsuleHidden}
+            onMore={() => setAddOpen(true)}
+            onExpand={({ rect, text }) => { setAddOrigin(rect); setAddText(text || ''); setAddOpen(true); }}
+          />
         </View>
       )}
       {selectMode ? (
@@ -1073,10 +1109,15 @@ export default function TodosScreen() {
   );
 
   const detailOpen = !!openTodoId && todos.some((t) => t.id === openTodoId);
+  // A wide detail pane needs the room: the lists panel steps aside (without forgetting the person's choice).
+  const sidebarSqueezed = wide && detailOpen && windowWidth < 1760;
+  const { setHidden: setSidebarSqueezed } = sidebar;
+  useEffect(() => { setSidebarSqueezed(sidebarSqueezed); }, [sidebarSqueezed, setSidebarSqueezed]);
 
   return (
     <View style={[styles.container, desktop && styles.containerDesktop]}>
-      {desktop && !sidebarHidden && !(wide && detailOpen && windowWidth < 1760) && (
+      {desktop && (
+        <Panel p={sidebar.p} width={252}>
         <WorkSidebar
           view={view}
           onView={(v) => { setView(v); setScope(v.startsWith('biz:') ? 'business' : 'mine'); }}
@@ -1095,7 +1136,9 @@ export default function TodosScreen() {
           onFilters={() => setFiltersOpen(true)}
           simple={simpleView}
         />
+        </Panel>
       )}
+      {desktop && <PaneHandle p={sidebar.p} max={252} open={sidebar.open} onPress={sidebar.toggle} label={sidebar.open ? 'Hide the lists panel' : 'Show the lists panel'} />}
       {main}
       {wide && detailOpen && (
         <View {...glass('bar')} style={styles.detailPane}>
@@ -1106,6 +1149,10 @@ export default function TodosScreen() {
       <QuickAddSheet
         visible={!!addOpen}
         onClose={() => setAddOpen(false)}
+        origin={addOrigin}
+        initialText={addText}
+        onMorphStart={() => setCapsuleHidden(true)}
+        onClosed={() => { setCapsuleHidden(false); setAddOrigin(null); setAddText(''); }}
         defaults={typeof addOpen === 'object' ? { ...quickAddDefaults, ...addOpen } : quickAddDefaults}
       />
       {!wide && <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />}
@@ -1259,8 +1306,6 @@ function LayoutButton({ icon, label, active, onPress }) {
       accessibilityLabel={`${label} layout`}
       style={{
         flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md,
-        backgroundColor: active ? colors.white : 'transparent',
-        borderWidth: active ? StyleSheet.hairlineWidth : 0, borderColor: colors.gray[300],
       }}
     >
       <Ionicons name={`${icon}${active ? '' : '-outline'}`} size={15} color={active ? colors.brand[700] : colors.gray[500]} />
@@ -1397,7 +1442,6 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row', gap: 4, marginHorizontal: spacing.lg, marginTop: spacing.md, padding: 3, borderRadius: radius.lg, backgroundColor: colors.gray[100],
   },
   segmentBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: radius.md },
-  segmentOn: { backgroundColor: colors.white, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200] },
   segmentText: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[500] },
   segmentTextOn: { color: colors.brand[700], fontWeight: '700' },
   tabsWrap: { flexGrow: 0 },

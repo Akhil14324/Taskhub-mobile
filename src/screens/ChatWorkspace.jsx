@@ -6,8 +6,10 @@ import { useColors } from '../context/ThemeContext';
 import { useChat } from '../context/ChatContext';
 import useShortcuts from '../hooks/useShortcuts';
 import { spacing, fontSize } from '../theme/theme';
+import { glass } from '../theme/glass';
 import ChatListScreen from './ChatListScreen';
 import ChatThreadScreen from './ChatThreadScreen';
+import { Panel, PaneHandle, usePanel } from '../components/Panel';
 
 /**
  * Desktop chat: the conversation list on the left, the open conversation on the right (like a mail
@@ -18,6 +20,7 @@ export default function ChatWorkspace() {
   const route = useRoute();
   const fromLink = route.params?.conversationId ?? null;
   const [activeId, setActiveId] = useState(fromLink);
+  const list = usePanel('chat.list');
 
   // Up / Down move between conversations when no text box has focus; Esc closes the open one.
   const { conversations } = useChat();
@@ -35,9 +38,12 @@ export default function ChatWorkspace() {
 
   return (
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
-      <View style={{ width: 380, borderRightWidth: 1, borderRightColor: colors.gray[200], backgroundColor: colors.white }}>
-        <ChatListScreen onOpen={setActiveId} activeId={activeId} />
-      </View>
+      <Panel p={list.p} width={380}>
+        <View {...glass('bar')} style={{ flex: 1, borderRightWidth: 1, borderRightColor: colors.gray[200], backgroundColor: colors.white }}>
+          <ChatListScreen onOpen={setActiveId} activeId={activeId} />
+        </View>
+      </Panel>
+      <PaneHandle p={list.p} max={380} open={list.open} onPress={list.toggle} label={list.open ? 'Hide conversations' : 'Show conversations'} />
       <View style={{ flex: 1, minWidth: 0 }}>
         {activeId ? (
           <ChatThreadScreen key={activeId} conversationId={activeId} embedded />

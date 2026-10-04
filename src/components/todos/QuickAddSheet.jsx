@@ -7,6 +7,7 @@ import { useTodos } from '../../context/TodoContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
+import useIsDesktop from '../../hooks/useBreakpoint';
 import DueDatePicker from '../DueDatePicker';
 import MentionSuggestions from '../MentionSuggestions';
 import { Chip, PRIORITY, Avatar } from '../kit';
@@ -31,13 +32,14 @@ const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
  * by someone who manages it, otherwise sent as a proposal for review.
  * `defaults` may carry due_date, list_id, section_id, parent_id (a sub-task), business_id, assign_to.
  */
-export default function QuickAddSheet({ visible, onClose, defaults = {}, initialText = '' }) {
+export default function QuickAddSheet({ visible, onClose, defaults = {}, initialText = '', origin = null, onMorphStart, onClosed }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
   const { lists, businesses, labels: knownLabels, createTodo, fetchAssignees } = useTodos();
   const { people } = useDirectory();
   const inputRef = useRef(null);
+  const desktop = useIsDesktop();
   const { lang } = useLang();
   const stopRef = useRef(null);
   const [listening, setListening] = useState(false);
@@ -78,7 +80,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       setGiveQuery('');
       setDelegateOff(false);
       setMenu(null);
-      setTimeout(() => inputRef.current?.focus(), Platform.OS === 'web' ? 50 : 250);
+      // Growing out of a control on a phone: let the keyboard wait for the arrival (it would shove the target mid-flight).
+      if (!origin || desktop) setTimeout(() => inputRef.current?.focus(), Platform.OS === 'web' ? 50 : 250);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialText]);
@@ -211,7 +214,16 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1, or: ask Ravi to send the invoice friday';
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight={640} avoidKeyboard>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      maxHeight={640}
+      avoidKeyboard
+      origin={origin}
+      onMorphStart={onMorphStart}
+      onClosed={onClosed}
+      onOpened={() => { if (origin && !desktop) inputRef.current?.focus(); }}
+    >
       <View style={styles.wrap}>
         {hasBusinesses && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeRow} keyboardShouldPersistTaps="always">

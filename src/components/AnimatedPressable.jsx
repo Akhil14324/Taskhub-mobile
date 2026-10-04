@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback } from 'react';
+import { memo, useRef, useCallback, useEffect } from 'react';
 import { Pressable, Platform, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -12,7 +12,8 @@ import { haptic as webHaptic } from '../utils/feedback';
 import { SPRING } from '../theme/motion';
 
 const SCALE_DOWN = 0.985;
-const MIN_DEPTH = 0.03;      // even the gentlest press squishes a little: that is what makes it feel liquid
+const MIN_DEPTH = 0.04;      // even the gentlest press squishes a little: that is what makes it feel liquid
+const MIN_HOLD = 120;        // ms the compression is held at least, so a quick click is still seen and felt
 const MORPH = 0.3;           // corners tighten by this fraction while pressed (small shapes only)
 const MAX_MORPH_RADIUS = 40; // pills and circles keep their shape; the squish alone carries them
 
@@ -42,11 +43,21 @@ function usePressSpring(style, scale) {
     return out;
   });
 
+  const downAt = useRef(0);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
   const down = useCallback(() => {
+    clearTimeout(timer.current);
+    downAt.current = Date.now();
     p.value = reduced ? withTiming(1, { duration: 80 }) : withSpring(1, SPRING.press);
   }, [p, reduced]);
   const up = useCallback(() => {
-    p.value = reduced ? withTiming(0, { duration: 120 }) : withSpring(0, SPRING.release);
+    const release = () => { p.value = reduced ? withTiming(0, { duration: 120 }) : withSpring(0, SPRING.release); };
+    // A tap that lifts within a few frames would be over before it registers: hold the dip a moment.
+    const held = Date.now() - downAt.current;
+    clearTimeout(timer.current);
+    if (!reduced && held < MIN_HOLD) timer.current = setTimeout(release, MIN_HOLD - held);
+    else release();
   }, [p, reduced]);
 
   return { animated, down, up };

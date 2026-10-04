@@ -32,6 +32,7 @@ import { openNotificationTarget } from './navigationRef';
 import { todayYmd } from '../utils/dates';
 import { glass } from '../theme/glass';
 import { SPRING } from '../theme/motion';
+import { withScreenTransition as T } from '../components/Reveal';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
@@ -94,6 +95,21 @@ const FramedNotifications = framed(NotificationsScreen, 1100);
 const FramedProfile = framed(ProfileScreen, 1000);
 const FramedProgress = framed(ProgressScreen, WIDE);
 const FramedRecap = framed(RecapScreen, 920);
+
+// The native stack does no transition in a browser, so every screen animates itself when it gains focus.
+const TabHome = T(HomeScreen, 'tab', 'Dashboard');
+const TabTodos = T(TodosScreen, 'tab', 'Todos');
+const TabChat = T(FramedChatList, 'tab', 'ChatList');
+const PushChatThread = T(FramedChatThread);
+const PushGroupInfo = T(FramedGroupInfo);
+const PushApprovals = T(FramedApprovals);
+const PushOrganization = T(FramedOrganization);
+const PushTeamMonitor = T(FramedTeamMonitor);
+const PushPersonMonitor = T(FramedPersonMonitor);
+const PushNotifications = T(FramedNotifications);
+const PushProfile = T(FramedProfile);
+const PushProgress = T(FramedProgress);
+const PushRecap = T(FramedRecap);
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -224,7 +240,7 @@ function MainTabs() {
       >
         <Tab.Screen
           name="Dashboard"
-          component={HomeScreen}
+          component={TabHome}
           options={{
             tabBarLabel: t('home'),
             tabBarIcon: ({ focused, color }) => (
@@ -234,7 +250,7 @@ function MainTabs() {
         />
         <Tab.Screen
           name="Todos"
-          component={TodosScreen}
+          component={TabTodos}
           options={{
             tabBarLabel: 'To-do',
             tabBarIcon: ({ focused, color }) => (
@@ -244,7 +260,7 @@ function MainTabs() {
         />
         <Tab.Screen
           name="ChatList"
-          component={FramedChatList}
+          component={TabChat}
           options={{
             tabBarLabel: t('chat'),
             tabBarIcon: ({ focused, color }) => (
@@ -414,16 +430,16 @@ export default function AppNavigator() {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen name="ChatThread" component={FramedChatThread} />
-            <Stack.Screen name="GroupInfo" component={FramedGroupInfo} />
-            <Stack.Screen name="Approvals" component={FramedApprovals} />
-            <Stack.Screen name="Organization" component={FramedOrganization} />
-            <Stack.Screen name="TeamMonitor" component={FramedTeamMonitor} />
-            <Stack.Screen name="PersonMonitor" component={FramedPersonMonitor} />
-            <Stack.Screen name="Notifications" component={FramedNotifications} />
-            <Stack.Screen name="Profile" component={FramedProfile} />
-            <Stack.Screen name="Progress" component={FramedProgress} />
-            <Stack.Screen name="Recap" component={FramedRecap} />
+            <Stack.Screen name="ChatThread" component={PushChatThread} />
+            <Stack.Screen name="GroupInfo" component={PushGroupInfo} />
+            <Stack.Screen name="Approvals" component={PushApprovals} />
+            <Stack.Screen name="Organization" component={PushOrganization} />
+            <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
+            <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />
+            <Stack.Screen name="Notifications" component={PushNotifications} />
+            <Stack.Screen name="Profile" component={PushProfile} />
+            <Stack.Screen name="Progress" component={PushProgress} />
+            <Stack.Screen name="Recap" component={PushRecap} />
           </>
         )}
         <Stack.Screen name="Legal" component={LegalScreen} />
