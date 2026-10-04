@@ -6,6 +6,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import BottomSheet from './BottomSheet';
 import { toYmd, parseYmd, todayYmd, addDays, WEEKDAYS_SHORT, formatTime, formatDue } from '../utils/dates';
+import { glass } from '../theme/glass';
 
 const TIME_PRESETS = ['09:00', '11:00', '14:00', '17:00', '19:00'];
 
@@ -108,7 +109,7 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
             <View style={styles.timeRow}>
               <AnimatedPressable
                 onPress={() => setPickedTime(null)}
-                style={[styles.timeChip, !pickedTime && styles.timeChipActive]}
+                {...glass('inset')} style={[styles.timeChip, !pickedTime && styles.timeChipActive]}
                 haptic="light"
               >
                 <Text style={[styles.timeText, !pickedTime && styles.timeTextActive]}>No time</Text>
@@ -120,7 +121,7 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
                     setPickedTime(tp);
                     onChange({ date: date || todayYmd(), time: tp });
                   }}
-                  style={[styles.timeChip, pickedTime === tp && styles.timeChipActive]}
+                  {...glass('inset')} style={[styles.timeChip, pickedTime === tp && styles.timeChipActive]}
                   haptic="light"
                 >
                   <Text style={[styles.timeText, pickedTime === tp && styles.timeTextActive]}>{formatTime(tp)}</Text>

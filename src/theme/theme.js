@@ -55,7 +55,10 @@ export const lightColors = {
   amber: redScale,
   white: '#ffffff',
   black: '#000000',
-  overlay: 'rgba(0, 0, 0, 0.4)',
+  overlay: 'rgba(30, 8, 8, 0.28)',
+  // Screens are transparent so the glass atmosphere (public/index.html) shows through.
+  page: 'transparent',
+  rim: 'rgba(255, 255, 255, 0.55)',
 };
 
 export const darkColors = {
@@ -99,7 +102,9 @@ export const darkColors = {
   amber: darkRedScale,
   white: '#101010',
   black: '#fafafa',
-  overlay: 'rgba(0, 0, 0, 0.6)',
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  page: 'transparent',
+  rim: 'rgba(255, 255, 255, 0.12)',
 };
 
 export const colors = lightColors;
@@ -142,4 +147,17 @@ export const fontWeight = {
   medium: '500',
   semibold: '600',
   bold: '700',
+};
+
+// SF-like type ramp: big text tightens, small text opens a touch (it stays legible over glass).
+// Spread into a Text style: { ...type.title, color }.
+export const type = {
+  largeTitle: { fontSize: 32, lineHeight: 38, fontWeight: '800', letterSpacing: -0.9 },
+  title: { fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.5 },
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600', letterSpacing: -0.3 },
+  body: { fontSize: 15, lineHeight: 21, fontWeight: '500', letterSpacing: -0.2 },
+  callout: { fontSize: 14, lineHeight: 19, fontWeight: '500', letterSpacing: -0.12 },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.05 },
+  // Vibrancy label over glass: slightly heavier and opened up instead of flat grey.
+  label: { fontSize: 11, lineHeight: 14, fontWeight: '700', letterSpacing: 0.4 },
 };

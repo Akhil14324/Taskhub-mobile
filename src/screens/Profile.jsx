@@ -589,7 +589,7 @@ export default function Profile() {
 const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: colors.page,
   },
   content: {
     padding: spacing.lg,

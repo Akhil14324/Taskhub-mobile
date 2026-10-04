@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import { View, Text, Modal as RNModal, StyleSheet, ScrollView, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,13 +10,16 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useColors } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 import AnimatedPressable from './AnimatedPressable';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useBackClose from '../hooks/useBackClose';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SPRING_CONFIG = { damping: 24, stiffness: 280, mass: 0.8, overshootClamping: true };
+const CLOSE_SPRING = { ...SPRING.smooth, overshootClamping: true };
+const CLOSE_MS = 300;
 
 /** Phones: a tall sheet from the bottom. Desktop browsers: a compact centred dialog that fits its content (`width` sets its maximum). */
 export default function Modal({ open, onClose, title, children, width = 460 }) {
@@ -26,16 +29,31 @@ export default function Modal({ open, onClose, title, children, width = 460 }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const overlayOpacity = useSharedValue(0);
+  const materialize = useSharedValue(0);
+  // Stay mounted while the exit spring plays, then unmount.
+  const [mounted, setMounted] = useState(false);
+  const timer = useRef(null);
 
   useEffect(() => {
-    if (open && desktop) {
-      translateY.value = 0;
-      overlayOpacity.value = withTiming(1, { duration: 160 });
-    } else if (open) {
-      translateY.value = withSpring(0, SPRING_CONFIG);
-      overlayOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.ease) });
+    clearTimeout(timer.current);
+    if (open) {
+      setMounted(true);
+      if (desktop) {
+        translateY.value = 0;
+        materialize.value = withSpring(1, SPRING.sheet);
+      } else {
+        translateY.value = withSpring(0, SPRING.sheet);
+        materialize.value = 1;
+      }
+      overlayOpacity.value = withTiming(1, { duration: 220 });
+    } else {
+      translateY.value = desktop ? 0 : withSpring(SCREEN_HEIGHT, CLOSE_SPRING);
+      materialize.value = withSpring(0, CLOSE_SPRING);
+      overlayOpacity.value = withTiming(0, { duration: 220 });
+      timer.current = setTimeout(() => setMounted(false), CLOSE_MS);
     }
-  }, [open, desktop, translateY, overlayOpacity]);
+    return () => clearTimeout(timer.current);
+  }, [open, desktop, translateY, overlayOpacity, materialize]);
 
   useEffect(() => {
     if (!open || !desktop || typeof document === 'undefined') return undefined;
@@ -45,7 +63,8 @@ export default function Modal({ open, onClose, title, children, width = 460 }) {
   }, [open, desktop, onClose]);
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.value }, { scale: desktop ? 0.94 + 0.06 * materialize.value : 1 }],
+    opacity: desktop ? Math.min(1, materialize.value * 1.4) : 1,
   }));
 
   const overlayStyle = useAnimatedStyle(() => ({
@@ -54,19 +73,19 @@ export default function Modal({ open, onClose, title, children, width = 460 }) {
 
   useBackClose(open, onClose);
 
-  if (!open) return null;
+  if (!mounted && !open) return null;
 
   return (
     <RNModal
-      visible={open}
+      visible
       transparent
       animationType="none"
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View style={[styles.overlay, desktop && styles.overlayDesktop, overlayStyle]}>
+        <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && styles.overlayDesktop, overlayStyle]}>
           <TouchableWithoutFeedback onPress={() => {}}>
-            <Animated.View style={[styles.container, desktop ? [styles.dialog, { maxWidth: width }] : { paddingBottom: spacing.xxxl + insets.bottom }, sheetStyle]}>
+            <Animated.View {...glass('sheet')} style={[styles.container, desktop ? [styles.dialog, { maxWidth: width }] : { paddingBottom: spacing.xxxl + insets.bottom }, sheetStyle]}>
               <View style={styles.header}>
                 <Text style={styles.title}>{title}</Text>
                 <AnimatedPressable onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">
@@ -92,14 +111,14 @@ const createStyles = (colors) => StyleSheet.create({
   },
   overlayDesktop: { justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
   dialog: {
-    height: 'auto', width: '100%', maxHeight: '88%', borderRadius: radius.xl, overflow: 'hidden',
+    height: 'auto', width: '100%', maxHeight: '88%', borderRadius: 28, overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
   },
   bodyDesktop: { flexGrow: 0 },
   container: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     height: '90%',
   },
   header: {
@@ -107,12 +126,11 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.lg,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray[200],
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
+    ...type.headline,
     color: colors.gray[900],
   },
   closeBtn: {

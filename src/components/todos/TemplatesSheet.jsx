@@ -14,6 +14,7 @@ import { formatDue, todayYmd } from '../../utils/dates';
 import { parseOutline, countNodes } from '../../utils/templateOutline';
 import { showToast, confirmDialog } from '../../utils/events';
 import { openNotificationTarget } from '../../navigation/navigationRef';
+import { glass } from '../../theme/glass';
 
 const SCOPE_LABEL = { personal: 'Only me', business: 'My business', company: 'Everyone' };
 
@@ -157,7 +158,7 @@ export default function TemplatesSheet({ visible, onClose, defaults = {} }) {
 
         {mode === 'list' && (
           <>
-            <TextInput value={query} onChangeText={setQuery} placeholder="Search templates" placeholderTextColor={colors.gray[400]} style={styles.input} />
+            <TextInput value={query} onChangeText={setQuery} placeholder="Search templates" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={styles.input} />
             {templates === null && <Text style={styles.sub}>Loading...</Text>}
             {templates && shown.length === 0 && (
               <View style={styles.empty}>
@@ -188,10 +189,10 @@ export default function TemplatesSheet({ visible, onClose, defaults = {} }) {
         {mode === 'use' && chosen && (
           <>
             {!!chosen.description && <Text style={styles.sub}>{chosen.description}</Text>}
-            <View style={styles.preview}><Preview tree={chosen.tree} colors={colors} /></View>
+            <View {...glass('inset')} style={styles.preview}><Preview tree={chosen.tree} colors={colors} /></View>
 
             <Text style={styles.label}>Start day</Text>
-            <AnimatedPressable style={styles.dateBtn} onPress={() => setDateOpen(true)}>
+            <AnimatedPressable {...glass('inset')} style={styles.dateBtn} onPress={() => setDateOpen(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.brand[600]} />
               <Text style={styles.dateText}>{formatDue(start)}</Text>
               <Text style={styles.sub}>due dates count from here</Text>
@@ -218,7 +219,7 @@ export default function TemplatesSheet({ visible, onClose, defaults = {} }) {
               </>
             )}
 
-            <AnimatedPressable onPress={use} haptic="medium" style={[styles.primary, busy && { opacity: 0.6 }]}>
+            <AnimatedPressable onPress={use} haptic="medium" {...glass('accent')} style={[styles.primary, busy && { opacity: 0.6 }]}>
               <Ionicons name="flash" size={16} color="#fff" />
               <Text style={styles.primaryText}>{busy ? 'Creating...' : `Create ${chosen.item_count} task${chosen.item_count === 1 ? '' : 's'}`}</Text>
             </AnimatedPressable>
@@ -228,20 +229,20 @@ export default function TemplatesSheet({ visible, onClose, defaults = {} }) {
 
         {mode === 'new' && (
           <>
-            <TextInput value={name} onChangeText={setName} placeholder="Name, e.g. Monthly GST filing" placeholderTextColor={colors.gray[400]} style={styles.input} maxLength={120} />
-            <TextInput value={desc} onChangeText={setDesc} placeholder="What it is for (optional)" placeholderTextColor={colors.gray[400]} style={styles.input} maxLength={500} />
+            <TextInput value={name} onChangeText={setName} placeholder="Name, e.g. Monthly GST filing" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={styles.input} maxLength={120} />
+            <TextInput value={desc} onChangeText={setDesc} placeholder="What it is for (optional)" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={styles.input} maxLength={500} />
             <Text style={styles.label}>Tasks</Text>
             <TextInput
               value={outline}
               onChangeText={setOutline}
               placeholder={'One task per line. Indent two spaces for a sub-task.\nFile GST {month} +0d\n  Reconcile sales p1 +2d\n  Pay the tax +5d'}
               placeholderTextColor={colors.gray[400]}
-              style={[styles.input, styles.outline]}
+              {...glass('inset')} style={[styles.input, styles.outline]}
               multiline
               autoCapitalize="none"
             />
             <Text style={styles.sub}>+3d = due 3 days after the start, p1 to p3 = priority. {'{month}'}, {'{year}'}, {'{date}'} and {'{week}'} fill in automatically.</Text>
-            {tree.length > 0 && <View style={styles.preview}><Preview tree={tree} colors={colors} /></View>}
+            {tree.length > 0 && <View {...glass('inset')} style={styles.preview}><Preview tree={tree} colors={colors} /></View>}
             <Text style={styles.label}>Who can use it</Text>
             <View style={styles.chips}>
               {scopes.map(([key, label]) => <Chip key={key} small label={label} active={scope === key} onPress={() => setScope(key)} />)}
@@ -253,7 +254,7 @@ export default function TemplatesSheet({ visible, onClose, defaults = {} }) {
             )}
             <AnimatedPressable
               onPress={save}
-              style={[styles.primary, (!name.trim() || !tree.length || (scope === 'business' && !scopeBiz) || busy) && { opacity: 0.5 }]}
+              {...glass('accent')} style={[styles.primary, (!name.trim() || !tree.length || (scope === 'business' && !scopeBiz) || busy) && { opacity: 0.5 }]}
             >
               <Text style={styles.primaryText}>{busy ? 'Saving...' : `Save template (${countNodes(tree)} tasks)`}</Text>
             </AnimatedPressable>
@@ -298,7 +299,7 @@ export function SaveTemplateSheet({ visible, onClose, todo }) {
       <View style={styles.wrap}>
         <Text style={styles.title}>Save as template</Text>
         <Text style={styles.sub}>Everything below this to-do is saved too. Dates are kept as days from its due date.</Text>
-        <TextInput value={name} onChangeText={setName} placeholder="Template name" placeholderTextColor={colors.gray[400]} style={styles.input} maxLength={120} />
+        <TextInput value={name} onChangeText={setName} placeholder="Template name" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={styles.input} maxLength={120} />
         <Text style={styles.label}>Who can use it</Text>
         <View style={styles.chips}>
           <Chip small label="Only me" active={scope === 'personal'} onPress={() => setScope('personal')} />
@@ -310,7 +311,7 @@ export function SaveTemplateSheet({ visible, onClose, todo }) {
             {businesses.map((b) => <Chip key={b.id} small icon="briefcase-outline" label={b.name} active={biz === b.id} onPress={() => setBiz(b.id)} />)}
           </View>
         )}
-        <AnimatedPressable onPress={save} style={[styles.primary, (!name.trim() || (scope === 'business' && !biz) || busy) && { opacity: 0.5 }]}>
+        <AnimatedPressable onPress={save} {...glass('accent')} style={[styles.primary, (!name.trim() || (scope === 'business' && !biz) || busy) && { opacity: 0.5 }]}>
           <Text style={styles.primaryText}>{busy ? 'Saving...' : 'Save template'}</Text>
         </AnimatedPressable>
       </View>

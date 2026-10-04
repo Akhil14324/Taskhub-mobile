@@ -2,7 +2,8 @@ import { memo, useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
 import AnimatedPressable from './AnimatedPressable';
 import useBackClose from '../hooks/useBackClose';
 
@@ -22,6 +23,7 @@ export const Input = memo(function Input({ label, value, onChangeText, placehold
         onFocus={onFocus}
         style={[styles.input, style]}
         placeholderTextColor={colors.gray[400]}
+        {...glass('inset')}
       />
     </View>
   );
@@ -99,7 +101,7 @@ export function DateInput({ label, value, onChangeText, placeholder }) {
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <AnimatedPressable onPress={onOpen} style={styles.input} haptic="light">
+      <AnimatedPressable onPress={onOpen} style={styles.input} haptic="light" {...glass('inset')}>
         <Text style={value ? styles.inputValue : styles.placeholder}>
           {value || placeholder || 'Select a date'}
         </Text>
@@ -107,7 +109,7 @@ export function DateInput({ label, value, onChangeText, placeholder }) {
 
       <Modal visible={show} transparent animationType="fade" onRequestClose={() => setShow(false)}>
         <Pressable style={styles.calendarOverlay} onPress={() => setShow(false)}>
-          <View style={styles.calendarSheet}>
+          <View {...glass('sheet')} style={styles.calendarSheet}>
             <View style={styles.calendarHeader}>
               <AnimatedPressable onPress={() => changeMonth(-1)} hitSlop={8} haptic="light">
                 <Ionicons name="chevron-back" size={24} color={colors.brand[600]} />
@@ -166,6 +168,7 @@ export const MultilineInput = memo(function MultilineInput({ label, value, onCha
         placeholder={placeholder}
         multiline
         numberOfLines={rows || 3}
+        {...glass('inset')}
         style={[styles.input, styles.multiline, style]}
         placeholderTextColor={colors.gray[400]}
         textAlignVertical="top"
@@ -179,17 +182,17 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: {
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-    color: colors.gray[700],
+    ...type.caption,
+    color: colors.gray[600],
     marginBottom: spacing.xs,
+    marginLeft: 4,
   },
   input: {
     borderWidth: 1,
     borderColor: colors.gray[300],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
     fontSize: fontSize.base,
     color: colors.gray[900],
     backgroundColor: colors.white,
@@ -209,7 +212,7 @@ const createStyles = (colors) => StyleSheet.create({
   calendarOverlay: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(30,8,8,0.3)',
     padding: spacing.lg,
   },
   calendarSheet: {
@@ -217,8 +220,8 @@ const createStyles = (colors) => StyleSheet.create({
     maxWidth: 380,
     alignSelf: 'center',
     backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: 28,
+    padding: spacing.lg,
   },
   calendarHeader: {
     flexDirection: 'row',

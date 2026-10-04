@@ -13,6 +13,7 @@ import { SkeletonList } from '../components/Skeleton';
 import { Avatar, Chip, EmptyHero } from '../components/kit';
 import { HealthPill } from '../components/todos/TimeHealth';
 import { formatSeconds, healthColor } from '../utils/timeline';
+import { glass } from '../theme/glass';
 
 const RANGES = [7, 30, 90];
 const FILTERS = [
@@ -102,7 +103,7 @@ export default function TeamMonitorScreen() {
         {!!error && <EmptyHero icon="lock-closed" title="Not available" message={error} />}
 
         {team && (
-          <View style={styles.teamCard}>
+          <View {...glass('card')} style={styles.teamCard}>
             <View style={styles.teamTop}>
               <Stat label="Open" value={team.open} />
               <Stat label="Overdue" value={team.overdue} level={team.overdue ? 'red' : null} />
@@ -123,7 +124,7 @@ export default function TeamMonitorScreen() {
 
         {data && (
           <>
-            <View style={styles.searchBox}>
+            <View {...glass('card')} style={styles.searchBox}>
               <Ionicons name="search" size={16} color={colors.gray[400]} />
               <TextInput
                 value={query}
@@ -214,7 +215,7 @@ export function Avg({ label, value, level }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },

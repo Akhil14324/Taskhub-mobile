@@ -5,12 +5,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -32,36 +26,22 @@ function ThemedStatusBar() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.style.backgroundColor = colors.gray[50];
-    document.body.style.backgroundColor = colors.gray[50];
+    document.body.style.backgroundColor = 'transparent';
     document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
   }, [colors, theme]);
   return <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />;
 }
 
 /**
- * Wraps the app content with a crossfade on theme change.
- * When dark/light mode toggles, the background color animates smoothly
- * instead of hard-swapping in a single frame.
+ * Fills the window for the app content. It stays transparent: the page colour and the glass
+ * atmosphere (public/index.html, body::before) live on the document, so glass surfaces always have
+ * something to refract, and switching theme re-tints that layer in place.
  */
 function ThemeCrossfade({ children }) {
-  const { colors, theme } = useTheme();
-  const bgColor = useSharedValue(colors.gray[50]);
-
-  useEffect(() => {
-    bgColor.value = withTiming(colors.gray[50], {
-      duration: 300,
-      easing: Easing.inOut(Easing.ease),
-    });
-  }, [colors.gray[50], bgColor]);
-
-  const bgStyle = useAnimatedStyle(() => ({
-    backgroundColor: bgColor.value,
-  }));
-
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, bgStyle]}>
+    <View style={StyleSheet.absoluteFill}>
       {children}
-    </Animated.View>
+    </View>
   );
 }
 

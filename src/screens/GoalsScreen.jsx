@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
 });
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },

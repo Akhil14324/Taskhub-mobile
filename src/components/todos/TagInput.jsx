@@ -9,6 +9,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { Avatar } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import { activeMentionQuery, completeMention } from '../../utils/quickAdd';
+import { glass } from '../../theme/glass';
 
 const TAG_ICON = { user: 'person', todo: 'checkbox-outline', business: 'business' };
 
@@ -76,7 +77,7 @@ export default function TagInput({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.gray[400]}
-          style={[styles.input, { minHeight }]}
+          {...glass('inset')} style={[styles.input, { minHeight }]}
           multiline
           autoFocus={autoFocus}
         />
@@ -90,7 +91,7 @@ export default function TagInput({
         </AnimatedPressable>
       </View>
       {suggestions.length > 0 && (
-        <View style={styles.box}>
+        <View {...glass('card')} style={styles.box}>
           {suggestions.map((s) => (
             <AnimatedPressable key={`${s.type}:${s.id}`} onPress={() => pick(s)} haptic="light" style={styles.row}>
               {s.type === 'user'

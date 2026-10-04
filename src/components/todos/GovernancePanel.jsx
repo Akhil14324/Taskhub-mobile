@@ -8,6 +8,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import PromptSheet from './PromptSheet';
 import { timeAgo } from '../../utils/dates';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 /**
  * Business-only controls of a to-do, driven entirely by the server's `permissions`:
@@ -52,7 +53,7 @@ export default function GovernancePanel({ todo }) {
   return (
     <View style={styles.wrap}>
       {todo.review_state === 'proposed' && (
-        <View style={styles.card}>
+        <View {...glass('inset')} style={styles.card}>
           <View style={styles.head}>
             <Ionicons name="git-pull-request-outline" size={18} color={colors.brand[700]} />
             <View style={{ flex: 1 }}>
@@ -74,7 +75,7 @@ export default function GovernancePanel({ todo }) {
       )}
 
       {todo.review_state === 'rejected' && (
-        <View style={styles.card}>
+        <View {...glass('inset')} style={styles.card}>
           <View style={styles.head}>
             <Ionicons name="close-circle-outline" size={18} color={colors.brand[700]} />
             <View style={{ flex: 1 }}>
@@ -91,7 +92,7 @@ export default function GovernancePanel({ todo }) {
       )}
 
       {todo.status === 'in_review' && !todo.is_done && (
-        <View style={styles.card}>
+        <View {...glass('inset')} style={styles.card}>
           <View style={styles.head}>
             <Ionicons name="eye-outline" size={18} color={colors.brand[700]} />
             <View style={{ flex: 1 }}>
@@ -112,7 +113,7 @@ export default function GovernancePanel({ todo }) {
       )}
 
       {todo.is_done && !!todo.approved_by_name && (
-        <View style={[styles.card, styles.quiet]}>
+        <View {...glass('inset')} style={[styles.card, styles.quiet]}>
           <View style={styles.head}>
             <Ionicons name="ribbon-outline" size={18} color={colors.gray[500]} />
             <Text style={styles.sub}>Approved by {first(todo.approved_by_name)} {todo.approved_at ? timeAgo(todo.approved_at) : ''}</Text>
@@ -121,7 +122,7 @@ export default function GovernancePanel({ todo }) {
       )}
 
       {todo.is_warned && !!todo.warning_message && (
-        <View style={styles.card}>
+        <View {...glass('inset')} style={styles.card}>
           <View style={styles.head}>
             <Ionicons name="warning" size={18} color={colors.red[600]} />
             <View style={{ flex: 1 }}>
@@ -133,7 +134,7 @@ export default function GovernancePanel({ todo }) {
       )}
 
       {!!todo.pending_delete_request_id && (
-        <View style={[styles.card, styles.quiet]}>
+        <View {...glass('inset')} style={[styles.card, styles.quiet]}>
           <View style={styles.head}>
             <Ionicons name="trash-outline" size={18} color={colors.gray[500]} />
             <Text style={styles.sub}>A deletion request is waiting for approval.</Text>

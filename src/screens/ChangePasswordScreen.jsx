@@ -9,6 +9,7 @@ import api from '../api/client';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { showToast } from '../utils/events';
+import { glass } from '../theme/glass';
 
 const RULES = [
   { test: (p) => p.length >= 8, label: 'At least 8 characters' },
@@ -46,7 +47,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.gray[50] }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xxxl }]} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.duration(400)} style={styles.iconWrap}>
           <Ionicons name="key" size={34} color={colors.brand[600]} />
@@ -81,7 +82,7 @@ export default function ChangePasswordScreen() {
           </View>
         </View>
 
-        <AnimatedPressable onPress={save} disabled={!valid || saving} haptic="medium" style={[styles.btn, (!valid || saving) && { opacity: 0.45 }]}>
+        <AnimatedPressable onPress={save} disabled={!valid || saving} haptic="medium" {...glass('accent')} style={[styles.btn, (!valid || saving) && { opacity: 0.45 }]}>
           <Text style={styles.btnText}>{saving ? 'Saving…' : 'Set password & continue'}</Text>
         </AnimatedPressable>
         <AnimatedPressable onPress={logout} style={styles.logout} haptic="light">

@@ -52,6 +52,134 @@
           padding: 6px 8px; border-radius: 6px; pointer-events: none; z-index: 9999;
         }
       }
+      /* ------------------------------------------------------------------------------------------
+         Liquid Glass. One material system, driven by data-glass="<variant>" on any view (see
+         src/theme/glass.js) and by html[data-theme] (set by ThemeProvider). Ingredients, always
+         together: heavy blur, saturation boost, a specular top edge, and a coloured atmosphere behind.
+         Never nest backdrop-filter: inside a blurred panel use data-glass="inset" (tint + sheen only).
+         The UI stays one colour, so the atmosphere is red only.
+         ------------------------------------------------------------------------------------------ */
+      :root {
+        color-scheme: light;
+        --g-panel: 255 255 255;
+        --g-solid: 255 255 255;
+        --g-ink: 24 8 8;
+        --g-edge: 255 255 255;
+        --g-edge-a: 0.7;
+        --g-rim: 255 255 255;
+        --g-rim-a: 0.55;
+        --g-mix-bar: 0.46; --g-mix-card: 0.52; --g-mix-sheet: 0.72; --g-mix-inset: 0.62; --g-mix-menu: 0.9;
+        --g-sat: 190%;
+        --aura-a: 0.30; --aura-b: 0.20; --aura-c: 0.16;
+      }
+      html[data-theme='dark'] {
+        color-scheme: dark;
+        --g-panel: 38 30 30;
+        --g-solid: 24 20 20;
+        --g-ink: 0 0 0;
+        --g-edge-a: 0.2;
+        --g-rim-a: 0.12;
+        --g-mix-bar: 0.48; --g-mix-card: 0.52; --g-mix-sheet: 0.7; --g-mix-inset: 0.55; --g-mix-menu: 0.92;
+        --g-sat: 170%;
+        --aura-a: 0.38; --aura-b: 0.32; --aura-c: 0.2;
+      }
+      /* The atmosphere glass refracts: soft red light on a neutral base. Static: no full-viewport motion. */
+      body::before {
+        content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+        background:
+          radial-gradient(60vmax 52vmax at 8% -6%, rgb(239 68 68 / var(--aura-a)), transparent 62%),
+          radial-gradient(52vmax 46vmax at 104% 14%, rgb(251 113 133 / var(--aura-b)), transparent 60%),
+          radial-gradient(70vmax 50vmax at 48% 112%, rgb(220 38 38 / var(--aura-c)), transparent 64%);
+      }
+      html[data-theme='dark'] body::before {
+        background:
+          radial-gradient(60vmax 52vmax at 8% -6%, rgb(220 38 38 / var(--aura-a)), transparent 62%),
+          radial-gradient(52vmax 46vmax at 104% 14%, rgb(127 29 29 / var(--aura-b)), transparent 60%),
+          radial-gradient(70vmax 50vmax at 48% 112%, rgb(153 27 27 / var(--aura-c)), transparent 64%);
+      }
+
+      [data-glass] {
+        -webkit-backdrop-filter: blur(var(--g-blur, 28px)) saturate(var(--g-sat));
+        backdrop-filter: blur(var(--g-blur, 28px)) saturate(var(--g-sat));
+        border-color: transparent !important;
+      }
+      /* bar: navigation chrome (sidebar, headers) */
+      [data-glass='bar'] {
+        --g-blur: 34px;
+        background-color: rgb(var(--g-panel) / var(--g-mix-bar)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          0 8px 32px -12px rgb(var(--g-ink) / 0.18) !important;
+      }
+      /* card: task cards and content tiles */
+      [data-glass='card'] {
+        --g-blur: 22px;
+        background-color: rgb(var(--g-panel) / var(--g-mix-card)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          0 6px 20px -10px rgb(var(--g-ink) / 0.16) !important;
+      }
+      /* sheet: modals, bottom sheets, dialogs, palette: thickest material, deepest shadow */
+      [data-glass='sheet'] {
+        --g-blur: 44px;
+        background-color: rgb(var(--g-panel) / var(--g-mix-sheet)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) + 0.1)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          0 30px 80px -20px rgb(var(--g-ink) / 0.42), 0 8px 24px -8px rgb(var(--g-ink) / 0.2) !important;
+      }
+      /* capsule: the floating input bar and the tab bar island */
+      [data-glass='capsule'] {
+        --g-blur: 40px;
+        background-color: rgb(var(--g-panel) / var(--g-mix-bar)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) + 0.1)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          inset 0 -10px 20px rgb(var(--g-ink) / 0.05), 0 18px 44px -14px rgb(var(--g-ink) / 0.4), 0 3px 10px rgb(var(--g-ink) / 0.1) !important;
+      }
+      /* button: light frost for secondary controls and chips */
+      [data-glass='button'] {
+        --g-blur: 20px;
+        background-color: rgb(var(--g-panel) / 0.5) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          0 4px 14px -6px rgb(var(--g-ink) / 0.22) !important;
+      }
+      /* accent: the one coloured glass: translucent brand red with a glow */
+      [data-glass='accent'] {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+        background: linear-gradient(180deg, rgb(248 113 113 / 0.96), rgb(220 38 38 / 0.9) 60%, rgb(185 28 28 / 0.92)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 0 0 1px rgb(255 255 255 / 0.18), inset 0 -8px 16px rgb(127 29 29 / 0.28),
+          0 10px 26px -8px rgb(220 38 38 / 0.6), 0 2px 6px rgb(127 29 29 / 0.3) !important;
+      }
+      [data-glass='accent-deep'] {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+        background: linear-gradient(180deg, rgb(220 38 38 / 0.96), rgb(185 28 28 / 0.94) 55%, rgb(127 29 29 / 0.96)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14), inset 0 -8px 16px rgb(69 10 10 / 0.35),
+          0 10px 26px -8px rgb(153 27 27 / 0.65), 0 2px 6px rgb(69 10 10 / 0.35) !important;
+      }
+      /* menu: dropdowns over busy content stay near-opaque so small text is readable */
+      [data-glass='menu'] {
+        --g-blur: 28px;
+        background-color: rgb(var(--g-panel) / var(--g-mix-menu)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
+          0 20px 50px -14px rgb(var(--g-ink) / 0.4) !important;
+      }
+      /* inset: tiles inside a glass panel. NO backdrop-filter (nesting breaks compositing). */
+      [data-glass='inset'] {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+        background-color: rgb(var(--g-panel) / var(--g-mix-inset)) !important;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) * 0.8)), inset 0 0 0 1px rgb(255 255 255 / calc(var(--g-rim-a) * 0.8)),
+          0 1px 3px rgb(var(--g-ink) / 0.1) !important;
+      }
+      /* scrim behind sheets: dims and softens the page (a modal pushes the world back). */
+      [data-glass='scrim'] {
+        -webkit-backdrop-filter: blur(8px) saturate(120%); backdrop-filter: blur(8px) saturate(120%);
+      }
+      /* Typography: SF-like tracking (large text tightens in JS; this is the body default). */
+      #root { letter-spacing: -0.011em; font-synthesis: none; text-rendering: optimizeLegibility; }
+      @media (prefers-reduced-transparency: reduce) {
+        [data-glass]:not([data-glass='accent']) { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgb(var(--g-solid)) !important; }
+      }
+      @media (prefers-contrast: more) {
+        [data-glass]:not([data-glass='accent']) { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgb(var(--g-solid)) !important; box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.6) !important; }
+      }
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        [data-glass]:not([data-glass='accent']):not([data-glass='inset']) { background-color: rgb(var(--g-solid) / 0.94) !important; }
+      }
       * { scrollbar-width: thin; scrollbar-color: rgba(120, 120, 130, 0.35) transparent; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
       *::-webkit-scrollbar-thumb { background: rgba(120, 120, 130, 0.35); border-radius: 8px; }

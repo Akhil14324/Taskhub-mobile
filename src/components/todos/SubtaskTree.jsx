@@ -8,6 +8,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { TodoCheckbox, DueChip, Avatar } from '../kit';
 import { buildTree, subtaskProgress } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const LEVEL = 20;
 
@@ -88,7 +89,7 @@ export default function SubtaskTree({ parent, onOpen }) {
         blurOnSubmit={false}
         placeholder="Sub-task name, then Enter"
         placeholderTextColor={colors.gray[400]}
-        style={styles.input}
+        {...glass('inset')} style={styles.input}
         returnKeyType="done"
       />
       <AnimatedPressable onPress={() => add(parentId)} hitSlop={8} disabled={!text.trim()}>

@@ -1,26 +1,62 @@
-import { memo, useRef, useCallback, useState } from 'react';
+import { memo, useRef, useCallback } from 'react';
 import { Pressable, Platform, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { haptic as webHaptic } from '../utils/feedback';
+import { SPRING } from '../theme/motion';
 
-const SPRING_CONFIG = { damping: 30, stiffness: 500, mass: 0.5, overshootClamping: true };
 const SCALE_DOWN = 0.985;
+const MIN_DEPTH = 0.03;      // even the gentlest press squishes a little: that is what makes it feel liquid
+const MORPH = 0.3;           // corners tighten by this fraction while pressed (small shapes only)
+const MAX_MORPH_RADIUS = 40; // pills and circles keep their shape; the squish alone carries them
+
+const AnimatedPressableView = Animated.createAnimatedComponent(Pressable);
 
 /**
- * Drop-in replacement for TouchableOpacity with a spring scale-down on press.
- * - Scales very slightly on press-in and eases back on press-out (no bounce)
- * - Optional haptic feedback on press
- * - Works with all TouchableOpacity props (onPress, disabled, style, hitSlop, etc.)
- *
+ * Press feedback shared by web and native: a spring-driven "squish". On finger-down the control
+ * compresses (shorter, a touch wider) and its corners tighten, and on release the spring overshoots
+ * so it wobbles back like a drop of liquid. It all runs on the UI thread, starts from the current
+ * value (so a second tap mid-wobble never jumps) and respects reduced motion (a short fade of scale).
+ */
+function usePressSpring(style, scale) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(0);
+  const depth = Math.max(1 - scale, MIN_DEPTH);
+  const flat = StyleSheet.flatten(style) || {};
+  const radiusPx = typeof flat.borderRadius === 'number' && flat.borderRadius <= MAX_MORPH_RADIUS ? flat.borderRadius : 0;
+
+  const animated = useAnimatedStyle(() => {
+    const out = {
+      transform: [
+        { scaleX: 1 + depth * 0.3 * p.value },
+        { scaleY: 1 - depth * p.value },
+      ],
+    };
+    if (radiusPx) out.borderRadius = radiusPx * (1 - MORPH * p.value);
+    return out;
+  });
+
+  const down = useCallback(() => {
+    p.value = reduced ? withTiming(1, { duration: 80 }) : withSpring(1, SPRING.press);
+  }, [p, reduced]);
+  const up = useCallback(() => {
+    p.value = reduced ? withTiming(0, { duration: 120 }) : withSpring(0, SPRING.release);
+  }, [p, reduced]);
+
+  return { animated, down, up };
+}
+
+/**
+ * Drop-in replacement for TouchableOpacity with the liquid squish press.
  * Props:
  * - haptic: boolean | 'light' | 'medium' | 'heavy' (default: false)
- * - scale: number (default: 0.985) — how much to scale down on press
+ * - scale: number (default 0.985); lower presses deeper (the squish never gets shallower than 3%)
  * - ...all Pressable props
  */
 function AnimatedPressable({
@@ -78,43 +114,40 @@ function WebPressable({
   scale,
   ...rest
 }) {
-  const [pressed, setPressed] = useState(false);
+  const { animated, down, up } = usePressSpring(style, scale);
   const hapticRef = useRef(haptic);
-
-  const triggerHaptic = useCallback(() => {
-    if (!hapticRef.current || disabled) return;
-    webHaptic(hapticRef.current === true ? 'light' : hapticRef.current);
-  }, [disabled]);
+  hapticRef.current = haptic;
 
   const handlePress = useCallback((e) => {
     if (disabled) return;
-    if (haptic) triggerHaptic();
+    if (hapticRef.current) webHaptic(hapticRef.current === true ? 'light' : hapticRef.current);
     onPress?.(e);
-  }, [disabled, haptic, triggerHaptic, onPress]);
+  }, [disabled, onPress]);
 
+  // Respond on pointer-down, not on release: the squish starts the instant the finger lands.
   const handlePressIn = useCallback((e) => {
-    setPressed(true);
+    down();
     onPressIn?.(e);
-  }, [onPressIn]);
+  }, [down, onPressIn]);
 
   const handlePressOut = useCallback((e) => {
-    setPressed(false);
+    up();
     onPressOut?.(e);
-  }, [onPressOut]);
+  }, [up, onPressOut]);
 
   return (
-    <Pressable
+    <AnimatedPressableView
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled}
       // A button role lets Tab reach it and Enter / Space press it (keyboard-only use).
       accessibilityRole={onPress ? 'button' : undefined}
-      style={[style, { transform: [{ scale: pressed ? scale : 1 }], transitionProperty: 'transform', transitionDuration: '90ms', transitionTimingFunction: 'ease-out' }]}
+      style={[style, animated]}
       {...rest}
     >
       {children}
-    </Pressable>
+    </AnimatedPressableView>
   );
 }
 
@@ -129,8 +162,9 @@ function NativePressable({
   scale,
   ...rest
 }) {
-  const isActive = useSharedValue(1);
+  const { animated, down, up } = usePressSpring(style, scale);
   const hapticRef = useRef(haptic);
+  hapticRef.current = haptic;
 
   const triggerHaptic = useCallback(() => {
     if (!hapticRef.current || disabled) return;
@@ -141,24 +175,20 @@ function NativePressable({
   }, [disabled]);
 
   const handlePressIn = useCallback((e) => {
-    isActive.value = withTiming(scale, { duration: 80 });
+    down();
     onPressIn?.(e);
-  }, [scale, onPressIn]);
+  }, [down, onPressIn]);
 
   const handlePressOut = useCallback((e) => {
-    isActive.value = withSpring(1, SPRING_CONFIG);
+    up();
     onPressOut?.(e);
-  }, [onPressOut]);
+  }, [up, onPressOut]);
 
   const handlePress = useCallback((e) => {
     if (disabled) return;
     if (haptic) triggerHaptic();
     onPress?.(e);
   }, [disabled, haptic, triggerHaptic, onPress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: isActive.value }],
-  }));
 
   // Extract layout-only props for the outer Pressable; full style goes on inner view
   const layoutStyle = StyleSheet.flatten(style);
@@ -197,7 +227,7 @@ function NativePressable({
       android_ripple={null}
       {...rest}
     >
-      <Animated.View style={[style, animatedStyle]}>
+      <Animated.View style={[style, animated]}>
         {children}
       </Animated.View>
     </Pressable>

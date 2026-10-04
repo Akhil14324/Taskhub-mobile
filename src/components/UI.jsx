@@ -14,6 +14,8 @@ import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import useIsDesktop from '../hooks/useBreakpoint';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 
 function useThemedStyles() {
   const colors = useColors();
@@ -33,7 +35,7 @@ export function Screen({ children, style, bottomOffset = 0 }) {
 export function Card({ children, style, onPress }) {
   const { styles } = useThemedStyles();
   return (
-    <View style={[styles.card, style]}>
+    <View {...glass('card')} style={[styles.card, style]}>
       {children}
     </View>
   );
@@ -107,8 +109,8 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
 
   useEffect(() => {
     if (visible) {
-      sheetTranslateY.value = withSpring(0, { damping: 24, stiffness: 280, mass: 0.8, overshootClamping: true });
-      overlayOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.ease) });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
+      overlayOpacity.value = withTiming(1, { duration: 220 });
     }
   }, [visible, sheetTranslateY, overlayOpacity]);
 
@@ -122,9 +124,9 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[styles.overlay, desktop && { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }, overlayStyle]}>
+      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <Animated.View style={[styles.sheet, desktop ? { width: '100%', maxWidth: 420, borderRadius: radius.xl, paddingBottom: spacing.md } : { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
+        <Animated.View {...glass('sheet')} style={[styles.sheet, desktop ? { width: '100%', maxWidth: 420, borderRadius: 28, paddingBottom: spacing.md } : { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{title || t('more')}</Text>
             <AnimatedPressable onPress={onClose} style={styles.sheetCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">
@@ -135,6 +137,7 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
             {items.map((item, index) => (
               <AnimatedPressable
                 key={index}
+                {...glass('inset')}
                 style={styles.sheetItem}
                 onPress={() => {
                   onClose();
@@ -352,6 +355,8 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   sheetItem: {
+    borderRadius: 16,
+    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,

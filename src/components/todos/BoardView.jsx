@@ -8,6 +8,7 @@ import { TodoCheckbox, DueChip, Avatar, PRIORITY } from '../kit';
 import { formatDuration, deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 import { makeDraggable } from '../../hooks/useWebReorder';
+import { glass } from '../../theme/glass';
 
 const COLUMN_WIDTH = 288;
 const MARK_TOP = 'inset 0 3px 0 #dc2626';
@@ -175,7 +176,7 @@ function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onTo
         : t.status === 'on_hold' && !t.is_done ? 'On hold' : null;
   return (
     <View ref={makeDraggable} dataSet={{ boardCard: String(t.id), col: String(colKey) }} style={styles.cardWrap}>
-      <Pressable style={[styles.card, selected && styles.cardSelected]} onPress={() => onOpen(t)}>
+      <Pressable {...glass('card')} style={[styles.card, selected && styles.cardSelected]} onPress={() => onOpen(t)}>
         <View style={styles.cardTop}>
           <TodoCheckbox
             checked={t.is_done}

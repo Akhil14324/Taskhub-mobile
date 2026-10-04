@@ -10,6 +10,7 @@ import { PrimaryButton } from '../Button';
 import { formatDue } from '../../utils/dates';
 import { showToast, confirmDialog } from '../../utils/events';
 import { openNotificationTarget } from '../../navigation/navigationRef';
+import { glass } from '../../theme/glass';
 
 /** Update one key result: type the new number, or see (and open) the to-dos it is measured by. */
 export default function KeyResultSheet({ visible, onClose, kr, canManage, onChanged }) {
@@ -71,7 +72,7 @@ export default function KeyResultSheet({ visible, onClose, kr, canManage, onChan
               onChangeText={setValue}
               keyboardType="numeric"
               editable={canManage}
-              style={styles.input}
+              {...glass('inset')} style={styles.input}
               autoFocus={canManage}
               onSubmitEditing={save}
             />

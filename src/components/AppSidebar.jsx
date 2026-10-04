@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
 import AnimatedPressable from './AnimatedPressable';
 import ShortcutsSheet from './ShortcutsSheet';
 import { Avatar } from './kit';
@@ -50,11 +51,12 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint }) {
       accessibilityLabel={label}
       style={{
         flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 9, paddingHorizontal: spacing.md,
-        borderRadius: radius.md, backgroundColor: active ? colors.brand[100] : 'transparent',
+        borderRadius: radius.lg, backgroundColor: active ? 'rgba(220, 38, 38, 0.14)' : 'transparent',
+        boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(220,38,38,0.18)' : undefined,
       }}
     >
       <Ionicons name={active ? activeIcon || icon : icon} size={19} color={active ? colors.brand[700] : colors.gray[500]} />
-      <Text style={{ flex: 1, fontSize: fontSize.base, fontWeight: active ? '700' : '500', color: active ? colors.brand[700] : colors.gray[700] }} numberOfLines={1}>
+      <Text style={{ flex: 1, ...type.callout, fontSize: fontSize.base, fontWeight: active ? '700' : '600', color: active ? colors.brand[700] : colors.gray[700] }} numberOfLines={1}>
         {label}
       </Text>
       {badge > 0 ? (
@@ -62,7 +64,7 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint }) {
           <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{badge > 99 ? '99+' : badge}</Text>
         </View>
       ) : !!hint && (
-        <Text style={{ fontSize: 11, color: colors.gray[400], fontWeight: '600' }}>{hint}</Text>
+        <Text style={{ ...type.label, color: colors.gray[500] }}>{hint}</Text>
       )}
     </AnimatedPressable>
   );
@@ -104,7 +106,7 @@ export default function AppSidebar({ routeName }) {
   }, true);
 
   return (
-    <View style={styles.wrap}>
+    <View {...glass('bar')} style={styles.wrap}>
       <View style={styles.brand}>
         <View style={styles.logo}><Ionicons name="checkmark" size={18} color="#fff" /></View>
         <Text style={styles.brandText}>TaskHub</Text>
@@ -130,7 +132,7 @@ export default function AppSidebar({ routeName }) {
         <Entry icon="keypad-outline" label="Keyboard shortcuts" hint={hint('app.help')} onPress={() => setHelp(true)} />
         <Entry icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onPress={toggleTheme} />
       </View>
-      <AnimatedPressable style={styles.me} onPress={() => go('Profile')}>
+      <AnimatedPressable style={styles.me} onPress={() => go('Profile')} {...glass('inset')}>
         <Avatar name={user?.name} uri={user?.profile_picture} size={34} />
         <View style={{ flex: 1 }}>
           <Text style={styles.meName} numberOfLines={1}>{user?.name}</Text>
@@ -151,8 +153,8 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.gray[200],
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingBottom: spacing.xl },
-  logo: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.brand[600], alignItems: 'center', justifyContent: 'center' },
-  brandText: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.4 },
+  logo: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.brand[600], alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 14px -4px rgba(220,38,38,0.55)' },
+  brandText: { ...type.headline, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   group: { gap: 2 },
   me: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, marginTop: spacing.sm, borderRadius: radius.lg,

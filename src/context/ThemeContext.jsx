@@ -29,8 +29,10 @@ export function ThemeProvider({ children }) {
   // Native controls (scrollbars, date inputs, autofill) follow the app's theme on the web.
   useEffect(() => {
     if (typeof document === 'undefined') return;
+    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
-    document.body.style.backgroundColor = colors.gray[50];
+    document.documentElement.style.backgroundColor = colors.gray[50];
+    document.body.style.backgroundColor = 'transparent'; // the glass atmosphere (body::before) sits between page and app
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#dc2626');
   }, [theme, colors]);

@@ -6,6 +6,7 @@ import { useColors, useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { glass } from '../theme/glass';
 import { navigationRef, openNotificationTarget } from '../navigation/navigationRef';
 import { openQuickAdd, openTemplates, openShortcuts } from '../utils/events';
 import { formatDue } from '../utils/dates';
@@ -105,8 +106,8 @@ export default function CommandPalette({ visible, onClose }) {
   let lastGroup = null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.card} onPress={() => {}}>
+      <Pressable {...glass('scrim')} style={styles.overlay} onPress={onClose}>
+        <Pressable {...glass('sheet')} style={styles.card} onPress={() => {}}>
           <View style={styles.inputRow}>
             <Ionicons name="search" size={18} color={colors.gray[400]} />
             <TextInput
@@ -150,18 +151,16 @@ export default function CommandPalette({ visible, onClose }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', paddingTop: '12%', paddingHorizontal: spacing.lg },
+  overlay: { flex: 1, backgroundColor: 'rgba(30,8,8,0.3)', alignItems: 'center', paddingTop: '12%', paddingHorizontal: spacing.lg },
   card: {
-    width: '100%', maxWidth: 620, borderRadius: radius.xl, backgroundColor: colors.white, overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
-    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 30, shadowOffset: { width: 0, height: 12 },
+    width: '100%', maxWidth: 620, borderRadius: 28, backgroundColor: colors.white, overflow: 'hidden',
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] },
   input: { flex: 1, fontSize: fontSize.md, color: colors.gray[900], paddingVertical: 16, outlineStyle: 'none' },
   esc: { fontSize: 11, fontWeight: '700', color: colors.gray[400], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[300], borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   group: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.gray[400], paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 4 },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 10 },
-  itemOn: { backgroundColor: colors.brand[50] },
+  itemOn: { backgroundColor: 'rgba(220, 38, 38, 0.12)', borderRadius: 14, marginHorizontal: 8 },
   itemLabel: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
   itemDetail: { fontSize: 11, color: colors.gray[500], marginTop: 1 },
   hint: { fontSize: 11, color: colors.gray[400], fontWeight: '700' },

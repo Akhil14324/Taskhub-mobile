@@ -7,6 +7,7 @@ import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import { TodoCheckbox, DueChip } from '../kit';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 /** Sub-tasks of one to-do: progress bar, tick-able rows and an inline "add" field. */
 export default function SubtaskList({ parent, subtasks, onOpen }) {
@@ -65,7 +66,7 @@ export default function SubtaskList({ parent, subtasks, onOpen }) {
             blurOnSubmit={false}
             placeholder="Sub-task name, then Enter"
             placeholderTextColor={colors.gray[400]}
-            style={styles.input}
+            {...glass('inset')} style={styles.input}
             returnKeyType="done"
           />
           <AnimatedPressable onPress={add} haptic="light" hitSlop={8} disabled={!text.trim()}>

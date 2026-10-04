@@ -10,6 +10,7 @@ import BottomSheet from '../BottomSheet';
 import { Avatar } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 export const KUDOS_REASONS = {
   great_work: { label: 'Great work', icon: 'ribbon' },
@@ -68,7 +69,7 @@ export default function KudosSheet({ visible, onClose, toUser = null, todo = nul
         </View>
 
         {picked ? (
-          <View style={styles.picked}>
+          <View {...glass('inset')} style={styles.picked}>
             <Avatar name={picked.name} uri={picked.profile_picture} size={34} />
             <Text style={styles.pickedName} numberOfLines={1}>{picked.name}</Text>
             {!toUser && (
@@ -84,7 +85,7 @@ export default function KudosSheet({ visible, onClose, toUser = null, todo = nul
               onChangeText={setQuery}
               placeholder="Who do you want to thank?"
               placeholderTextColor={colors.gray[400]}
-              style={styles.input}
+              {...glass('inset')} style={styles.input}
               autoFocus
             />
             {matches.map((p) => (
@@ -104,7 +105,7 @@ export default function KudosSheet({ visible, onClose, toUser = null, todo = nul
           {Object.entries(KUDOS_REASONS).map(([key, r]) => {
             const active = reason === key;
             return (
-              <AnimatedPressable key={key} onPress={() => setReason(key)} style={[styles.reason, active && styles.reasonActive]}>
+              <AnimatedPressable key={key} onPress={() => setReason(key)} {...glass('inset')} style={[styles.reason, active && styles.reasonActive]}>
                 <Ionicons name={r.icon} size={14} color={active ? '#fff' : colors.brand[600]} />
                 <Text style={[styles.reasonText, active && { color: '#fff' }]}>{r.label}</Text>
               </AnimatedPressable>
@@ -117,12 +118,12 @@ export default function KudosSheet({ visible, onClose, toUser = null, todo = nul
           onChangeText={setMessage}
           placeholder="Add a few words (optional)"
           placeholderTextColor={colors.gray[400]}
-          style={[styles.input, styles.message]}
+          {...glass('inset')} style={[styles.input, styles.message]}
           multiline
           maxLength={280}
         />
 
-        <AnimatedPressable onPress={send} haptic="medium" style={[styles.send, (!picked || sending) && { opacity: 0.5 }]}>
+        <AnimatedPressable onPress={send} haptic="medium" {...glass('accent')} style={[styles.send, (!picked || sending) && { opacity: 0.5 }]}>
           <Ionicons name="heart" size={16} color="#fff" />
           <Text style={styles.sendText}>{sending ? 'Sending...' : 'Send kudos'}</Text>
         </AnimatedPressable>

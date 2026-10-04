@@ -1,9 +1,11 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay, interpolateColor, useReducedMotion } from 'react-native-reanimated';
 import { useColors, useTheme } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 import AnimatedPressable from './AnimatedPressable';
 import SmartImage from './SmartImage';
 import { formatDue, formatTime, daysFromToday, RECURRENCE_LABELS } from '../utils/dates';
@@ -122,7 +124,7 @@ export const Chip = memo(function Chip({ label, icon, color, active, onPress, on
   const colors = useColors();
   const tone = color || colors.brand[600];
   const content = (
-    <View style={[
+    <View {...glass(active ? 'accent' : 'inset')} style={[
       chipStyles.chip,
       small && chipStyles.small,
       {
@@ -132,11 +134,11 @@ export const Chip = memo(function Chip({ label, icon, color, active, onPress, on
       style,
     ]}
     >
-      {icon && <Ionicons name={icon} size={small ? 12 : 14} color={active ? colors.white : tone} />}
-      <Text style={[chipStyles.label, small && chipStyles.labelSmall, { color: active ? colors.white : tone }]} numberOfLines={1}>{label}</Text>
+      {icon && <Ionicons name={icon} size={small ? 12 : 14} color={active ? '#fff' : tone} />}
+      <Text style={[chipStyles.label, small && chipStyles.labelSmall, { color: active ? '#fff' : tone }]} numberOfLines={1}>{label}</Text>
       {onRemove && (
         <AnimatedPressable onPress={onRemove} hitSlop={8}>
-          <Ionicons name="close" size={14} color={active ? colors.white : tone} />
+          <Ionicons name="close" size={14} color={active ? '#fff' : tone} />
         </AnimatedPressable>
       )}
     </View>
@@ -157,7 +159,7 @@ const chipStyles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   small: { paddingHorizontal: 8, paddingVertical: 3 },
-  label: { fontSize: fontSize.sm, fontWeight: '600', maxWidth: 180 },
+  label: { fontSize: fontSize.sm, fontWeight: '600', maxWidth: 180, letterSpacing: -0.1 },
   labelSmall: { fontSize: 11 },
 });
 
@@ -194,26 +196,50 @@ export const PriorityFlag = memo(function PriorityFlag({ priority, size = 14 }) 
 // ---------------------------------------------------------------------------
 export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, onPress, size = 22 }) {
   const colors = useColors();
+  const reduced = useReducedMotion();
   const tone = PRIORITY[priority]?.color || PRIORITY[4].color;
   const fill = useSharedValue(checked ? 1 : 0);
-  const pop = useSharedValue(1);
+  const pop = useSharedValue(1);      // the body squashes in, then springs past 1 and settles
+  const mark = useSharedValue(checked ? 1 : 0); // the tick draws in with its own spring
+  const burst = useSharedValue(1);    // one ring that expands off the box and fades
+  const mounted = useRef(false);
 
   useEffect(() => {
-    fill.value = withTiming(checked ? 1 : 0, { duration: 180 });
-    if (checked) {
-      pop.value = 0.92;
-      pop.value = withTiming(1, { duration: 140 });
+    const first = !mounted.current;
+    mounted.current = true;
+    fill.value = withTiming(checked ? 1 : 0, { duration: 160 });
+    if (first || reduced) {
+      mark.value = checked ? 1 : 0;
+      return;
     }
-  }, [checked, fill, pop]);
+    if (checked) {
+      pop.value = 0.74;
+      pop.value = withSpring(1, SPRING.pop);
+      mark.value = 0;
+      mark.value = withSpring(1, SPRING.pop);
+      burst.value = 0;
+      burst.value = withTiming(1, { duration: 560 });
+    } else {
+      mark.value = withTiming(0, { duration: 120 });
+    }
+  }, [checked, fill, pop, mark, burst, reduced]);
 
+  const open = tint(tone, priority === 4 ? 0 : 0.1);
   const boxStyle = useAnimatedStyle(() => ({
-    backgroundColor: fill.value > 0.5 ? tone : tint(tone, priority === 4 ? 0 : 0.1),
+    backgroundColor: interpolateColor(fill.value, [0, 1], [open, tone]),
     transform: [{ scale: pop.value }],
   }));
-  const checkStyle = useAnimatedStyle(() => ({ opacity: fill.value, transform: [{ scale: 0.6 + fill.value * 0.4 }] }));
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, mark.value * 1.6),
+    transform: [{ scale: 0.3 + mark.value * 0.7 }, { rotate: (1 - mark.value) * -24 + 'deg' }],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: (1 - burst.value) * 0.55,
+    transform: [{ scale: 1 + burst.value * 1.1 }],
+  }));
 
   return (
-    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.94}>
+    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.9}>
       <Animated.View style={[{
         width: size,
         height: size,
@@ -224,6 +250,10 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
         justifyContent: 'center',
       }, boxStyle]}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[{ position: 'absolute', top: -2, left: -2, width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: tone }, ringStyle]}
+        />
         <Animated.View style={checkStyle}>
           <Ionicons name="checkmark" size={size * 0.7} color={colors.white} />
         </Animated.View>
@@ -239,15 +269,17 @@ export function Fab({ onPress, icon = 'add', bottom = 24, color, label }) {
   const { theme } = useTheme();
   const enter = useSharedValue(0);
   useEffect(() => {
-    enter.value = withDelay(100, withTiming(1, { duration: 160 }));
+    enter.value = withDelay(100, withSpring(1, SPRING.sheet));
   }, [enter]);
-  const style = useAnimatedStyle(() => ({ opacity: enter.value, transform: [{ scale: 0.92 + enter.value * 0.08 }] }));
+  const style = useAnimatedStyle(() => ({ opacity: Math.min(1, enter.value * 1.5), transform: [{ scale: 0.6 + enter.value * 0.4 }] }));
   const bg = color || (theme === 'dark' ? '#dc2626' : '#dc2626');
   return (
     <Animated.View style={[{ position: 'absolute', right: spacing.xl, bottom }, style]}>
       <AnimatedPressable
         onPress={onPress}
         haptic="medium"
+        scale={0.92}
+        {...glass('accent')}
         style={{
           height: 56,
           minWidth: 56,
@@ -311,8 +343,8 @@ export function SectionHeader({ title, count, right, color, style }) {
   return (
     <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing.lg, paddingBottom: spacing.sm }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.base, fontWeight: '700', color: color || colors.gray[800] }}>{title}</Text>
-        {count !== undefined && <Text style={{ fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '600' }}>{count}</Text>}
+        <Text style={{ ...type.headline, fontSize: fontSize.md, color: color || colors.gray[800] }}>{title}</Text>
+        {count !== undefined && <Text style={{ ...type.caption, color: colors.gray[500] }}>{count}</Text>}
       </View>
       {right}
     </View>
@@ -322,22 +354,22 @@ export function SectionHeader({ title, count, right, color, style }) {
 /** Friendly empty state with a bouncing icon. */
 export function EmptyHero({ icon = 'sparkles', title, message, color, action }) {
   const colors = useColors();
-  const bounce = useSharedValue(0.9);
+  const bounce = useSharedValue(0.6);
   useEffect(() => {
-    bounce.value = withTiming(1, { duration: 200 });
+    bounce.value = withSpring(1, SPRING.pop);
   }, [bounce]);
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: bounce.value }], opacity: Math.min(1, bounce.value) }));
   const tone = color || colors.brand[500];
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl }}>
-      <Animated.View style={[{
+      <Animated.View {...glass('card')} style={[{
         width: 88, height: 88, borderRadius: 44, backgroundColor: tint(tone.startsWith('#') ? tone : '#dc2626', 0.14),
         alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
       }, iconStyle]}
       >
         <Ionicons name={icon} size={40} color={tone} />
       </Animated.View>
-      {!!title && <Text style={{ fontSize: fontSize.lg, fontWeight: '700', color: colors.gray[900], textAlign: 'center' }}>{title}</Text>}
+      {!!title && <Text style={{ ...type.title, fontSize: fontSize.xl, color: colors.gray[900], textAlign: 'center' }}>{title}</Text>}
       {!!message && <Text style={{ fontSize: fontSize.base, color: colors.gray[500], textAlign: 'center', marginTop: spacing.xs, lineHeight: 20 }}>{message}</Text>}
       {action && <View style={{ marginTop: spacing.lg }}>{action}</View>}
     </View>

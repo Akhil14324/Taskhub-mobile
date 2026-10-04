@@ -52,7 +52,7 @@ export default function ProgressScreen() {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   title: { fontSize: 26, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },

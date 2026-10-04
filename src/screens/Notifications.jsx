@@ -18,6 +18,7 @@ import { IconButton } from '../components/kit';
 import { openNotificationTarget } from '../navigation/navigationRef';
 import { timeAgo } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
+import { glass } from '../theme/glass';
 
 function getNotifIcons(colors) {
   return {
@@ -58,7 +59,7 @@ const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, o
   const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
   return (
     <AnimatedPressable onPress={() => onPress(item)} haptic="light">
-      <View style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
+      <View {...glass('card')} style={[styles.notifCard, !item.is_read && styles.unreadCard]}>
         <View style={[styles.notifIcon, { backgroundColor: config.bg }]}>
           <Ionicons name={config.icon} size={20} color={config.color} />
         </View>
@@ -210,7 +211,7 @@ export default function Notifications() {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.md },
   header: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900], paddingLeft: spacing.xs },
   subheader: { fontSize: fontSize.sm, color: colors.gray[500], paddingLeft: spacing.xs },

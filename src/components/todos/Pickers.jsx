@@ -5,6 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
+import { glass } from '../../theme/glass';
 
 /**
  * Generic "choose one" sheet. options = [{ key, label, icon?, active?, destructive? }]
@@ -56,11 +57,11 @@ export function NameSheet({ value, title, placeholder, onClose, onSave, onDelete
           onSubmitEditing={() => name.trim() && onSave({ ...value, name: name.trim() })}
           placeholder={placeholder}
           placeholderTextColor={colors.gray[400]}
-          style={styles.input}
+          {...glass('inset')} style={styles.input}
         />
         <View style={styles.actions}>
           {!!value.id && onDelete && (
-            <AnimatedPressable onPress={() => onDelete(value)} style={styles.deleteBtn} haptic="light">
+            <AnimatedPressable onPress={() => onDelete(value)} {...glass('inset')} style={styles.deleteBtn} haptic="light">
               <Ionicons name="trash-outline" size={20} color={colors.red[600]} />
             </AnimatedPressable>
           )}
@@ -68,7 +69,7 @@ export function NameSheet({ value, title, placeholder, onClose, onSave, onDelete
             disabled={!name.trim()}
             onPress={() => onSave({ ...value, name: name.trim() })}
             haptic="medium"
-            style={[styles.saveBtn, { opacity: name.trim() ? 1 : 0.4 }]}
+            {...glass('accent')} style={[styles.saveBtn, { opacity: name.trim() ? 1 : 0.4 }]}
           >
             <Text style={styles.saveText}>Save</Text>
           </AnimatedPressable>

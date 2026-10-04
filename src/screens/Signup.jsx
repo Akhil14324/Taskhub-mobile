@@ -13,6 +13,7 @@ import { PrimaryButton } from '../components/Button';
 import { ErrorBanner } from '../components/UI';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { glass } from '../theme/glass';
 
 export default function Signup() {
   const { login } = useAuth();
@@ -112,7 +113,7 @@ export default function Signup() {
           </View>
         </Animated.View>
         <Animated.View style={[formStyle]}>
-          <View style={styles.form}>
+          <View {...glass('card')} style={styles.form}>
             <Text style={styles.title}>{t('createAccount')}</Text>
             {error && <ErrorBanner message={error} />}
             <Input
@@ -171,7 +172,7 @@ export default function Signup() {
 const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: colors.page,
   },
   scroll: {
     flexGrow: 1,

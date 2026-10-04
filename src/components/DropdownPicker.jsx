@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableWithoutFeedback } from 'react-native';
+import { glass } from '../theme/glass';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -33,7 +34,7 @@ export function DropdownPicker({ selectedValue, onValueChange, items, style }) {
         <TouchableWithoutFeedback onPress={() => setOpen(false)}>
           <View style={styles.overlay}>
             <TouchableWithoutFeedback>
-              <View style={styles.sheet}>
+              <View {...glass('menu')} style={styles.sheet}>
                 <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                   {items.map((item) => (
                     <AnimatedPressable

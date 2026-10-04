@@ -10,6 +10,7 @@ import BottomSheet from '../BottomSheet';
 import { Chip, accent } from '../kit';
 import { showToast, showDialog } from '../../utils/events';
 import { invalidateDirectory } from '../../hooks/useDirectory';
+import { glass } from '../../theme/glass';
 
 /**
  * Portal editor for one person (Chairman / Chief of Staff only).
@@ -109,14 +110,14 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
         <Text style={styles.sub}>{creating ? 'Creates their account and places them in the organisation.' : `@${person.username}`}</Text>
 
         <Field label="Full name">
-          <TextInput value={form.name} onChangeText={(name) => set({ name })} style={styles.input} placeholder="e.g. Ravi Teja" placeholderTextColor={colors.gray[400]} />
+          <TextInput value={form.name} onChangeText={(name) => set({ name })} {...glass('inset')} style={styles.input} placeholder="e.g. Ravi Teja" placeholderTextColor={colors.gray[400]} />
         </Field>
         {creating && (
           <Field label="Username (for login and @mentions)">
             <TextInput
               value={form.username}
               onChangeText={(username) => set({ username: username.toLowerCase().replace(/\s/g, '') })}
-              style={styles.input}
+              {...glass('inset')} style={styles.input}
               autoCapitalize="none"
               placeholder="Leave empty to make one from the name"
               placeholderTextColor={colors.gray[400]}
@@ -124,7 +125,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
           </Field>
         )}
         <Field label="Custom title (optional)">
-          <TextInput value={form.title} onChangeText={(title) => set({ title })} style={styles.input} placeholder="e.g. Head Chef, Site Engineer" placeholderTextColor={colors.gray[400]} />
+          <TextInput value={form.title} onChangeText={(title) => set({ title })} {...glass('inset')} style={styles.input} placeholder="e.g. Head Chef, Site Engineer" placeholderTextColor={colors.gray[400]} />
         </Field>
 
         <Text style={styles.label}>Leadership tier</Text>
@@ -140,7 +141,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
         {businesses.map((b) => {
           const m = membership(b.id);
           return (
-            <View key={b.id} style={[styles.bizCard, m && { borderColor: accent(b.color) }]}>
+            <View key={b.id} {...glass('inset')} style={[styles.bizCard, m && { borderColor: accent(b.color) }]}>
               <AnimatedPressable style={styles.bizHeader} onPress={() => toggleBusiness(b.id)} haptic="light">
                 <View style={[styles.bizDot, { backgroundColor: accent(b.color) }]} />
                 <Text style={styles.bizName}>{b.name}</Text>
@@ -158,7 +159,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
         })}
 
         {!creating && (
-          <View style={styles.switchRow}>
+          <View {...glass('inset')} style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.switchTitle}>Account active</Text>
               <Text style={styles.hint}>Inactive people can’t sign in or be assigned work.</Text>
@@ -171,7 +172,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
           </View>
         )}
 
-        <AnimatedPressable onPress={save} disabled={saving} haptic="medium" style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
+        <AnimatedPressable onPress={save} disabled={saving} haptic="medium" {...glass('accent')} style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
           <Text style={styles.saveText}>{saving ? 'Saving…' : creating ? 'Create account' : 'Save changes'}</Text>
         </AnimatedPressable>
       </ScrollView>

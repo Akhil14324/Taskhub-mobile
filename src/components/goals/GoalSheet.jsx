@@ -12,6 +12,7 @@ import { PrimaryButton } from '../Button';
 import { Chip } from '../kit';
 import { formatDue, todayYmd, addDays } from '../../utils/dates';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -108,8 +109,8 @@ export default function GoalSheet({ visible, onClose, onSaved, options }) {
     <BottomSheet visible={visible} onClose={onClose} avoidKeyboard maxHeight={720}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.wrap}>
         <Text style={styles.title}>New goal</Text>
-        <TextInput value={title} onChangeText={setTitle} placeholder="What do you want to achieve?" placeholderTextColor={colors.gray[400]} style={styles.input} maxLength={160} autoFocus />
-        <TextInput value={desc} onChangeText={setDesc} placeholder="Why it matters (optional)" placeholderTextColor={colors.gray[400]} style={[styles.input, { minHeight: 56 }]} multiline maxLength={1000} />
+        <TextInput value={title} onChangeText={setTitle} placeholder="What do you want to achieve?" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={styles.input} maxLength={160} autoFocus />
+        <TextInput value={desc} onChangeText={setDesc} placeholder="Why it matters (optional)" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, { minHeight: 56 }]} multiline maxLength={1000} />
 
         <Text style={styles.label}>Whose goal</Text>
         <View style={styles.row}>
@@ -133,7 +134,7 @@ export default function GoalSheet({ visible, onClose, onSaved, options }) {
           <View key={k.key} style={styles.kr}>
             <View style={styles.krHead}>
               <Text style={styles.krNum}>{i + 1}</Text>
-              <TextInput value={k.title} onChangeText={(v) => patch(k.key, { title: v })} placeholder="Key result" placeholderTextColor={colors.gray[400]} style={[styles.input, { flex: 1, marginTop: 0 }]} maxLength={160} />
+              <TextInput value={k.title} onChangeText={(v) => patch(k.key, { title: v })} placeholder="Key result" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, { flex: 1, marginTop: 0 }]} maxLength={160} />
               {krs.length > 1 && (
                 <AnimatedPressable onPress={() => setKrs((l) => l.filter((x) => x.key !== k.key))} hitSlop={8}>
                   <Ionicons name="close-circle" size={20} color={colors.gray[400]} />
@@ -146,10 +147,10 @@ export default function GoalSheet({ visible, onClose, onSaved, options }) {
             </View>
             {k.kind === 'number' ? (
               <View style={styles.row}>
-                <TextInput value={k.start} onChangeText={(v) => patch(k.key, { start: v })} keyboardType="numeric" placeholder="From" placeholderTextColor={colors.gray[400]} style={[styles.input, styles.small]} />
+                <TextInput value={k.start} onChangeText={(v) => patch(k.key, { start: v })} keyboardType="numeric" placeholder="From" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, styles.small]} />
                 <Ionicons name="arrow-forward" size={14} color={colors.gray[400]} />
-                <TextInput value={k.target} onChangeText={(v) => patch(k.key, { target: v })} keyboardType="numeric" placeholder="Target" placeholderTextColor={colors.gray[400]} style={[styles.input, styles.small]} />
-                <TextInput value={k.unit} onChangeText={(v) => patch(k.key, { unit: v })} placeholder="Unit (Rs, %, ...)" placeholderTextColor={colors.gray[400]} style={[styles.input, { flex: 1, marginTop: 0 }]} maxLength={20} />
+                <TextInput value={k.target} onChangeText={(v) => patch(k.key, { target: v })} keyboardType="numeric" placeholder="Target" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, styles.small]} />
+                <TextInput value={k.unit} onChangeText={(v) => patch(k.key, { unit: v })} placeholder="Unit (Rs, %, ...)" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, { flex: 1, marginTop: 0 }]} maxLength={20} />
               </View>
             ) : (
               <View>
@@ -159,7 +160,7 @@ export default function GoalSheet({ visible, onClose, onSaved, options }) {
                 </AnimatedPressable>
                 {pickFor === k.key && (
                   <View style={styles.picker}>
-                    <TextInput value={search} onChangeText={setSearch} placeholder="Search your to-dos" placeholderTextColor={colors.gray[400]} style={[styles.input, { marginTop: 0 }]} />
+                    <TextInput value={search} onChangeText={setSearch} placeholder="Search your to-dos" placeholderTextColor={colors.gray[400]} {...glass('inset')} style={[styles.input, { marginTop: 0 }]} />
                     {openTodos.map((t) => {
                       const on = k.todoIds.includes(t.id);
                       return (

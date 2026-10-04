@@ -15,6 +15,7 @@ import { timeAgo } from '../../utils/dates';
 import { showToast, confirmDialog } from '../../utils/events';
 import api from '../../api/client';
 import { RichText, ReactionBar, AttachmentList, pickFile, uploadAttachment, collabStyles } from './collab';
+import { glass } from '../../theme/glass';
 
 const THREAD_PREVIEW = 2;
 
@@ -239,7 +240,7 @@ export default function TodoComments({ todo }) {
           blurOnSubmit={false}
           placeholder={replyTo ? 'Write a reply...' : 'Write a comment... use @name to bring someone in'}
           placeholderTextColor={colors.gray[400]}
-          style={styles.input}
+          {...glass('inset')} style={styles.input}
           multiline
         />
         <AnimatedPressable onPress={send} haptic="light" hitSlop={8} disabled={(!text.trim() && !pending.length) || sending}>

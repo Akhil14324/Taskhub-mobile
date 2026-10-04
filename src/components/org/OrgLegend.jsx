@@ -6,6 +6,7 @@ import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import { tint } from '../kit';
 import { TIER_ICONS, TIER_SHADES, DESIGNATION_ICONS, DESIGNATION_BLURBS, businessIcon } from '../../utils/orgMeta';
+import { glass } from '../../theme/glass';
 
 /**
  * What every icon on the Organisation screen means: leadership tiers, business positions
@@ -30,7 +31,7 @@ export default function OrgLegend({ structure }) {
   );
 
   return (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <AnimatedPressable onPress={() => setOpen((o) => !o)} haptic="light" style={styles.header}>
         <Ionicons name="information-circle" size={20} color={colors.brand[600]} />
         <Text style={styles.heading}>Legend</Text>

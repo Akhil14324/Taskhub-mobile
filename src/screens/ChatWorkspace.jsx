@@ -34,7 +34,7 @@ export default function ChatWorkspace() {
   useEffect(() => { if (fromLink) setActiveId(fromLink); }, [fromLink]);
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.gray[50] }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
       <View style={{ width: 380, borderRightWidth: 1, borderRightColor: colors.gray[200], backgroundColor: colors.white }}>
         <ChatListScreen onOpen={setActiveId} activeId={activeId} />
       </View>

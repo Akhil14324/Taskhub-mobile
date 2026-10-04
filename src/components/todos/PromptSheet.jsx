@@ -4,6 +4,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
+import { glass } from '../../theme/glass';
 
 /**
  * Ask for a short piece of text (a reason, a note, a warning message) before doing something.
@@ -30,7 +31,7 @@ export default function PromptSheet({ value, onClose, onSubmit }) {
           onChangeText={setText}
           placeholder={value.placeholder || 'Write a note'}
           placeholderTextColor={colors.gray[400]}
-          style={styles.input}
+          {...glass('inset')} style={styles.input}
           multiline
         />
         <View style={styles.actions}>

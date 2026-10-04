@@ -5,7 +5,9 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   withTiming,
+  withSpring,
   withSequence,
   interpolate,
   Extrapolation,
@@ -14,13 +16,18 @@ import Animated, {
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useEngage } from '../../context/EngageContext';
-import { spacing, fontSize } from '../../theme/theme';
+import { spacing, fontSize, radius } from '../../theme/theme';
+import { glass } from '../../theme/glass';
+import { SPRING, project, rubberband } from '../../theme/motion';
+import { haptic as webHaptic } from '../../utils/feedback';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 
-const SWIPE_TRIGGER = 90;
+const ACTION_W = 84;          // a swipe opens this far and rests on its glass action button
+const COMMIT_PROJECTED = 230; // a flick that would carry past this commits the action outright
+const COMMIT_VISUAL = 170;    // past here the button swells and ticks: the point of no return
 const INDENT = 22;
 
 /** Short text tag for states that are not "just open". */
@@ -57,29 +64,74 @@ function TodoItem({
     }
   }, [highlighted, flash]);
 
+  const startX = useSharedValue(0);
+  const width = useSharedValue(360);
+  const dragging = useSharedValue(false);
+  const tick = () => webHaptic('light');
+  const closeRow = () => { translateX.value = withSpring(0, SPRING.smooth); };
+
   const pan = Gesture.Pan()
     .enabled(!selectMode)
-    .activeOffsetX([-16, 16])
+    .activeOffsetX([-14, 14])
     .failOffsetY([-10, 10])
+    .onStart(() => {
+      // Grab it wherever it is (mid-spring or resting open): never snap back to 0 first.
+      startX.value = translateX.value;
+      dragging.value = true;
+    })
     .onUpdate((e) => {
-      translateX.value = e.translationX;
+      let x = startX.value + e.translationX;
+      if (!canTick && x > 0) x = 0;
+      const limit = width.value * 0.82;
+      if (Math.abs(x) > limit) x = (x < 0 ? -1 : 1) * (limit + rubberband(Math.abs(x) - limit, width.value));
+      translateX.value = x;
     })
     .onEnd((e) => {
-      if (e.translationX > SWIPE_TRIGGER && canTick) {
+      dragging.value = false;
+      // Where the flick is heading, not where the finger let go; then hand its velocity to the spring.
+      let end = translateX.value + project(e.velocityX, 0.99);
+      if (!canTick && end > 0) end = 0;
+      const spring = { ...SPRING.momentum, velocity: e.velocityX };
+      if (end > COMMIT_PROJECTED && canTick) {
         runOnJS(onToggle)(todo);
-      } else if (e.translationX < -SWIPE_TRIGGER) {
+        translateX.value = withSpring(0, spring);
+      } else if (end < -COMMIT_PROJECTED) {
         runOnJS(onDelete)(todo);
+        translateX.value = withSpring(0, spring);
+      } else if (end > ACTION_W * 0.5 && canTick) {
+        translateX.value = withSpring(ACTION_W, spring);
+      } else if (end < -ACTION_W * 0.5) {
+        translateX.value = withSpring(-ACTION_W, spring);
+      } else {
+        translateX.value = withSpring(0, spring);
       }
-      translateX.value = withTiming(0, { duration: 160 });
     });
 
+  const swell = useSharedValue(0);
+  useAnimatedReaction(
+    () => Math.abs(translateX.value) > COMMIT_VISUAL,
+    (past, was) => {
+      swell.value = withSpring(past ? 1 : 0, SPRING.press);
+      if (past && !was && dragging.value) runOnJS(tick)();
+    },
+  );
+
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
-  const leftBg = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [0, SWIPE_TRIGGER], [0, 1], Extrapolation.CLAMP),
-  }));
-  const rightBg = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [-SWIPE_TRIGGER, 0], [1, 0], Extrapolation.CLAMP),
-  }));
+  // Each glass action grows out of the card's edge as the card slides away, and swells once committed.
+  const leftBg = useAnimatedStyle(() => {
+    const x = Math.max(translateX.value, 0);
+    return {
+      opacity: interpolate(x, [0, 24, ACTION_W], [0, 0.6, 1], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(x, [0, ACTION_W], [0.55, 1], Extrapolation.CLAMP) * (1 + 0.1 * swell.value) }],
+    };
+  });
+  const rightBg = useAnimatedStyle(() => {
+    const x = Math.max(-translateX.value, 0);
+    return {
+      opacity: interpolate(x, [0, 24, ACTION_W], [0, 0.6, 1], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(x, [0, ACTION_W], [0.55, 1], Extrapolation.CLAMP) * (1 + 0.1 * swell.value) }],
+    };
+  });
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value * 0.18 }));
 
   const others = (todo.members || []).filter((m) => m.id !== currentUserId);
@@ -96,19 +148,38 @@ function TodoItem({
     : null;
 
   return (
-    <View style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }]} dataSet={{ todoRow: String(todo.id) }}>
-      <Animated.View style={[styles.swipeBg, styles.swipeLeft, leftBg]}>
-        <Ionicons name={todo.is_done ? 'arrow-undo' : 'checkmark-circle'} size={22} color="#fff" />
-        <Text style={styles.swipeText}>{todo.is_done ? 'Undo' : 'Done'}</Text>
-      </Animated.View>
-      <Animated.View style={[styles.swipeBg, styles.swipeRight, rightBg]}>
-        <Text style={styles.swipeText}>{todo.business_id && !todo.permissions?.can_delete ? 'Ask to delete' : 'Delete'}</Text>
-        <Ionicons name="trash" size={20} color="#fff" />
-      </Animated.View>
+    <View
+      style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }]}
+      dataSet={{ todoRow: String(todo.id) }}
+      onLayout={(e) => { width.value = e.nativeEvent.layout.width; }}
+    >
+      <View style={styles.swipeLayer} pointerEvents="box-none">
+        <Animated.View style={[styles.action, styles.actionLeft, leftBg]} {...glass('accent')}>
+          <Pressable
+            style={styles.actionHit}
+            accessibilityLabel={todo.is_done ? 'Reopen' : 'Mark done'}
+            onPress={() => { onToggle(todo); closeRow(); }}
+          >
+            <Ionicons name={todo.is_done ? 'arrow-undo' : 'checkmark'} size={22} color="#fff" />
+            <Text style={styles.swipeText}>{todo.is_done ? 'Undo' : 'Done'}</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View style={[styles.action, styles.actionRight, rightBg]} {...glass('accent-deep')}>
+          <Pressable
+            style={styles.actionHit}
+            accessibilityLabel="Delete"
+            onPress={() => { onDelete(todo); closeRow(); }}
+          >
+            <Ionicons name="trash-outline" size={21} color="#fff" />
+            <Text style={styles.swipeText}>{todo.business_id && !todo.permissions?.can_delete ? 'Request' : 'Delete'}</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
 
       {/* touchAction keeps vertical page scrolling working on touch screens (web). */}
       <GestureDetector gesture={pan} touchAction="pan-y">
-        <Animated.View style={[styles.row, selected && styles.rowSelected, active && styles.rowActive, rowStyle]}>
+        <Animated.View {...glass('card')} style={[styles.row, rowStyle]}>
+          {(selected || active) && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand[500], opacity: selected ? 0.2 : 0.13 }]} />}
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand[500] }, flashStyle]} />
           {dragHandle}
           <View style={styles.check}>
@@ -129,7 +200,14 @@ function TodoItem({
               />
             )}
           </View>
-          <Pressable style={styles.body} onPress={() => (selectMode ? onSelect?.(todo) : onOpen(todo))}>
+          <Pressable
+            style={styles.body}
+            onPress={() => {
+              if (Math.abs(translateX.get()) > 6) closeRow();
+              else if (selectMode) onSelect?.(todo);
+              else onOpen(todo);
+            }}
+          >
             {!!parentTitle && (
               <Text style={styles.parentHint} numberOfLines={1}>in {parentTitle}</Text>
             )}
@@ -233,37 +311,32 @@ function TodoItem({
 const createStyles = (colors) => StyleSheet.create({
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.brand[600], paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   waitingText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  container: { position: 'relative' },
+  container: { position: 'relative', marginVertical: 3 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.gray[200], marginTop: 6, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.brand[500] },
-  swipeBg: {
-    ...StyleSheet.absoluteFillObject,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.sm,
-    borderRadius: 10,
+  swipeLayer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' },
+  action: {
+    position: 'absolute', top: 2, bottom: 2, width: ACTION_W - 14, borderRadius: radius.xl,
+    backgroundColor: colors.brand[600], overflow: 'hidden',
   },
-  swipeLeft: { backgroundColor: '#dc2626', justifyContent: 'flex-start' },
-  swipeRight: { backgroundColor: '#dc2626', justifyContent: 'flex-end' },
-  swipeText: { color: '#fff', fontWeight: '600', fontSize: fontSize.sm },
+  actionLeft: { left: 4 },
+  actionRight: { right: 4, backgroundColor: colors.brand[700] },
+  actionHit: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  swipeText: { color: '#fff', fontWeight: '700', fontSize: 11, letterSpacing: 0.2 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xs,
-    backgroundColor: colors.gray[50],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.gray[200],
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.xl + 2,
+    backgroundColor: colors.white,
     overflow: 'hidden',
   },
-  rowSelected: { backgroundColor: colors.brand[50] },
-  rowActive: { backgroundColor: colors.brand[50] },
   check: { paddingTop: 1, paddingRight: spacing.md, paddingLeft: spacing.xs },
   body: { flex: 1 },
   parentHint: { fontSize: 11, color: colors.gray[400], marginBottom: 1 },
-  title: { fontSize: fontSize.md, color: colors.gray[900], lineHeight: 21, fontWeight: '500' },
-  titleSub: { fontSize: fontSize.base },
+  title: { fontSize: fontSize.md, color: colors.gray[900], lineHeight: 21, fontWeight: '600', letterSpacing: -0.25 },
+  titleSub: { fontSize: fontSize.base, fontWeight: '500' },
   titleDone: { textDecorationLine: 'line-through', color: colors.gray[400], fontWeight: '400' },
   notes: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
   doneLine: { fontSize: 11, color: colors.gray[400], marginTop: 2 },

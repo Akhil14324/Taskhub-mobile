@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Alert, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import { useColors } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 import AnimatedPressable from './AnimatedPressable';
 import { on, showDialog } from '../utils/events';
 import useBackClose from '../hooks/useBackClose';
@@ -20,21 +22,21 @@ export default function DialogHost() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [queue, setQueue] = useState([]);
   const current = queue[0];
-  const scale = useSharedValue(0.92);
+  const scale = useSharedValue(0.86);
   const opacity = useSharedValue(0);
 
   useEffect(() => on('dialog:show', (options) => setQueue((q) => [...q, options])), []);
 
   useEffect(() => {
     if (current) {
-      scale.value = 0.92;
+      scale.value = 0.86;
       opacity.value = 0;
-      scale.value = withSpring(1, { damping: 18, stiffness: 320, mass: 0.6 });
-      opacity.value = withTiming(1, { duration: 160 });
+      scale.value = withSpring(1, SPRING.sheet);
+      opacity.value = withTiming(1, { duration: 200 });
     }
   }, [current, scale, opacity]);
 
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: Math.min(1, opacity.value * 1.3) }));
   const overlayStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   const close = useCallback((button) => {
@@ -64,7 +66,7 @@ export default function DialogHost() {
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={() => { current.onDismiss?.(); close(cancelButton); }}>
-      <Animated.View style={[styles.overlay, overlayStyle]}>
+      <Animated.View {...glass('scrim')} style={[styles.overlay, overlayStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={() => {
@@ -74,7 +76,7 @@ export default function DialogHost() {
             }
           }}
         />
-        <Animated.View style={[styles.card, cardStyle]}>
+        <Animated.View {...glass('sheet')} style={[styles.card, cardStyle]}>
           {!!current.title && <Text style={styles.title}>{current.title}</Text>}
           {!!current.message && <Text style={styles.message}>{current.message}</Text>}
           <View style={[styles.actions, stacked && styles.actionsStacked]}>
@@ -86,6 +88,7 @@ export default function DialogHost() {
                   key={`${b.text}-${i}`}
                   haptic="light"
                   onPress={() => close(b)}
+                  {...glass(isCancel ? 'inset' : isDestructive ? 'accent-deep' : 'accent')}
                   style={[
                     styles.btn,
                     !stacked && { flex: 1 },
@@ -115,17 +118,13 @@ const createStyles = (colors) => StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     backgroundColor: colors.white,
-    borderRadius: radius.xl,
+    borderRadius: 30,
     padding: spacing.xl,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
   title: {
+    ...type.title,
     fontSize: fontSize.lg,
-    fontWeight: '700',
     color: colors.gray[900],
     marginBottom: spacing.sm,
   },
@@ -143,8 +142,8 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'column-reverse',
   },
   btn: {
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    paddingVertical: 13,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
   btnPrimary: { backgroundColor: colors.brand[600] },
@@ -152,6 +151,6 @@ const createStyles = (colors) => StyleSheet.create({
   btnCancel: { backgroundColor: colors.gray[100] },
   btnText: { fontSize: fontSize.base, fontWeight: '600' },
   // colors.white is the card colour, which reads correctly on brand/red in both themes.
-  btnTextOnColor: { color: colors.white },
+  btnTextOnColor: { color: '#fff' },
   btnTextCancel: { color: colors.gray[700] },
 });

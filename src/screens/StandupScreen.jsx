@@ -13,6 +13,7 @@ import { SkeletonList } from '../components/Skeleton';
 import { Avatar, Chip, EmptyHero } from '../components/kit';
 import { addDays, formatDayHeader } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
+import { glass } from '../theme/glass';
 
 const SECTIONS = [
   { key: 'done', title: 'Done since the last working day', icon: 'checkmark-done', empty: 'Nothing finished yet.' },
@@ -194,7 +195,7 @@ export default function StandupScreen({ embedded = false }) {
         {!today && !error && tab === 'mine' && <SkeletonList count={2} type="notification" />}
 
         {tab === 'mine' && today && (
-          <View style={styles.card}>
+          <View {...glass('card')} style={styles.card}>
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle}>{formatDayHeader(today.day)}</Text>
               {posted ? (
@@ -245,7 +246,7 @@ export default function StandupScreen({ embedded = false }) {
             </View>
             {!feed && !error && <SkeletonList count={3} type="notification" />}
             {feed?.can_see_missing && feed.missing.length > 0 && (
-              <View style={[styles.card, { marginTop: 0 }]}>
+              <View {...glass('card')} style={[styles.card, { marginTop: 0 }]}>
                 <Text style={styles.cardTitle}>Not posted yet · {feed.missing.length}</Text>
                 {feed.missing.map((p) => (
                   <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -273,7 +274,7 @@ export default function StandupScreen({ embedded = false }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },

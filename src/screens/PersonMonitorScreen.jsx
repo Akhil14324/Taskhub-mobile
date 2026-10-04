@@ -16,6 +16,7 @@ import MonitorTodoSheet from '../components/todos/MonitorTodoSheet';
 import { HealthBar, Stat, Avg } from './TeamMonitorScreen';
 import { WEEKDAYS_SHORT, parseYmd, addDays, formatDayHeader, toYmd, timeAgo } from '../utils/dates';
 import { describeEntry, formatSeconds, formatRatio, healthColor, todoHealth, todoMetrics, formatSecondsShort, STATUS } from '../utils/timeline';
+import { glass } from '../theme/glass';
 
 const RANGES = [7, 30, 90];
 const VIEWS = [
@@ -123,7 +124,7 @@ export default function PersonMonitorScreen() {
         {!!error && <EmptyHero icon="lock-closed" title="Not available" message={error} />}
 
         {stats && (
-          <View style={styles.card}>
+          <View {...glass('card')} style={styles.card}>
             <View style={{ flexDirection: 'row' }}>
               <Stat label="Open" value={stats.open} />
               <Stat label="Overdue" value={stats.overdue} level={stats.overdue ? 'red' : null} />
@@ -159,7 +160,7 @@ export default function PersonMonitorScreen() {
 
             {tab === 'todos' ? (
               <>
-                <View style={styles.searchBox}>
+                <View {...glass('card')} style={styles.searchBox}>
                   <Ionicons name="search" size={16} color={colors.gray[400]} />
                   <TextInput value={query} onChangeText={setQuery} placeholder={`Search ${person?.name?.split(' ')[0] || 'their'} to-dos`} placeholderTextColor={colors.gray[400]} style={styles.searchInput} />
                 </View>
@@ -256,7 +257,7 @@ function ActivityFeed({ items }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   title: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.4 },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },

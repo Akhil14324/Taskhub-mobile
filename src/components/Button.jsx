@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
 import { Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useColors } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
 import AnimatedPressable from './AnimatedPressable';
 
 export const PrimaryButton = memo(function PrimaryButton({ children, onPress, disabled, style, loading }) {
@@ -13,9 +14,10 @@ export const PrimaryButton = memo(function PrimaryButton({ children, onPress, di
       disabled={disabled || loading}
       style={[styles.primary, disabled && styles.disabled, style]}
       haptic="light"
+      {...glass('accent')}
     >
       {loading ? (
-        <ActivityIndicator color={colors.white} size="small" />
+        <ActivityIndicator color="#fff" size="small" />
       ) : (
         <Text style={styles.primaryText}>{children}</Text>
       )}
@@ -32,6 +34,7 @@ export const SecondaryButton = memo(function SecondaryButton({ children, onPress
       disabled={disabled || loading}
       style={[styles.secondary, disabled && styles.disabled, style]}
       haptic="light"
+      {...glass('inset')}
     >
       {loading ? (
         <ActivityIndicator color={colors.gray[600]} size="small" />
@@ -51,9 +54,10 @@ export const DangerButton = memo(function DangerButton({ children, onPress, disa
       disabled={disabled || loading}
       style={[styles.danger, disabled && styles.disabled, style]}
       haptic="medium"
+      {...glass('accent')}
     >
       {loading ? (
-        <ActivityIndicator color={colors.white} size="small" />
+        <ActivityIndicator color="#fff" size="small" />
       ) : (
         <Text style={styles.dangerText}>{children}</Text>
       )}
@@ -79,24 +83,26 @@ export const GhostButton = memo(function GhostButton({ children, onPress, disabl
 const createStyles = (colors) => StyleSheet.create({
   primary: {
     backgroundColor: colors.brand[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    paddingVertical: 13,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
   },
   primaryText: {
-    color: colors.white,
+    color: '#fff',
+    ...type.callout,
     fontSize: fontSize.base,
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
   secondary: {
     backgroundColor: colors.gray[100],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    paddingVertical: 13,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -104,23 +110,27 @@ const createStyles = (colors) => StyleSheet.create({
   },
   secondaryText: {
     color: colors.gray[700],
+    ...type.callout,
     fontSize: fontSize.base,
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
   danger: {
     backgroundColor: colors.red[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    paddingVertical: 13,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
   },
   dangerText: {
-    color: colors.white,
+    color: '#fff',
+    ...type.callout,
     fontSize: fontSize.base,
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
   ghost: {
     paddingVertical: spacing.sm,

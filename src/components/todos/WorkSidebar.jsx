@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
+import { glass } from '../../theme/glass';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import { ListGlyph } from '../kit';
@@ -52,7 +53,7 @@ export default function WorkSidebar({
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <View style={styles.wrap}>
+    <View {...glass('bar')} style={styles.wrap}>
       <AnimatedPressable style={styles.add} onPress={onAdd}>
         <Ionicons name="add" size={19} color="#fff" />
         <Text style={styles.addText}>Add to-do</Text>

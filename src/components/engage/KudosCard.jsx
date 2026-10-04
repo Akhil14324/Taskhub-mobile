@@ -7,6 +7,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { Avatar } from '../kit';
 import { timeAgo } from '../../utils/dates';
 import { KUDOS_REASONS } from './KudosSheet';
+import { glass } from '../../theme/glass';
 
 /** One thank-you: who, to whom, for what. `compact` drops the recipient (when it is always you). */
 export default function KudosCard({ k, compact = false, onPressTodo }) {
@@ -14,7 +15,7 @@ export default function KudosCard({ k, compact = false, onPressTodo }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const reason = KUDOS_REASONS[k.reason] || KUDOS_REASONS.great_work;
   return (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <Avatar name={k.from_name} uri={k.from_picture} size={36} />
       <View style={{ flex: 1 }}>
         <Text style={styles.line}>

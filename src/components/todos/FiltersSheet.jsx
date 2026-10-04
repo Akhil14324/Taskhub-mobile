@@ -9,6 +9,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
 import { Chip, PRIORITY } from '../kit';
 import { todayYmd } from '../../utils/dates';
+import { glass } from '../../theme/glass';
 import {
   BUILTIN_FILTERS, FILTER_DEFAULT, FILTER_DUE_OPTIONS, FILTER_ASSIGNED_OPTIONS, applyFilter, describeFilter,
 } from '../../utils/todoMeta';
@@ -106,7 +107,7 @@ export function FilterEditorSheet({ value, onClose, onSave, onDelete }) {
           onChangeText={(name) => setDraft((d) => ({ ...d, name }))}
           placeholder="Filter name, e.g. Urgent finance"
           placeholderTextColor={colors.gray[400]}
-          style={styles.input}
+          {...glass('inset')} style={styles.input}
         />
 
         <Text style={styles.label}>Due</Text>
@@ -152,7 +153,7 @@ export function FilterEditorSheet({ value, onClose, onSave, onDelete }) {
 
         <View style={styles.actions}>
           {draft.id && (
-            <AnimatedPressable onPress={() => onDelete(draft)} style={styles.deleteBtn} haptic="light">
+            <AnimatedPressable onPress={() => onDelete(draft)} {...glass('inset')} style={styles.deleteBtn} haptic="light">
               <Ionicons name="trash-outline" size={20} color={colors.red[600]} />
             </AnimatedPressable>
           )}
@@ -160,7 +161,7 @@ export function FilterEditorSheet({ value, onClose, onSave, onDelete }) {
             disabled={!draft.name?.trim()}
             onPress={() => onSave({ ...draft, name: draft.name.trim(), config })}
             haptic="medium"
-            style={[styles.saveBtn, { opacity: draft.name?.trim() ? 1 : 0.4 }]}
+            {...glass('accent')} style={[styles.saveBtn, { opacity: draft.name?.trim() ? 1 : 0.4 }]}
           >
             <Text style={styles.saveText}>{draft.id ? 'Save' : 'Create filter'}</Text>
           </AnimatedPressable>

@@ -4,7 +4,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 import { useColors, useTheme } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme/theme';
+import { spacing, radius, fontSize, type } from '../theme/theme';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 import { on } from '../utils/events';
 
 /**
@@ -25,7 +27,7 @@ export default function ToastHost() {
 
   const hide = useCallback(() => {
     clearTimeout(timerRef.current);
-    progress.value = withTiming(0, { duration: 180 }, (finished) => {
+    progress.value = withSpring(0, { ...SPRING.smooth, overshootClamping: true }, (finished) => {
       if (finished) runOnJS(clear)();
     });
   }, [progress, clear]);
@@ -34,7 +36,7 @@ export default function ToastHost() {
     clearTimeout(timerRef.current);
     setToast({ ...options, key: Date.now() });
     progress.value = 0;
-    progress.value = withSpring(1, { damping: 18, stiffness: 260, mass: 0.7 });
+    progress.value = withSpring(1, SPRING.pop);
     timerRef.current = setTimeout(hide, options.duration || (options.actionLabel ? 5000 : options.title ? 4500 : 2600));
   }), [hide, progress]);
 
@@ -42,8 +44,8 @@ export default function ToastHost() {
 
   const isBanner = !!toast?.title;
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * (isBanner ? -40 : 40) }, { scale: 0.96 + progress.value * 0.04 }],
+    opacity: Math.min(1, progress.value * 1.5),
+    transform: [{ translateY: (1 - progress.value) * (isBanner ? -40 : 40) }, { scale: 0.9 + progress.value * 0.1 }],
   }));
 
   if (!toast) return null;
@@ -56,11 +58,12 @@ export default function ToastHost() {
       <Animated.View
         style={[
           styles.wrap,
-          isBanner ? { marginTop: insets.top + spacing.sm } : { marginBottom: insets.bottom + 72 },
+          isBanner ? { marginTop: insets.top + spacing.sm } : { marginBottom: insets.bottom + 96 },
           animatedStyle,
         ]}
       >
         <Pressable
+          {...glass('capsule')}
           style={[styles.toast, isBanner && styles.banner]}
           onPress={() => {
             if (toast.onPress) {
@@ -104,28 +107,23 @@ const createStyles = (colors, theme) => StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radius.xl,
-    backgroundColor: theme === 'dark' ? '#262626' : '#1f2937',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    borderRadius: 26,
+    backgroundColor: colors.white,
     elevation: 10,
   },
   banner: {
-    backgroundColor: colors.white,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray[200],
+    borderRadius: 24,
   },
   texts: { flex: 1 },
   title: {
-    fontSize: fontSize.base,
+    ...type.callout,
     fontWeight: '700',
     color: colors.gray[900],
   },
   message: {
-    fontSize: fontSize.base,
-    color: '#f9fafb',
+    ...type.callout,
+    fontWeight: '600',
+    color: colors.gray[900],
   },
   bannerMessage: {
     fontSize: fontSize.sm,
@@ -135,6 +133,6 @@ const createStyles = (colors, theme) => StyleSheet.create({
   action: {
     fontSize: fontSize.base,
     fontWeight: '700',
-    color: colors.brand[400],
+    color: colors.brand[600],
   },
 });

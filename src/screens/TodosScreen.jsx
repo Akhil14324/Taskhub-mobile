@@ -30,7 +30,7 @@ import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
 import { useNowTick } from '../components/todos/TimeHealth';
 import { PickerSheet, NameSheet } from '../components/todos/Pickers';
-import { Chip, Fab, IconButton, EmptyHero, ProgressRing, ListGlyph, LIST_ICONS, PRIORITY } from '../components/kit';
+import { Chip, IconButton, EmptyHero, ProgressRing, ListGlyph, LIST_ICONS, PRIORITY } from '../components/kit';
 import useWebReorder, { makeDraggable } from '../hooks/useWebReorder';
 import useShortcuts from '../hooks/useShortcuts';
 import * as SecureStore from '../utils/secureStorage';
@@ -41,6 +41,7 @@ import {
 } from '../utils/todoMeta';
 import { STATUS } from '../utils/timeline';
 import { showToast, confirmDialog } from '../utils/events';
+import { glass } from '../theme/glass';
 
 const BOARD_GROUPS = [
   { key: 'status', label: 'Status', icon: 'git-commit-outline' },
@@ -803,7 +804,7 @@ export default function TodosScreen() {
   );
 
   const searchBox = searching && !selectMode ? (
-    <View style={styles.searchBox}>
+    <View {...glass('card')} style={styles.searchBox}>
       <Ionicons name="search" size={16} color={colors.gray[400]} />
       <TextInput
         autoFocus
@@ -1050,11 +1051,13 @@ export default function TodosScreen() {
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
-      {desktop && view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
-        <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} />
-      )}
       {mobileNav}
       {body}
+      {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
+        <View pointerEvents="box-none" style={[styles.composer, { bottom: desktop ? 20 : 12 }]}>
+          <InlineQuickAdd ref={inlineAddRef} defaults={quickAddDefaults} lists={lists} onMore={() => setAddOpen(true)} />
+        </View>
+      )}
       {selectMode ? (
         <BulkBar
           count={selected.size}
@@ -1065,8 +1068,6 @@ export default function TodosScreen() {
           onDuplicate={bulk.duplicate}
           onDelete={bulk.remove}
         />
-      ) : !desktop ? (
-        <Fab onPress={() => setAddOpen(true)} bottom={24 + insets.bottom} />
       ) : null}
     </View>
   );
@@ -1097,7 +1098,7 @@ export default function TodosScreen() {
       )}
       {main}
       {wide && detailOpen && (
-        <View style={styles.detailPane}>
+        <View {...glass('bar')} style={styles.detailPane}>
           <TodoDetailBody todoId={openTodoId} onClose={() => setOpenTodoId(null)} variant="panel" />
         </View>
       )}
@@ -1359,9 +1360,10 @@ function ListEditor({ value, onClose, onSave, onDelete }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   containerDesktop: { flexDirection: 'row' },
   main: { flex: 1, minWidth: 0 },
+  composer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: spacing.lg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

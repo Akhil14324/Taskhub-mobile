@@ -7,6 +7,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { Avatar, Chip, PRIORITY } from '../kit';
 import { STATUS, healthColor, formatSeconds } from '../../utils/timeline';
 import { formatDue, MONTHS_SHORT } from '../../utils/dates';
+import { glass } from '../../theme/glass';
 
 const DAY = 24 * 3600 * 1000;
 const ROW = 48;
@@ -208,7 +209,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
           <Text style={styles.emptyText}>Work appears here from the day it is created until it is finished.</Text>
         </View>
       ) : (
-        <View style={styles.chart}>
+        <View {...glass('card')} style={styles.chart}>
           {/* Names */}
           <View style={{ width: labelW }}>
             <View style={[styles.cornerHead, { height: HEAD }]}>
@@ -436,7 +437,7 @@ function FocusCard({ it, people, statusColor, colors, theme, nowMs, onClose, onO
   const personRows = [...byPerson.entries()].sort((a, b) => b[1] - a[1]);
 
   return (
-    <View style={styles.focus}>
+    <View {...glass('card')} style={styles.focus}>
       <View style={styles.focusHead}>
         <View style={{ flex: 1 }}>
           <Text style={styles.focusTitle} numberOfLines={2}>{it.title}</Text>

@@ -44,6 +44,7 @@ import { activeMentionQuery, completeMention } from '../utils/quickAdd';
 import { openQuickAdd } from '../utils/events';
 import AnimatedPressable from '../components/AnimatedPressable';
 import TypingIndicator from '../components/TypingIndicator';
+import { glass } from '../theme/glass';
 
 const DELETE_WINDOW_MS = 15 * 60 * 1000;
 const EDIT_WINDOW_MS = 30 * 60 * 1000;
@@ -247,7 +248,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
     <Animated.View style={enterStyle}>
       {showDateHeader && currentDay && (
         <View style={styles.dateSeparator}>
-          <Text style={styles.dateSeparatorText}>{formatDateLabel(item.createdAt, lang, t)}</Text>
+          <Text {...glass('inset')} style={styles.dateSeparatorText}>{formatDateLabel(item.createdAt, lang, t)}</Text>
         </View>
       )}
       {showUnreadSeparator && (
@@ -1322,7 +1323,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
         onRequestClose={() => setConfirmScope(null)}
       >
         <Pressable style={styles.confirmOverlay} onPress={() => setConfirmScope(null)}>
-          <Pressable style={styles.confirmDialog} onPress={(e) => e.stopPropagation()}>
+          <Pressable {...glass('card')} style={styles.confirmDialog} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.confirmText}>
               {confirmScope === 'everyone' ? t('deleteForEveryoneConfirm') : t('deleteForMeConfirm')}
             </Text>
@@ -1453,7 +1454,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   inner: { flex: 1 },
   header: {
     flexDirection: 'row',

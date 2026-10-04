@@ -10,6 +10,7 @@ import BottomSheet from './BottomSheet';
 import { Avatar } from './kit';
 import useDirectory, { filterPeople } from '../hooks/useDirectory';
 import { showToast } from '../utils/events';
+import { glass } from '../theme/glass';
 
 /**
  * Pick chats (existing conversations or any colleague) and send something to them.
@@ -104,7 +105,7 @@ export default function ShareToChatSheet({ visible, onClose, heading, subheading
         <Text style={styles.heading}>{heading || 'Share to chat'}</Text>
         {!!subheading && <Text style={styles.subheading} numberOfLines={2}>{subheading}</Text>}
       </View>
-      <View style={styles.search}>
+      <View {...glass('inset')} style={styles.search}>
         <Ionicons name="search" size={16} color={colors.gray[400]} />
         <TextInput
           value={query}
@@ -149,13 +150,13 @@ export default function ShareToChatSheet({ visible, onClose, heading, subheading
           onChangeText={setNote}
           placeholder="Add a message (optional)"
           placeholderTextColor={colors.gray[400]}
-          style={styles.note}
+          {...glass('inset')} style={styles.note}
         />
         <AnimatedPressable
           onPress={send}
           disabled={!selected.length || sending}
           haptic="medium"
-          style={[styles.send, (!selected.length || sending) && { opacity: 0.4 }]}
+          {...glass('accent')} style={[styles.send, (!selected.length || sending) && { opacity: 0.4 }]}
         >
           <Ionicons name="paper-plane" size={18} color={colors.white} />
           <Text style={styles.sendText}>{selected.length > 1 ? `Send (${selected.length})` : 'Send'}</Text>

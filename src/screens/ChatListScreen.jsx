@@ -16,6 +16,7 @@ import { SkeletonList } from '../components/Skeleton';
 import { FadeInItem } from '../components/StaggeredFadeIn';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import api from '../api/client';
+import { glass } from '../theme/glass';
 
 function formatChatTime(dateStr, t) {
   if (!dateStr) return '';
@@ -340,7 +341,7 @@ export default function ChatListScreen({ onOpen, activeId } = {}) {
           <AnimatedPressable
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            {...glass('inset')} style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             haptic="light"
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>

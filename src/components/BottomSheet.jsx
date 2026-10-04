@@ -13,14 +13,16 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius } from '../theme/theme';
+import { glass } from '../theme/glass';
+import { SPRING, project } from '../theme/motion';
 import useKeyboardInset from '../hooks/useKeyboardInset';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useBackClose from '../hooks/useBackClose';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SPRING_CONFIG = { damping: 28, stiffness: 280, mass: 0.8, overshootClamping: true };
-const CLOSE_DURATION = 180;
-const OPEN_DURATION = 200;
+// Open with a slightly lively spring; close with a critically damped one (nothing to overshoot while leaving).
+const CLOSE_SPRING = { ...SPRING.smooth, overshootClamping: true };
+const CLOSE_DURATION = 300; // how long the exit spring is given before the Modal unmounts
 
 /**
  * Gesture-driven bottom sheet that slides in/out on the UI thread.
@@ -51,6 +53,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
 
   const translateY = useSharedValue(hiddenY);
   const overlayOpacity = useSharedValue(0);
+  const materialize = useSharedValue(0); // 0 -> 1 as the glass arrives: scale and fade together
   const shouldRenderRef = useRef(false);
 
   useEffect(() => {
@@ -61,18 +64,20 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         shouldRenderRef.current = true;
         setShouldRender(true);
       }
-      translateY.value = withTiming(0, { duration: OPEN_DURATION });
-      overlayOpacity.value = withTiming(1, { duration: 160 });
+      translateY.value = withSpring(0, SPRING.sheet);
+      materialize.value = withSpring(1, SPRING.sheet);
+      overlayOpacity.value = withTiming(1, { duration: 220 });
     } else if (shouldRenderRef.current) {
       // Closing: animate out, then unmount after animation completes
-      translateY.value = withTiming(hiddenY, { duration: CLOSE_DURATION });
-      overlayOpacity.value = withTiming(0, { duration: CLOSE_DURATION });
+      translateY.value = withSpring(hiddenY, CLOSE_SPRING);
+      materialize.value = withSpring(0, CLOSE_SPRING);
+      overlayOpacity.value = withTiming(0, { duration: 220 });
       closeTimerRef.current = setTimeout(() => {
         shouldRenderRef.current = false;
         setShouldRender(false);
       }, CLOSE_DURATION + 16);
     }
-  }, [visible, maxHeight, hiddenY, translateY, overlayOpacity]);
+  }, [visible, maxHeight, hiddenY, translateY, overlayOpacity, materialize]);
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 
@@ -98,7 +103,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const touchHandlers = desktop ? {} : {
     onTouchStart: (e) => {
       const t = e.nativeEvent.touches?.[0];
-      touch.current = t ? { y: t.pageY, x: t.pageX, active: false, off: scrolledAway(e.target) } : null;
+      touch.current = t ? { y: t.pageY, x: t.pageX, active: false, off: scrolledAway(e.target), lastY: t.pageY, lastT: Date.now(), vy: 0 } : null;
     },
     onTouchMove: (e) => {
       const s = touch.current;
@@ -109,6 +114,10 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         if (dy > 14 && Math.abs(t.pageX - s.x) < dy) s.active = true;
         else return;
       }
+      // Track the finger's speed (px/s) so release can hand it to the spring.
+      const now = Date.now();
+      if (now > s.lastT) s.vy = ((t.pageY - s.lastY) / (now - s.lastT)) * 1000;
+      s.lastY = t.pageY; s.lastT = now;
       translateY.value = Math.max(0, dy - 14);
       overlayOpacity.value = interpolate(translateY.value, [0, maxHeight], [1, 0], Extrapolation.CLAMP);
     },
@@ -118,20 +127,22 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       if (!s || !s.active) return;
       const t = e.nativeEvent.changedTouches?.[0];
       const dy = t ? t.pageY - s.y : 0;
-      if (dy > 110) {
-        translateY.value = withTiming(maxHeight, { duration: CLOSE_DURATION });
-        overlayOpacity.value = withTiming(0, { duration: CLOSE_DURATION });
+      // Decide from where the flick is heading, not where the finger let go.
+      const heading = translateY.value + project(s.vy, 0.99);
+      if (dy > 110 || heading > maxHeight * 0.45) {
+        translateY.value = withSpring(maxHeight, { ...CLOSE_SPRING, velocity: s.vy });
+        overlayOpacity.value = withTiming(0, { duration: 220 });
         onClose();
       } else {
-        translateY.value = withTiming(0, { duration: 140 });
-        overlayOpacity.value = withTiming(1, { duration: 120 });
+        translateY.value = withSpring(0, { ...SPRING.sheet, velocity: s.vy });
+        overlayOpacity.value = withTiming(1, { duration: 160 });
       }
     },
   };
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: desktop ? overlayOpacity.value : 1,
+    transform: [{ translateY: translateY.value }, { scale: desktop ? 0.94 + 0.06 * materialize.value : 1 }],
+    opacity: desktop ? Math.min(1, materialize.value * 1.4) : 1,
   }));
 
   const overlayStyle = useAnimatedStyle(() => ({
@@ -149,9 +160,9 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       statusBarTranslucent
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <Animated.View style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, overlayStyle]}>
+      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <Animated.View style={[styles.sheet, desktop && styles.dialog, { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md }, sheetStyle]} {...touchHandlers}>
+        <Animated.View {...glass('sheet')} style={[styles.sheet, desktop && styles.dialog, { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md }, sheetStyle]} {...touchHandlers}>
           {/* Swipe-down handling is the touch handlers above (works from anywhere once content is at the top). */}
           {desktop ? <View style={{ height: spacing.sm }} /> : (
             <View style={styles.handleZone}>
@@ -176,15 +187,15 @@ const createStyles = (colors, insets) => StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
     maxWidth: 620,
-    borderRadius: radius.xl,
+    borderRadius: 28,
     marginBottom: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
   },
   sheet: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingBottom: Math.max(insets.bottom, spacing.md),
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -200,7 +211,8 @@ const createStyles = (colors, insets) => StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.gray[300],
+    backgroundColor: colors.gray[400],
+    opacity: 0.55,
     alignSelf: 'center',
     marginTop: spacing.sm,
   },

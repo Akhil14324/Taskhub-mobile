@@ -7,6 +7,7 @@ import { useColors } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { glass } from '../theme/glass';
 
 const SUPPORT_EMAIL = 'support@vgrand.com';
 const LAST_UPDATED = 'August 13, 2026';
@@ -134,13 +135,13 @@ export default function LegalScreen() {
         <Text style={styles.updated}>{t('lastUpdated')}: {LAST_UPDATED}</Text>
 
         {sections.map((section, index) => (
-          <View key={index} style={styles.section}>
+          <View key={index} {...glass('card')} style={styles.section}>
             <Text style={styles.sectionHeading}>{section.heading}</Text>
             <Text style={styles.sectionBody}>{section.body}</Text>
           </View>
         ))}
 
-        <AnimatedPressable onPress={openEmail} style={styles.contactBtn} activeOpacity={0.7} haptic="light">
+        <AnimatedPressable onPress={openEmail} {...glass('inset')} style={styles.contactBtn} activeOpacity={0.7} haptic="light">
           <Ionicons name="mail-outline" size={18} color={colors.brand[600]} />
           <Text style={styles.contactText}>{t('contactUs')}: {SUPPORT_EMAIL}</Text>
         </AnimatedPressable>
@@ -152,7 +153,7 @@ export default function LegalScreen() {
 const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray[50],
+    backgroundColor: colors.page,
   },
   header: {
     flexDirection: 'row',

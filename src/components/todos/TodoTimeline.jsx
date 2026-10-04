@@ -14,6 +14,7 @@ import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import { STATUS, BLOCKER_KINDS, formatSeconds, healthColor } from '../../utils/timeline';
 import { timeAgo } from '../../utils/dates';
 import { showToast, confirmDialog } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const PROGRESS_STEPS = [0, 25, 50, 75, 100];
 
@@ -152,7 +153,7 @@ export default function TodoTimeline({ todo }) {
               )}
               <Text style={[styles.blockerTime, { color: healthColor(level, theme) }]}>Stuck for {formatSeconds(since)} · raised by {b.raised_by === user?.id ? 'you' : b.raised_by_name}</Text>
             </View>
-            <AnimatedPressable onPress={() => clearBlocker(b)} haptic="medium" style={styles.clearBtn}>
+            <AnimatedPressable onPress={() => clearBlocker(b)} haptic="medium" {...glass('inset')} style={styles.clearBtn}>
               <Text style={styles.clearText}>Clear</Text>
             </AnimatedPressable>
           </View>
@@ -184,7 +185,7 @@ export default function TodoTimeline({ todo }) {
               ))}
             </View>
           )}
-          <AnimatedPressable onPress={post} disabled={!updateText.trim() || posting} haptic="light" style={[styles.postBtn, { opacity: updateText.trim() && !posting ? 1 : 0.4 }]}>
+          <AnimatedPressable onPress={post} disabled={!updateText.trim() || posting} haptic="light" {...glass('accent')} style={[styles.postBtn, { opacity: updateText.trim() && !posting ? 1 : 0.4 }]}>
             <Ionicons name="paper-plane" size={15} color="#fff" />
             <Text style={styles.postText}>Post update</Text>
           </AnimatedPressable>

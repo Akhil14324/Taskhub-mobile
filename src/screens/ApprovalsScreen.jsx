@@ -18,6 +18,7 @@ import useIsDesktop from '../hooks/useBreakpoint';
 import useShortcuts from '../hooks/useShortcuts';
 import { timeAgo } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
+import { glass } from '../theme/glass';
 
 /**
  * Everything waiting on me, in order of the chain of command:
@@ -182,7 +183,7 @@ export default function ApprovalsScreen() {
           {proposals.length > 0 && <SectionHeader title="Suggested tasks" count={proposals.length} />}
           {proposals.map((t) => (
             <SwipeCard key={`p${t.id}`} approveLabel="Accept" declineLabel="Decline" selected={selKey === `p${t.id}`} onApprove={byKey.get(`p${t.id}`).approve} onDecline={byKey.get(`p${t.id}`).decline}>
-            <View style={styles.card}>
+            <View {...glass('card')} style={styles.card}>
               <AnimatedPressable onPress={() => openTodo(t.id)}>
                 <View style={styles.cardTop}>
                   <Avatar name={t.created_by_name} size={34} />
@@ -222,7 +223,7 @@ export default function ApprovalsScreen() {
           )}
           {reviews.map((t) => (
             <SwipeCard key={`r${t.id}`} approveLabel="Approve" declineLabel="Changes" selected={selKey === `r${t.id}`} onApprove={byKey.get(`r${t.id}`).approve} onDecline={byKey.get(`r${t.id}`).decline}>
-            <View style={styles.card}>
+            <View {...glass('card')} style={styles.card}>
               <AnimatedPressable onPress={() => openTodo(t.id)}>
                 <View style={styles.cardTop}>
                   <Avatar name={t.submitted_by_name || t.assignee_name} size={34} />
@@ -257,7 +258,7 @@ export default function ApprovalsScreen() {
           {requests.length > 0 && <SectionHeader title="Requests from your team" count={requests.length} />}
           {requests.map((a) => (
             <SwipeCard key={`a${a.id}`} approveLabel="Delete" declineLabel="Decline" selected={selKey === `a${a.id}`} onApprove={byKey.get(`a${a.id}`).approve} onDecline={byKey.get(`a${a.id}`).decline}>
-            <View style={styles.card}>
+            <View {...glass('card')} style={styles.card}>
               <View style={styles.cardTop}>
                 <View style={styles.kindIcon}>
                   <Ionicons name="trash-bin-outline" size={18} color={colors.brand[700]} />
@@ -330,7 +331,7 @@ function DecisionButton({ label, icon, solid, loading, onPress }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.6 },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500] },

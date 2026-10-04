@@ -20,6 +20,7 @@ import useIsDesktop from '../hooks/useBreakpoint';
 import { greeting, daysFromToday, todayYmd, toYmd, WEEKDAYS, MONTHS_SHORT, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
 import { formatSeconds } from '../utils/timeline';
 import { showToast } from '../utils/events';
+import { glass } from '../theme/glass';
 
 /** Why a task is being suggested, and how strongly. Higher score = do it sooner. */
 function rank(t, today, waiting) {
@@ -130,7 +131,7 @@ export default function MyDayScreen({ embedded = false }) {
   };
 
   const hero = (
-    <View style={styles.hero}>
+    <View {...glass('card')} style={styles.hero}>
       <View style={{ flex: 1 }}>
         <Text style={styles.date}>{WEEKDAYS[d.getDay()]}, {d.getDate()} {MONTHS_SHORT[d.getMonth()]}</Text>
         <Text style={styles.greet}>{greeting()}, {firstName}</Text>
@@ -147,7 +148,7 @@ export default function MyDayScreen({ embedded = false }) {
   );
 
   const streakCard = (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <View style={styles.streakTop}>
         <View style={styles.flame}><Ionicons name="flame" size={22} color="#fff" /></View>
         <View style={{ flex: 1 }}>
@@ -183,7 +184,7 @@ export default function MyDayScreen({ embedded = false }) {
   );
 
   const nextCard = next ? (
-    <View style={styles.next}>
+    <View {...glass('accent')} style={styles.next}>
       <Text style={styles.nextKicker}>DO THIS NEXT</Text>
       <View style={styles.nextBody}>
         <TodoCheckbox checked={false} priority={next.t.priority} onPress={() => toggleTodo(next.t)} size={26} />
@@ -196,7 +197,7 @@ export default function MyDayScreen({ embedded = false }) {
   ) : null;
 
   const waitingCard = (myDay?.waiting_on_you || []).length > 0 ? (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <SectionHeader title="Waiting on you" count={myDay.waiting_on_you.length} style={{ paddingTop: 0 }} />
       <Text style={styles.sub}>Their work is held up until you act.</Text>
       {myDay.waiting_on_you.map((w) => (
@@ -213,20 +214,20 @@ export default function MyDayScreen({ embedded = false }) {
   ) : null;
 
   const listCard = (title, items, opts = {}) => (items.length > 0 ? (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <SectionHeader title={title} count={items.length} style={{ paddingTop: 0 }} color={opts.hot ? colors.brand[700] : undefined} />
       {items.map((t) => renderRow(t))}
     </View>
   ) : null);
 
   const allClearCard = allClear ? (
-    <View style={[styles.card, styles.clear]}>
+    <View {...glass('card')} style={[styles.card, styles.clear]}>
       <View style={styles.clearIcon}><Ionicons name="checkmark-done" size={26} color="#fff" /></View>
       <View style={{ flex: 1 }}>
         <Text style={styles.clearTitle}>Day complete</Text>
         <Text style={styles.sub}>{doneToday.length} finished today{streak > 1 ? ` · ${streak}-day streak` : ''}. Thank someone who helped?</Text>
       </View>
-      <AnimatedPressable style={styles.clearBtn} onPress={() => setKudosOpen(true)}>
+      <AnimatedPressable {...glass('accent')} style={styles.clearBtn} onPress={() => setKudosOpen(true)}>
         <Ionicons name="heart" size={14} color="#fff" />
         <Text style={styles.clearBtnText}>Kudos</Text>
       </AnimatedPressable>
@@ -234,7 +235,7 @@ export default function MyDayScreen({ embedded = false }) {
   ) : null;
 
   const kudosCard = (
-    <View style={styles.card}>
+    <View {...glass('card')} style={styles.card}>
       <SectionHeader
         title="Kudos for you"
         count={myDay?.kudos_this_week ? `${myDay.kudos_this_week} this week` : undefined}
@@ -253,7 +254,7 @@ export default function MyDayScreen({ embedded = false }) {
   );
 
   const recapLink = (
-    <AnimatedPressable style={styles.recapLink} onPress={() => navigation.navigate('Recap')}>
+    <AnimatedPressable {...glass('card')} style={styles.recapLink} onPress={() => navigation.navigate('Recap')}>
       <View style={styles.recapIcon}><Ionicons name="stats-chart" size={18} color={colors.brand[700]} /></View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle}>Your week in review</Text>
@@ -272,7 +273,7 @@ export default function MyDayScreen({ embedded = false }) {
       {listCard('Due today', dueToday)}
       {listCard('In progress', inProgress.slice(0, 5))}
       {total === 0 && inProgress.length === 0 && !waitingCard && (
-        <View style={[styles.card, { alignItems: 'center', paddingVertical: spacing.xl }]}>
+        <View {...glass('card')} style={[styles.card, { alignItems: 'center', paddingVertical: spacing.xl }]}>
           <Ionicons name="sunny-outline" size={32} color={colors.gray[300]} />
           <Text style={[styles.rowTitle, { marginTop: 8 }]}>Nothing is due today</Text>
           <AnimatedPressable style={[styles.smallBtn, { marginTop: 10 }]} onPress={() => setAddOpen(true)}>
@@ -282,7 +283,7 @@ export default function MyDayScreen({ embedded = false }) {
         </View>
       )}
       {doneToday.length > 0 && (
-        <View style={styles.card}>
+        <View {...glass('card')} style={styles.card}>
           <AnimatedPressable onPress={() => setShowDone((v) => !v)} style={styles.doneHead}>
             <Text style={styles.rowTitle}>Done today · {doneToday.length}</Text>
             <Ionicons name={showDone ? 'chevron-up' : 'chevron-down'} size={16} color={colors.gray[400]} />
@@ -326,7 +327,7 @@ export default function MyDayScreen({ embedded = false }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.md },
   contentDesktop: { paddingHorizontal: spacing.xxxl, maxWidth: 1240, width: '100%', alignSelf: 'center' },
   screenTitle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900] },

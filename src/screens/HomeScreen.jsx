@@ -20,6 +20,7 @@ import useIsDesktop from '../hooks/useBreakpoint';
 import { greeting, todayYmd, toYmd, WEEKDAYS, MONTHS_SHORT, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
 import { pushEnvironment } from '../services/webPush';
 import { showToast } from '../utils/events';
+import { glass } from '../theme/glass';
 
 /**
  * Home. Two clearly separate panels: what is mine (personal to-dos) and what belongs to the business
@@ -99,7 +100,7 @@ export default function HomeScreen() {
   const openBusiness = (id) => navigation.navigate('Main', { screen: 'Todos', params: { business_id: id } });
 
   const personalPanel = (
-    <View style={styles.panel}>
+    <View {...glass('card')} style={styles.panel}>
       <View style={styles.panelHead}>
         <View style={styles.panelTitleRow}>
           <Ionicons name="person-outline" size={16} color={colors.brand[600]} />
@@ -167,7 +168,7 @@ export default function HomeScreen() {
   );
 
   const businessPanel = hasBusiness ? (
-    <View style={styles.panel}>
+    <View {...glass('card')} style={styles.panel}>
       <View style={styles.panelHead}>
         <View style={styles.panelTitleRow}>
           <Ionicons name="briefcase-outline" size={16} color={colors.brand[600]} />
@@ -242,7 +243,7 @@ export default function HomeScreen() {
         </View>
 
         {(pushState === 'default' || pushState === 'needs-install') && (
-          <View style={styles.pushCard}>
+          <View {...glass('accent')} style={styles.pushCard}>
             <View style={styles.pushIcon}><Ionicons name="notifications" size={20} color="#fff" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.pushTitle}>Never miss a task</Text>
@@ -261,7 +262,7 @@ export default function HomeScreen() {
         )}
 
         {notPlaced && (
-          <View style={[styles.banner, { backgroundColor: colors.brand[50] }]}>
+          <View {...glass('card')} style={[styles.banner, { backgroundColor: colors.brand[50] }]}>
             <Ionicons name="hourglass-outline" size={20} color={colors.brand[700]} />
             <Text style={styles.bannerText}>You are not placed in a business yet. The Chairman or Chief of Staff will add you soon. Your personal to-dos and chat work as usual.</Text>
           </View>
@@ -269,7 +270,7 @@ export default function HomeScreen() {
 
         {approvalCount > 0 && (
           <AnimatedPressable onPress={() => navigation.navigate('Approvals')}>
-            <View style={[styles.banner, styles.bannerLink]}>
+            <View {...glass('card')} style={[styles.banner, styles.bannerLink]}>
               <Ionicons name="shield-checkmark" size={20} color={colors.brand[700]} />
               <Text style={[styles.bannerText, { fontWeight: '700' }]}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your decision</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.brand[700]} />
@@ -278,7 +279,7 @@ export default function HomeScreen() {
         )}
 
         <AnimatedPressable onPress={() => navigation.navigate('Progress')}>
-          <View style={styles.dayCard}>
+          <View {...glass('accent')} style={styles.dayCard}>
             <View style={styles.dayIcon}><Ionicons name="sunny" size={22} color="#fff" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.dayTitle}>My Day</Text>
@@ -348,7 +349,7 @@ function Quick({ icon, label, onPress }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg },
   contentDesktop: { paddingHorizontal: spacing.xxxl, maxWidth: 1240, width: '100%', alignSelf: 'center' },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, marginBottom: spacing.xl },

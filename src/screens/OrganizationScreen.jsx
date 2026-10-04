@@ -21,6 +21,7 @@ import { Avatar, Chip, IconButton, accent, tint } from '../components/kit';
 import useDirectory, { filterPeople, invalidateDirectory } from '../hooks/useDirectory';
 import { showToast } from '../utils/events';
 import { TIER_ICONS, TIER_SHADES, businessIcon, designationIcon } from '../utils/orgMeta';
+import { glass } from '../theme/glass';
 
 // Accountants and heads are always on show; everyone else sits in the expandable list.
 const KEY_DESIGNATIONS = ['head', 'accountant'];
@@ -127,14 +128,14 @@ export default function OrganizationScreen() {
           <Text style={styles.subtitle}>{portal ? 'Portal — you can place and manage people' : 'Who’s who across VGrand'}</Text>
         </View>
         {portal && (
-          <AnimatedPressable style={styles.addBtn} onPress={() => setEditing(null)} haptic="medium">
+          <AnimatedPressable {...glass('accent')} style={styles.addBtn} onPress={() => setEditing(null)} haptic="medium">
             <Ionicons name="person-add" size={16} color={colors.white} />
             <Text style={styles.addBtnText}>Person</Text>
           </AnimatedPressable>
         )}
       </View>
 
-      <View style={styles.searchBox}>
+      <View {...glass('card')} style={styles.searchBox}>
         <Ionicons name="search" size={16} color={colors.gray[400]} />
         <TextInput
           value={query}
@@ -194,7 +195,7 @@ export default function OrganizationScreen() {
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Businesses</Text>
               {portal && (
-                <AnimatedPressable style={styles.addBizBtn} onPress={() => setBizEditor(null)} haptic="light">
+                <AnimatedPressable {...glass('inset')} style={styles.addBizBtn} onPress={() => setBizEditor(null)} haptic="light">
                   <Ionicons name="add" size={16} color={colors.brand[600]} />
                   <Text style={styles.addBizText}>Business</Text>
                 </AnimatedPressable>
@@ -209,7 +210,7 @@ export default function OrganizationScreen() {
               const keyPeople = b.members.filter((m) => KEY_DESIGNATIONS.includes(m.designation));
               return (
                 <Animated.View key={b.id} entering={FadeInDown.delay(200 + i * 70).duration(300)} layout={LinearTransition}>
-                  <View style={styles.bizCard}>
+                  <View {...glass('card')} style={styles.bizCard}>
                     <AnimatedPressable onPress={() => setExpanded((e) => ({ ...e, [b.id]: !open }))} haptic="light">
                       <View style={styles.bizHeader}>
                         <View style={[styles.bizIcon, { backgroundColor: tint(accent(), 0.14) }]}>
@@ -287,7 +288,7 @@ export default function OrganizationScreen() {
                       <Text style={styles.personName}>{p.name}</Text>
                       <Text style={styles.personTitle}>@{p.username}</Text>
                     </View>
-                    <View style={styles.placeBtn}><Text style={styles.placeText}>Place</Text></View>
+                    <View {...glass('accent')} style={styles.placeBtn}><Text style={styles.placeText}>Place</Text></View>
                   </AnimatedPressable>
                 ))}
               </View>
@@ -429,7 +430,7 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   title: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900] },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500] },

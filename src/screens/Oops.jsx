@@ -19,6 +19,7 @@ import { PrimaryButton } from '../components/Button';
 import Cat3D from '../components/Cat3D';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { spacing, radius, fontSize } from '../theme/theme';
+import { glass } from '../theme/glass';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -142,7 +143,7 @@ export default function Oops() {
           <Cat3D size={280} />
         </Animated.View>
 
-        <View style={styles.sign}>
+        <View {...glass('card')} style={styles.sign}>
           <Text style={styles.signText}>{statusText}</Text>
         </View>
 
@@ -164,7 +165,7 @@ const createStyles = (colors) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.gray[50],
+      backgroundColor: colors.page,
       justifyContent: 'center',
       alignItems: 'center',
       overflow: 'hidden',

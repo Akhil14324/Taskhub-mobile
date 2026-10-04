@@ -11,6 +11,7 @@ import { HealthBanner, MetricsGrid, TimelineEntries, useNowTick } from './TimeHe
 import { Avatar, DueChip } from '../kit';
 import { STATUS, BLOCKER_KINDS, formatSeconds, healthColor } from '../../utils/timeline';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const QUICK_QUESTIONS = [
   'Why is this taking so long?',
@@ -117,7 +118,7 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
           <Text style={styles.label}>Ask why</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow} keyboardShouldPersistTaps="always">
             {QUICK_QUESTIONS.map((q) => (
-              <AnimatedPressable key={q} onPress={() => setQuestion(q)} haptic="light" style={styles.quick}>
+              <AnimatedPressable key={q} onPress={() => setQuestion(q)} haptic="light" {...glass('inset')} style={styles.quick}>
                 <Text style={styles.quickText}>{q}</Text>
               </AnimatedPressable>
             ))}
@@ -131,7 +132,7 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
               style={styles.askInput}
               multiline
             />
-            <AnimatedPressable onPress={ask} disabled={!question.trim() || sending} haptic="medium" style={[styles.askBtn, { opacity: question.trim() && !sending ? 1 : 0.4 }]}>
+            <AnimatedPressable onPress={ask} disabled={!question.trim() || sending} haptic="medium" {...glass('accent')} style={[styles.askBtn, { opacity: question.trim() && !sending ? 1 : 0.4 }]}>
               <Ionicons name="help-circle" size={16} color="#fff" />
               <Text style={styles.askText}>Ask</Text>
             </AnimatedPressable>

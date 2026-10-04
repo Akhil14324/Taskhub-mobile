@@ -12,6 +12,7 @@ import TagInput from './TagInput';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import { BLOCKER_KINDS } from '../../utils/timeline';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const NOTE_PLACEHOLDER = {
   dependency: 'Why does it have to come first? (optional) Type @ to tag people, to-dos or a business',
@@ -104,7 +105,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
         onChangeText={setQuery}
         placeholder={kind === 'waiting_on' ? 'Search anyone whose decision or suggestion you need' : 'Search the person'}
         placeholderTextColor={colors.gray[400]}
-        style={styles.input}
+        {...glass('inset')} style={styles.input}
       />
       {peopleMatches.map((p) => (
         <AnimatedPressable key={p.id} onPress={() => setPersonId(personId === p.id ? null : p.id)} haptic="light" style={styles.pickRow}>
@@ -132,7 +133,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
               key={key}
               onPress={() => { setKind(key); setQuery(''); setPersonId(null); setDepId(null); }}
               haptic="light"
-              style={[styles.kind, kind === key && styles.kindActive]}
+              {...glass('inset')} style={[styles.kind, kind === key && styles.kindActive]}
             >
               <Ionicons name={k.icon} size={20} color={kind === key ? '#fff' : colors.brand[600]} />
               <Text style={[styles.kindLabel, kind === key && { color: '#fff' }]}>{k.short}</Text>
@@ -163,7 +164,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
                   onChangeText={setQuery}
                   placeholder={todo?.business_id ? 'Search a task in this business that must be done first' : 'Search your to-do that must be done first'}
                   placeholderTextColor={colors.gray[400]}
-                  style={styles.input}
+                  {...glass('inset')} style={styles.input}
                 />
                 {candidates.map((t) => (
                   <AnimatedPressable key={t.id} onPress={() => setDepId(depId === t.id ? null : t.id)} haptic="light" style={styles.pickRow}>
@@ -191,7 +192,7 @@ export default function BlockerSheet({ visible, todo, onClose }) {
           excludeTodoIds={[todo?.id]}
         />
 
-        <AnimatedPressable disabled={!valid || saving} onPress={submit} haptic="medium" style={[styles.submit, { opacity: valid && !saving ? 1 : 0.4 }]}>
+        <AnimatedPressable disabled={!valid || saving} onPress={submit} haptic="medium" {...glass('accent')} style={[styles.submit, { opacity: valid && !saving ? 1 : 0.4 }]}>
           <Ionicons name="hand-left" size={18} color="#fff" />
           <Text style={styles.submitText}>Report as stuck</Text>
         </AnimatedPressable>

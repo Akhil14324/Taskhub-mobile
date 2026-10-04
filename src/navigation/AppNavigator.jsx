@@ -30,6 +30,8 @@ import { MoreMenu } from '../components/UI';
 import { addNotificationResponseListener } from '../services/notifications';
 import { openNotificationTarget } from './navigationRef';
 import { todayYmd } from '../utils/dates';
+import { glass } from '../theme/glass';
+import { SPRING } from '../theme/motion';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
@@ -96,53 +98,51 @@ const FramedRecap = framed(RecapScreen, 920);
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const ICON_EASE = { duration: 140 };
-
 /**
- * Animated tab bar icon — scales up with a spring when focused.
+ * Tab bar icon. A glass pill blooms behind the focused icon and the icon pops with a spring;
+ * the badge springs in and bounces when its count changes.
  */
 function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
-  const scale = useSharedValue(focused ? 1.06 : 1);
+  const pill = useSharedValue(focused ? 1 : 0);
   const badgeScale = useSharedValue(badge ? 1 : 0);
   const prevBadgeRef = useRef(badge);
 
   useEffect(() => {
-    scale.value = withTiming(focused ? 1.06 : 1, ICON_EASE);
-  }, [focused, scale]);
+    pill.value = withSpring(focused ? 1 : 0, SPRING.pop);
+  }, [focused, pill]);
 
   // Badge pop animation when count changes
   useEffect(() => {
     if (badge && prevBadgeRef.current !== badge) {
-      badgeScale.value = withSequence(
-        withTiming(1.12, { duration: 90 }),
-        withTiming(1, { duration: 110 }),
-      );
+      badgeScale.value = 0.6;
+      badgeScale.value = withSpring(1, SPRING.pop);
     } else if (badge) {
-      badgeScale.value = withTiming(1, { duration: 120 });
+      badgeScale.value = withSpring(1, SPRING.pop);
     } else {
       badgeScale.value = withTiming(0, { duration: 120 });
     }
     prevBadgeRef.current = badge;
   }, [badge, badgeScale]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pill.value * 0.08 }, { translateY: -pill.value * 0.5 }] }));
+  const pillStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pill.value * 1.5), transform: [{ scaleX: 0.5 + pill.value * 0.5 }, { scaleY: 0.6 + pill.value * 0.4 }] }));
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScale.value }],
-    opacity: badgeScale.value,
+    opacity: Math.min(1, badgeScale.value * 1.5),
   }));
 
   return (
-    <Animated.View style={animatedStyle}>
-      <Ionicons name={name} size={size} color={color} />
-      {badge > 0 && (
-        <Animated.View style={[tabStyles.badge, badgeStyle]} pointerEvents="none">
-          <Text style={tabStyles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
-        </Animated.View>
-      )}
-    </Animated.View>
+    <View style={tabStyles.iconWrap}>
+      <Animated.View {...glass('inset')} style={[tabStyles.pill, pillStyle]} pointerEvents="none" />
+      <Animated.View style={iconStyle}>
+        <Ionicons name={name} size={size} color={color} />
+        {badge > 0 && (
+          <Animated.View style={[tabStyles.badge, badgeStyle]} pointerEvents="none">
+            <Text style={tabStyles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+          </Animated.View>
+        )}
+      </Animated.View>
+    </View>
   );
 }
 
@@ -201,21 +201,24 @@ function MainTabs() {
           headerShown: false,
           tabBarActiveTintColor: colors.brand[600],
           tabBarInactiveTintColor: colors.gray[400],
+          // A floating glass island instead of an edge-to-edge bar: translucent, blurred, specular rim.
           tabBarStyle: {
-            paddingBottom: insets.bottom + 4,
-            paddingTop: 4,
-            height: 56 + insets.bottom,
-            backgroundColor: colors.white,
+            height: 64,
+            marginHorizontal: 14,
+            marginBottom: Math.max(insets.bottom, 10),
+            paddingTop: 7,
+            paddingBottom: 7,
+            borderRadius: 32,
+            backgroundColor: 'transparent',
             borderTopColor: 'transparent',
             borderTopWidth: 0,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            elevation: 8,
+            elevation: 0,
           },
+          tabBarBackground: () => <View {...glass('capsule')} style={[StyleSheet.absoluteFill, { borderRadius: 32, backgroundColor: colors.white }]} />,
           tabBarLabelStyle: {
             fontSize: 10,
+            fontWeight: '600',
+            letterSpacing: 0.15,
           },
         }}
       >
@@ -321,6 +324,8 @@ const createStyles = (colors) => StyleSheet.create({
 });
 
 const tabStyles = StyleSheet.create({
+  iconWrap: { width: 52, height: 30, alignItems: 'center', justifyContent: 'center' },
+  pill: { position: 'absolute', width: 52, height: 30, borderRadius: 15 },
   badge: {
     position: 'absolute',
     top: -6,
@@ -353,7 +358,7 @@ export default function AppNavigator() {
   // The default navigation theme paints a pale grey behind screens that do not fill the window.
   const navTheme = useMemo(() => ({
     ...DefaultTheme,
-    colors: { ...DefaultTheme.colors, background: colors.gray[50], card: colors.white, border: colors.gray[200], text: colors.gray[900], primary: colors.brand[600] },
+    colors: { ...DefaultTheme.colors, background: 'transparent', card: 'transparent', border: 'transparent', text: colors.gray[900], primary: colors.brand[600] },
   }), [colors]);
 
   useEffect(() => {
@@ -374,7 +379,7 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.gray[50] }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.page }}>
         <ActivityIndicator size="large" color={colors.brand[600]} />
       </View>
     );
@@ -387,13 +392,14 @@ export default function AppNavigator() {
   };
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.gray[50] }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
       {showShell && <AppSidebar routeName={routeName} />}
       <View style={{ flex: 1, minWidth: 0 }}>
     <NavigationContainer ref={navigationRef} theme={navTheme} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
+          contentStyle: { backgroundColor: 'transparent' },
           ...screenTransition,
         }}
       >

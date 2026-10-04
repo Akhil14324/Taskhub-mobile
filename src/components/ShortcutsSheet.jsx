@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import useBackClose from '../hooks/useBackClose';
+import { glass } from '../theme/glass';
 import {
   ACTIONS, FIXED, actionById, chordOf, chordKeys, splitCombo, effective, isCustomised, setCombos, resetAction, resetAll,
   findClash, stealCombo, useShortcutVersion,
@@ -145,7 +146,7 @@ export default function ShortcutsSheet({ visible, onClose }) {
           </View>
         </View>
         {editing && (
-          <View style={styles.recorder}>
+          <View {...glass('inset')} style={styles.recorder}>
             <Text style={styles.recHint}>
               {draft.length ? 'Press more keys to make a sequence, or save.' : 'Press the keys you want. A key alone, Ctrl/Alt/Shift combinations, or up to three in a row all work. Esc cancels.'}
             </Text>
@@ -174,7 +175,7 @@ export default function ShortcutsSheet({ visible, onClose }) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.card} onPress={() => {}}>
+        <Pressable {...glass('inset')} style={styles.card} onPress={() => {}}>
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>Keyboard shortcuts</Text>

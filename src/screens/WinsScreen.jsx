@@ -15,6 +15,7 @@ import BadgeMedal from '../components/engage/BadgeMedal';
 import KudosSheet from '../components/engage/KudosSheet';
 import { parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT, timeAgo } from '../utils/dates';
 import { openNotificationTarget } from '../navigation/navigationRef';
+import { glass } from '../theme/glass';
 
 const FAMILY_TITLE = { tasks: 'Finishing', streak: 'Streaks', clean_month: 'On time', kudos: 'Thanks' };
 
@@ -70,7 +71,7 @@ function WeekTab({ week, setWeek, data, onCheer }) {
         </AnimatedPressable>
       </View>
 
-      <View style={styles.hero}>
+      <View {...glass('accent')} style={styles.hero}>
         <Text style={styles.heroNum}>{data.totals.done}</Text>
         <Text style={styles.heroLabel}>tasks finished across the company</Text>
         <View style={styles.bars}>
@@ -97,7 +98,7 @@ function WeekTab({ week, setWeek, data, onCheer }) {
       {!data.totals.done && <EmptyHero icon="trophy" title="Nothing finished yet" message="Finished business work shows up here for everyone in the business to see." />}
 
       {data.top.length > 0 && (
-        <View style={styles.card}>
+        <View {...glass('card')} style={styles.card}>
           <Text style={styles.cardTitle}>Top finishers</Text>
           {data.top.map((p) => (
             <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -109,14 +110,14 @@ function WeekTab({ week, setWeek, data, onCheer }) {
       )}
 
       {data.businesses.length > 1 && (
-        <View style={styles.card}>
+        <View {...glass('card')} style={styles.card}>
           <Text style={styles.cardTitle}>By business</Text>
           {data.businesses.map((b) => <Bar key={b.id} label={b.name} value={b.count} max={maxBiz} />)}
         </View>
       )}
 
       {data.feed.length > 0 && (
-        <View style={styles.card}>
+        <View {...glass('card')} style={styles.card}>
           <Text style={styles.cardTitle}>Just finished</Text>
           {data.feed.map((f) => (
             <View key={f.id} style={styles.feedRow}>
@@ -151,7 +152,7 @@ function BadgesTab({ data }) {
         <Stat icon="trophy" value={`${earned}/${data.badges.length}`} label="badges" />
       </View>
       {families.map((fam) => (
-        <View key={fam} style={styles.card}>
+        <View key={fam} {...glass('card')} style={styles.card}>
           <Text style={styles.cardTitle}>{FAMILY_TITLE[fam] || fam}</Text>
           <View style={styles.medals}>
             {data.badges.filter((b) => b.family === fam).map((b) => (
@@ -238,7 +239,7 @@ export default function WinsScreen({ embedded = false }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   title: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.5 },
   subtitle: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },

@@ -24,6 +24,7 @@ import { RECURRENCE_LABELS, timeAgo, formatDue } from '../../utils/dates';
 import { DURATION_PRESETS, REMINDER_CHOICES, formatDuration, cleanLabel } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 import { showToast } from '../../utils/events';
+import { glass } from '../../theme/glass';
 
 const TABS = [
   { key: 'details', label: 'Details' },
@@ -241,7 +242,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
               value={notes}
               onChangeText={setNotes}
               onBlur={() => notes !== (todo.notes || '') && save({ notes })}
-              style={styles.notes}
+              {...glass('inset')} style={styles.notes}
               editable={editable}
               placeholder={editable ? 'Add a description' : 'No description'}
               placeholderTextColor={colors.gray[400]}
@@ -249,7 +250,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
             />
 
             <Text style={styles.label}>Schedule</Text>
-            <AnimatedPressable style={styles.field} onPress={editable ? () => setDateOpen(true) : undefined}>
+            <AnimatedPressable {...glass('inset')} style={styles.field} onPress={editable ? () => setDateOpen(true) : undefined}>
               <Ionicons name="calendar-outline" size={19} color={colors.gray[500]} />
               <View style={{ flex: 1 }}>
                 {todo.due_date
@@ -273,7 +274,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
             {business ? (
               <>
                 <Text style={styles.label}>Assigned to</Text>
-                <AnimatedPressable style={styles.field} onPress={perms.can_assign ? () => setAssignOpen(true) : undefined}>
+                <AnimatedPressable {...glass('inset')} style={styles.field} onPress={perms.can_assign ? () => setAssignOpen(true) : undefined}>
                   <Avatar name={todo.assignee_name || todo.business_name || '?'} uri={todo.assignee_picture} size={26} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.fieldValue}>
@@ -325,7 +326,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
                   onBlur={() => !labelText && setLabelText(null)}
                   placeholder="Type a label, then Enter"
                   placeholderTextColor={colors.gray[400]}
-                  style={styles.personInput}
+                  {...glass('inset')} style={styles.personInput}
                   autoCapitalize="none"
                 />
                 <View style={[styles.chipRow, { marginBottom: spacing.sm }]}>
@@ -346,7 +347,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
             {editable && !simple && more && (
               <View>
                 <Text style={styles.label}>Deadline</Text>
-                <AnimatedPressable style={styles.field} onPress={() => setDeadlineOpen(true)}>
+                <AnimatedPressable {...glass('inset')} style={styles.field} onPress={() => setDeadlineOpen(true)}>
                   <Ionicons name="alert-circle-outline" size={19} color={colors.gray[500]} />
                   <View style={{ flex: 1 }}>
                     {todo.deadline_date
@@ -423,7 +424,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
                       onChangeText={setPersonQuery}
                       placeholder="Type a name or @username"
                       placeholderTextColor={colors.gray[400]}
-                      style={styles.personInput}
+                      {...glass('inset')} style={styles.personInput}
                     />
                     <MentionSuggestions
                       people={suggestions}

@@ -12,6 +12,7 @@ import { Chip } from '../components/kit';
 import useIsDesktop from '../hooks/useBreakpoint';
 import { parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT } from '../utils/dates';
 import { formatSeconds } from '../utils/timeline';
+import { glass } from '../theme/glass';
 
 const fmtDay = (ymd) => {
   const d = parseYmd(ymd);
@@ -90,7 +91,7 @@ export default function RecapScreen() {
           <Text style={styles.sub}>Loading your week...</Text>
         ) : (
           <>
-            <View style={styles.hero}>
+            <View {...glass('card')} style={styles.hero}>
               <Text style={styles.range}>{fmtDay(cur.start)} to {fmtDay(cur.end)}</Text>
               <Text style={styles.big}>{cur.completed}</Text>
               <Text style={styles.bigLabel}>{cur.completed === 1 ? 'task finished' : 'tasks finished'}</Text>
@@ -111,7 +112,7 @@ export default function RecapScreen() {
 
             <View style={styles.grid}>
               {tiles.map((t) => (
-                <View key={t.label} style={styles.tile}>
+                <View key={t.label} {...glass('card')} style={styles.tile}>
                   <View style={styles.tileIcon}><Ionicons name={t.icon} size={16} color={colors.brand[700]} /></View>
                   <Text style={styles.tileValue}>{t.value}</Text>
                   <Text style={styles.tileLabel}>{t.label}</Text>
@@ -121,7 +122,7 @@ export default function RecapScreen() {
             </View>
 
             {cur.quickest && (
-              <View style={styles.card}>
+              <View {...glass('card')} style={styles.card}>
                 <Ionicons name="flash" size={18} color={colors.brand[600]} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>Quickest finish</Text>
@@ -129,7 +130,7 @@ export default function RecapScreen() {
                 </View>
               </View>
             )}
-            <View style={styles.card}>
+            <View {...glass('card')} style={styles.card}>
               <Ionicons name="flame" size={18} color={colors.brand[600]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>{data.streak}-day streak</Text>
@@ -145,7 +146,7 @@ export default function RecapScreen() {
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray[50] },
+  container: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.md, maxWidth: 820, width: '100%', alignSelf: 'center' },
   title: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900] },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
