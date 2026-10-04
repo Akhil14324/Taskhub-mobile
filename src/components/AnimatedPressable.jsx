@@ -10,12 +10,16 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { haptic as webHaptic } from '../utils/feedback';
 import { SPRING } from '../theme/motion';
+import { waterPress } from '../utils/water';
 
 const SCALE_DOWN = 0.985;
 const MIN_DEPTH = 0.04;      // even the gentlest press squishes a little: that is what makes it feel liquid
 const MIN_HOLD = 120;        // ms the compression is held at least, so a quick click is still seen and felt
 const MORPH = 0.3;           // corners tighten by this fraction while pressed (small shapes only)
 const MAX_MORPH_RADIUS = 40; // pills and circles keep their shape; the squish alone carries them
+
+// Controls (as opposed to rows and cards) behave like water when touched: the squish plus a ripple distortion.
+const WATER_GLASS = new Set(['button', 'accent', 'accent-deep', 'inset', 'capsule', 'tint']);
 
 const AnimatedPressableView = Animated.createAnimatedComponent(Pressable);
 
@@ -67,7 +71,8 @@ function usePressSpring(style, scale) {
  * Drop-in replacement for TouchableOpacity with the liquid squish press.
  * Props:
  * - haptic: boolean | 'light' | 'medium' | 'heavy' (default: false)
- * - scale: number (default 0.985); lower presses deeper (the squish never gets shallower than 3%)
+ * - scale: number (default 0.985); lower presses deeper (the squish never gets shallower than 4%)
+ * - water: boolean; the pressed control ripples like a disturbed surface (default: on for glass controls)
  * - ...all Pressable props
  */
 function AnimatedPressable({
@@ -79,6 +84,7 @@ function AnimatedPressable({
   style,
   haptic = false,
   scale = SCALE_DOWN,
+  water,
   ...rest
 }) {
   if (Platform.OS === 'web') {
@@ -91,6 +97,7 @@ function AnimatedPressable({
         style={style}
         haptic={haptic}
         scale={scale}
+        water={water}
         {...rest}
       >
         {children}
@@ -123,6 +130,7 @@ function WebPressable({
   style,
   haptic,
   scale,
+  water,
   ...rest
 }) {
   const { animated, down, up } = usePressSpring(style, scale);
@@ -136,10 +144,12 @@ function WebPressable({
   }, [disabled, onPress]);
 
   // Respond on pointer-down, not on release: the squish starts the instant the finger lands.
+  const wet = water ?? WATER_GLASS.has(rest.dataSet?.glass);
   const handlePressIn = useCallback((e) => {
     down();
+    if (wet && !disabled) waterPress(e?.currentTarget);
     onPressIn?.(e);
-  }, [down, onPressIn]);
+  }, [down, onPressIn, wet, disabled]);
 
   const handlePressOut = useCallback((e) => {
     up();

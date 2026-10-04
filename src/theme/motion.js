@@ -18,7 +18,7 @@ export const SPRING = {
   momentum: apple(0.42, 0.8),   // after a flick, with the release velocity handed in
   layout: apple(0.42, 0.88),    // list items reordering / entering / leaving
   screen: apple(0.62, 0.9),     // a whole module arriving (tab / route / layout change)
-  morph: apple(0.7, 0.82),      // one surface becoming another (capsule to dialog)
+  morph: apple(0.9, 0.9),       // one surface becoming another (capsule gathers into a bubble, flies, unfolds)
   panel: apple(0.55, 0.96),     // sidebars opening and closing
 };
 

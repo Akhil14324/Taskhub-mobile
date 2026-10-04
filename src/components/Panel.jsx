@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as SecureStore from '../utils/secureStorage';
-import AnimatedPressable from './AnimatedPressable';
-import { useColors } from '../context/ThemeContext';
-import { glass } from '../theme/glass';
 import { SPRING } from '../theme/motion';
 
 /**
@@ -48,29 +44,6 @@ export function Panel({ p, width, children }) {
       <View style={{ flex: 1, overflow: 'hidden' }}>
         <Animated.View style={[{ width, flex: 1, flexDirection: 'row' }, inner]}>{children}</Animated.View>
       </View>
-    </Animated.View>
-  );
-}
-
-/**
- * The small glass grip that straddles a panel's edge: tap to close, tap again to bring it back. It rides the
- * edge as the panel moves and parks against the window's left edge once the panel is shut.
- * The edge runs from `min` (shut, 0 for a drawer, the rail width for the main sidebar) to `max` (open).
- */
-export function PaneHandle({ p, min = 0, max, open, onPress, label, top = '50%' }) {
-  const colors = useColors();
-  const style = useAnimatedStyle(() => ({ transform: [{ translateX: Math.max(4, min + (max - min) * Math.min(1.02, p.value) - 13) }] }));
-  return (
-    <Animated.View pointerEvents="box-none" style={[{ position: 'absolute', left: 0, top, marginTop: -14, zIndex: 40 }, style]}>
-      <AnimatedPressable
-        onPress={onPress}
-        hitSlop={10}
-        accessibilityLabel={label}
-        {...glass('button')}
-        style={{ width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Ionicons name={open ? 'chevron-back' : 'chevron-forward'} size={14} color={colors.gray[600]} />
-      </AnimatedPressable>
     </Animated.View>
   );
 }

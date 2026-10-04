@@ -384,7 +384,7 @@ function formatDateLabel(dateStr, lang, t) {
   return msgDay.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export default function ChatThreadScreen({ conversationId: openId, embedded = false } = {}) {
+export default function ChatThreadScreen({ conversationId: openId, embedded = false, leading = null } = {}) {
   const { user } = useAuth();
   const {
     conversations, messages, typingUsers, onlineUsers, connected,
@@ -1057,6 +1057,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
     <Screen style={styles.container} bottomOffset={-insets.bottom}>
       <View style={styles.inner}>
       <View style={styles.header}>
+        {leading}
         {!embedded && (
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn} haptic="light" accessibilityLabel="Back">
             <Ionicons name="arrow-back" size={24} color={colors.gray[700]} />

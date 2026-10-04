@@ -5,18 +5,20 @@ import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
+import { SlideGroup, SlideItem } from '../SlideGroup';
 import { ListGlyph } from '../kit';
 import { BUILTIN_FILTERS } from '../../utils/todoMeta';
 
 function Item({ icon, glyph, label, count, active, onPress, indent, urgent }) {
   const colors = useColors();
   return (
+    <SlideItem active={active}>
     <AnimatedPressable
       onPress={onPress}
+      water
       style={{
         flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 7, paddingHorizontal: spacing.md,
         borderRadius: radius.md, marginLeft: indent ? spacing.md : 0,
-        backgroundColor: active ? colors.brand[100] : 'transparent',
       }}
     >
       {glyph || <Ionicons name={icon} size={17} color={active ? colors.brand[700] : colors.gray[500]} />}
@@ -27,6 +29,7 @@ function Item({ icon, glyph, label, count, active, onPress, indent, urgent }) {
         <Text style={{ fontSize: 12, fontWeight: '600', color: urgent ? colors.brand[600] : colors.gray[400] }}>{count}</Text>
       )}
     </AnimatedPressable>
+    </SlideItem>
   );
 }
 
@@ -60,6 +63,7 @@ export default function WorkSidebar({
         <Text style={styles.addKey}>Q</Text>
       </AnimatedPressable>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+        <SlideGroup pillStyle={{ borderRadius: radius.md }}>
         <Heading>My work</Heading>
         <Item icon="today-outline" label="Today" count={counts.today} urgent active={view === 'today'} onPress={() => onView('today')} />
         <Item icon="calendar-outline" label="Upcoming" active={view === 'upcoming'} onPress={() => onView('upcoming')} />
@@ -142,6 +146,7 @@ export default function WorkSidebar({
         <Heading>Oversight</Heading>
         <Item icon="shield-checkmark-outline" label="Approvals" count={approvalCount} urgent onPress={onApprovals} />
         {canMonitor && <Item icon="speedometer-outline" label="Team monitor" onPress={onMonitor} />}
+        </SlideGroup>
       </ScrollView>
     </View>
   );

@@ -12,7 +12,8 @@ import AnimatedPressable from './AnimatedPressable';
 import ShortcutsSheet from './ShortcutsSheet';
 import { Avatar } from './kit';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { PaneHandle, usePanel } from './Panel';
+import { usePanel } from './Panel';
+import { SlideGroup, SlideItem } from './SlideGroup';
 import { useEngage } from '../context/EngageContext';
 import { openPalette, on } from '../utils/events';
 import { navigationRef } from '../navigation/navigationRef';
@@ -54,13 +55,14 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint, p }) {
   const fade = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (p.value - 0.4) / 0.6)) }));
   const dot = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (0.6 - p.value) / 0.6)) }));
   return (
+    <SlideItem active={active}>
     <AnimatedPressable
       onPress={onPress}
       accessibilityLabel={label}
+      water
       style={{
         flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 9, paddingHorizontal: spacing.md,
-        borderRadius: radius.lg, backgroundColor: active ? 'rgba(220, 38, 38, 0.14)' : 'transparent',
-        boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(220,38,38,0.18)' : undefined,
+        borderRadius: radius.lg, overflow: 'hidden',
       }}
     >
       <View style={{ width: 28, alignItems: 'center', marginLeft: -4, marginRight: -4 }}>
@@ -80,6 +82,7 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint, p }) {
         )}
       </Animated.View>
     </AnimatedPressable>
+    </SlideItem>
   );
 }
 
@@ -123,6 +126,7 @@ export default function AppSidebar({ routeName }) {
 
   // The sidebar narrows to an icon rail (not away: it is how you move around) and widens again, as one spring.
   const widthStyle = useAnimatedStyle(() => ({ width: RAIL + (FULL - RAIL) * Math.min(1.02, p.value) }));
+  const navWidth = useAnimatedStyle(() => ({ width: (RAIL - 24) + (FULL - RAIL) * Math.min(1.02, p.value), overflow: 'hidden' }));
   const fadeStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (p.value - 0.4) / 0.6)) }));
 
   return (
@@ -134,7 +138,8 @@ export default function AppSidebar({ routeName }) {
         <Animated.Text style={[styles.brandText, fadeStyle]} numberOfLines={1}>TaskHub</Animated.Text>
       </View>
 
-      <View style={styles.group}>
+      <Animated.View style={navWidth}>
+      <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
@@ -146,11 +151,13 @@ export default function AppSidebar({ routeName }) {
         )}
         <Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
         <Entry p={p} icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />
-      </View>
+      </SlideGroup>
+      </Animated.View>
 
       <View style={{ flex: 1 }} />
 
       <View style={styles.group}>
+        <Entry p={p} icon={panel.open ? 'chevron-back-outline' : 'chevron-forward-outline'} label={panel.open ? 'Collapse sidebar' : 'Expand sidebar'} hint={hint('app.sidebar')} onPress={panel.toggle} />
         <Entry p={p} icon="keypad-outline" label="Keyboard shortcuts" hint={hint('app.help')} onPress={() => setHelp(true)} />
         <Entry p={p} icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onPress={toggleTheme} />
       </View>
@@ -169,7 +176,6 @@ export default function AppSidebar({ routeName }) {
       <ShortcutsSheet visible={help} onClose={() => setHelp(false)} />
     </View>
     </View>
-    <PaneHandle p={p} min={RAIL} max={FULL} open={panel.open} onPress={panel.toggle} label={panel.open ? 'Collapse the sidebar' : 'Expand the sidebar'} />
     </Animated.View>
   );
 }

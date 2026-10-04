@@ -245,16 +245,39 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const sheetStyle = useAnimatedStyle(() => {
     if (mode.value === 1) return { opacity: 0, transform: [] };
     if (mode.value === 2) {
+      // Two beats on one spring. First the capsule gathers itself into a round bubble and floats to the middle
+      // of the screen (with a small hop); then the bubble unfolds into the dialog. Closing plays it backwards.
       const t = m.value;
-      const top = orad.value + (28 - orad.value) * t;
-      const bottom = orad.value + ((desktop ? 28 : 0) - orad.value) * t;
+      const B = 64;
+      const SPLIT = 0.42;
+      const cx = tx.value + tw.value / 2;
+      const cy = ty.value + th.value / 2;
+      const ocx = ox.value + ow.value / 2;
+      const ocy = oy.value + oh.value / 2;
+      const t1 = Math.min(1, Math.max(0, t / SPLIT));
+      const t2 = Math.min(1, Math.max(0, (t - SPLIT) / (1 - SPLIT)));
+      let w; let h; let x; let y; let topR; let botR;
+      if (t < SPLIT) {
+        w = ow.value + (B - ow.value) * t1;
+        h = oh.value + (B - oh.value) * t1;
+        x = ocx + (cx - ocx) * t1;
+        y = ocy + (cy - ocy) * t1 - Math.sin(Math.PI * t1) * 36;
+        topR = Math.min(w, h) / 2;
+        botR = topR;
+      } else {
+        w = B + (tw.value - B) * t2;
+        h = B + (th.value - B) * t2;
+        x = cx; y = cy;
+        topR = B / 2 + (28 - B / 2) * t2;
+        botR = B / 2 + ((desktop ? 28 : 0) - B / 2) * t2;
+      }
       return {
         position: 'absolute',
-        left: ox.value + (tx.value - ox.value) * t,
-        top: oy.value + (ty.value - oy.value) * t,
-        width: ow.value + (tw.value - ow.value) * t,
-        height: oh.value + (th.value - oh.value) * t,
-        borderTopLeftRadius: top, borderTopRightRadius: top, borderBottomLeftRadius: bottom, borderBottomRightRadius: bottom,
+        left: x - w / 2,
+        top: y - h / 2,
+        width: w,
+        height: h,
+        borderTopLeftRadius: topR, borderTopRightRadius: topR, borderBottomLeftRadius: botR, borderBottomRightRadius: botR,
         opacity: 1,
         transform: [],
       };
@@ -267,7 +290,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   });
   // While morphing the content keeps its final layout (so nothing reflows) and fades in once the shape has room.
   const contentStyle = useAnimatedStyle(() => (mode.value === 2
-    ? { opacity: interpolate(m.value, [0.3, 0.8], [0, 1], Extrapolation.CLAMP) }
+    ? { opacity: interpolate(m.value, [0.64, 0.95], [0, 1], Extrapolation.CLAMP) }
     : { opacity: 1 }));
 
   const overlayStyle = useAnimatedStyle(() => ({

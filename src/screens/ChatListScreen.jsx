@@ -17,6 +17,7 @@ import { FadeInItem } from '../components/StaggeredFadeIn';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import api from '../api/client';
 import { glass } from '../theme/glass';
+import { SlideGroup, SlideItem } from '../components/SlideGroup';
 
 function formatChatTime(dateStr, t) {
   if (!dateStr) return '';
@@ -127,7 +128,7 @@ const ConversationItem = memo(function ConversationItem({ item, userId, colors, 
   );
 });
 
-export default function ChatListScreen({ onOpen, activeId } = {}) {
+export default function ChatListScreen({ onOpen, activeId, onCollapse } = {}) {
   const { user } = useAuth();
   const { conversations, fetchConversations, totalUnread, onlineUsers, createConversation, deleteConversation, markRead } = useChat();
   const colors = useColors();
@@ -332,24 +333,33 @@ export default function ChatListScreen({ onOpen, activeId } = {}) {
     <Screen style={styles.container} bottomOffset={56}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('chat')}</Text>
-        <AnimatedPressable onPress={openNewModal} style={styles.newBtn} haptic="light">
-          <Ionicons name="create-outline" size={22} color={colors.brand[600]} />
-        </AnimatedPressable>
-      </View>
-      <View style={styles.tabRow}>
-        {tabs.map((tab) => (
-          <AnimatedPressable
-            key={tab.key}
-            onPress={() => setActiveTab(tab.key)}
-            {...glass('inset')} style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            haptic="light"
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          {!!onCollapse && (
+            <AnimatedPressable onPress={onCollapse} style={styles.newBtn} haptic="light" accessibilityLabel="Hide conversations" dataSet={{ tip: 'Hide conversations' }}>
+              <Ionicons name="chevron-back" size={22} color={colors.gray[500]} />
+            </AnimatedPressable>
+          )}
+          <AnimatedPressable onPress={openNewModal} style={styles.newBtn} haptic="light">
+            <Ionicons name="create-outline" size={22} color={colors.brand[600]} />
           </AnimatedPressable>
-        ))}
+        </View>
       </View>
+      <SlideGroup style={styles.tabRow} pillStyle={{ borderRadius: radius.full }}>
+        {tabs.map((tab) => (
+          <SlideItem key={tab.key} active={activeTab === tab.key}>
+            <AnimatedPressable
+              onPress={() => setActiveTab(tab.key)}
+              water
+              style={styles.tab}
+              haptic="light"
+            >
+              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+            </AnimatedPressable>
+          </SlideItem>
+        ))}
+      </SlideGroup>
       <FlatList
         data={filteredConversations}
         keyExtractor={(item) => item.id.toString()}
@@ -485,11 +495,10 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: colors.gray[100],
   },
-  tabActive: { backgroundColor: colors.brand[600] },
+  tabActive: {},
   tabText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.gray[600] },
-  tabTextActive: { color: colors.white },
+  tabTextActive: { color: colors.brand[700], fontWeight: '700' },
   convItem: {
     flexDirection: 'row',
     alignItems: 'center',

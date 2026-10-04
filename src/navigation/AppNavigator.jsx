@@ -33,6 +33,7 @@ import { todayYmd } from '../utils/dates';
 import { glass } from '../theme/glass';
 import { SPRING } from '../theme/motion';
 import { withScreenTransition as T } from '../components/Reveal';
+import { SlideGroup, SlideItem } from '../components/SlideGroup';
 
 import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
@@ -141,7 +142,6 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
   }, [badge, badgeScale]);
 
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pill.value * 0.08 }, { translateY: -pill.value * 0.5 }] }));
-  const pillStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pill.value * 1.5), transform: [{ scaleX: 0.5 + pill.value * 0.5 }, { scaleY: 0.6 + pill.value * 0.4 }] }));
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScale.value }],
     opacity: Math.min(1, badgeScale.value * 1.5),
@@ -149,7 +149,6 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
 
   return (
     <View style={tabStyles.iconWrap}>
-      <Animated.View {...glass('inset')} style={[tabStyles.pill, pillStyle]} pointerEvents="none" />
       <Animated.View style={iconStyle}>
         <Ionicons name={name} size={size} color={color} />
         {badge > 0 && (
@@ -158,6 +157,47 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
           </Animated.View>
         )}
       </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * The floating tab island. One light-red highlight sits behind the current tab and slides (stretching toward
+ * the new one) when you change module; each tab squishes like water under the finger.
+ */
+function GlassTabBar({ state, descriptors, navigation, onMore }) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { t } = useLang();
+  return (
+    <View
+      {...glass('capsule')}
+      style={{ height: 66, marginHorizontal: 14, marginBottom: Math.max(insets.bottom, 10), borderRadius: 33, backgroundColor: colors.white }}
+    >
+      <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const isMore = route.name === 'More';
+          const focused = !isMore && state.index === index;
+          const color = focused ? colors.brand[700] : colors.gray[500];
+          const label = isMore ? t('more') : (typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name);
+          const onPress = () => {
+            if (isMore) { onMore(); return; }
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+          };
+          return (
+            <SlideItem key={route.key} active={focused} style={{ flex: 1 }}>
+              <AnimatedPressable onPress={onPress} haptic="light" water accessibilityLabel={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 28, paddingVertical: 4 }}>
+                {isMore
+                  ? <Ionicons name="ellipsis-horizontal-outline" size={22} color={color} />
+                  : options.tabBarIcon?.({ focused, color, size: 22 })}
+                <Text style={{ fontSize: 10, fontWeight: focused ? '700' : '600', letterSpacing: 0.15, marginTop: 2, color }}>{label}</Text>
+              </AnimatedPressable>
+            </SlideItem>
+          );
+        })}
+      </SlideGroup>
     </View>
   );
 }
@@ -212,7 +252,7 @@ function MainTabs() {
     <>
       <Tab.Navigator
         initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || 'Dashboard'}
-        tabBar={desktop ? () => null : undefined}
+        tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={() => setMoreVisible(true)} />}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.brand[600],

@@ -44,7 +44,8 @@ import { showToast, confirmDialog } from '../utils/events';
 import { glass } from '../theme/glass';
 import { Reveal } from '../components/Reveal';
 import SlidingSegment from '../components/SlidingSegment';
-import { Panel, PaneHandle, usePanel } from '../components/Panel';
+import { Panel, usePanel } from '../components/Panel';
+import { SlideGroup, SlideItem } from '../components/SlideGroup';
 
 const BOARD_GROUPS = [
   { key: 'status', label: 'Status', icon: 'git-commit-outline' },
@@ -793,7 +794,7 @@ export default function TodosScreen() {
         { key: 'timeline', icon: 'analytics', label: 'Timeline', ok: canTimeline },
       ].filter((l) => l.ok).map((l) => ({
         key: l.key,
-        content: <LayoutButton icon={l.icon} label={l.label} active={effectiveLayout === l.key} onPress={() => chooseLayout(l.key)} />,
+        content: <LayoutButton icon={l.icon} label={l.label} compact={windowWidth < 1400 && effectiveLayout !== l.key} active={effectiveLayout === l.key} onPress={() => chooseLayout(l.key)} />,
       }))}
     />
   ) : null;
@@ -801,6 +802,14 @@ export default function TodosScreen() {
   // ---- parts ---------------------------------------------------------------
   const header = (
     <View style={styles.header}>
+      {desktop && !selectMode && (
+        <IconButton
+          icon={sidebar.open ? 'chevron-back' : 'chevron-forward'}
+          onPress={sidebar.toggle}
+          accessibilityLabel={sidebar.open ? 'Hide the lists panel' : 'Show the lists panel'}
+          style={{ marginRight: spacing.xs, marginLeft: -spacing.sm }}
+        />
+      )}
       <View style={{ flex: 1 }}>
         <Text style={styles.title} numberOfLines={1}>{selectMode ? `${selected.size} selected` : viewTitle}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
@@ -867,6 +876,7 @@ export default function TodosScreen() {
         />
       )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsWrap}>
+        <SlideGroup style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} pillStyle={{ borderRadius: radius.full }}>
         {scope === 'business' && hasBusiness ? (
           businesses.map((b) => (
             <ViewTab key={b.id} label={b.name} icon="briefcase-outline" count={bizCounts[b.id]} active={view === `biz:${b.id}`} onPress={() => setView(`biz:${b.id}`)} />
@@ -886,7 +896,7 @@ export default function TodosScreen() {
             {lists.map((l) => (
               <ViewTab
                 key={l.id}
-                glyph={<ListGlyph list={l} size={15} color={view === `list:${l.id}` ? '#fff' : colors.brand[600]} />}
+                glyph={<ListGlyph list={l} size={15} color={view === `list:${l.id}` ? colors.brand[700] : colors.brand[600]} />}
                 label={l.name}
                 count={counts.lists[l.id]}
                 active={view === `list:${l.id}`}
@@ -896,6 +906,7 @@ export default function TodosScreen() {
             <Chip icon="add" label="List" color={colors.gray[500]} onPress={() => setListEditor({ name: '', color: 'red', emoji: 'list' })} />
           </>
         )}
+        </SlideGroup>
       </ScrollView>
       {!desktop && layoutSwitch && <View style={styles.mobileLayout}>{layoutSwitch}</View>}
     </View>
@@ -1138,7 +1149,6 @@ export default function TodosScreen() {
         />
         </Panel>
       )}
-      {desktop && <PaneHandle p={sidebar.p} max={252} open={sidebar.open} onPress={sidebar.toggle} label={sidebar.open ? 'Hide the lists panel' : 'Show the lists panel'} />}
       {main}
       {wide && detailOpen && (
         <View {...glass('bar')} style={styles.detailPane}>
@@ -1298,18 +1308,19 @@ export default function TodosScreen() {
   );
 }
 
-function LayoutButton({ icon, label, active, onPress }) {
+function LayoutButton({ icon, label, active, onPress, compact }) {
   const colors = useColors();
   return (
     <AnimatedPressable
       onPress={onPress}
+      water
       accessibilityLabel={`${label} layout`}
       style={{
         flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md,
       }}
     >
       <Ionicons name={`${icon}${active ? '' : '-outline'}`} size={15} color={active ? colors.brand[700] : colors.gray[500]} />
-      <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: active ? colors.gray[900] : colors.gray[500] }}>{label}</Text>
+      {!compact && <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: active ? colors.brand[700] : colors.gray[500] }}>{label}</Text>}
     </AnimatedPressable>
   );
 }
@@ -1317,8 +1328,10 @@ function LayoutButton({ icon, label, active, onPress }) {
 function ViewTab({ label, icon, glyph, count, active, onPress }) {
   const colors = useColors();
   return (
+    <SlideItem active={active}>
     <AnimatedPressable
       onPress={onPress}
+      water
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -1326,17 +1339,15 @@ function ViewTab({ label, icon, glyph, count, active, onPress }) {
         paddingHorizontal: 13,
         paddingVertical: 8,
         borderRadius: radius.full,
-        backgroundColor: active ? colors.brand[600] : colors.white,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: active ? colors.brand[600] : colors.gray[200],
       }}
     >
-      {glyph || (icon && <Ionicons name={icon} size={15} color={active ? '#fff' : colors.brand[600]} />)}
-      <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: active ? '#fff' : colors.gray[700], maxWidth: 140 }} numberOfLines={1}>{label}</Text>
+      {glyph || (icon && <Ionicons name={icon} size={15} color={active ? colors.brand[700] : colors.brand[600]} />)}
+      <Text style={{ fontSize: fontSize.sm, fontWeight: active ? '700' : '600', color: active ? colors.brand[700] : colors.gray[700], maxWidth: 140 }} numberOfLines={1}>{label}</Text>
       {count > 0 && (
-        <Text style={{ fontSize: 11, fontWeight: '700', color: active ? 'rgba(255,255,255,0.85)' : colors.gray[400] }}>{count}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: active ? colors.brand[600] : colors.gray[400] }}>{count}</Text>
       )}
     </AnimatedPressable>
+    </SlideItem>
   );
 }
 
