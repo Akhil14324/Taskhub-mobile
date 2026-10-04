@@ -183,6 +183,22 @@ export function NotificationProvider({ children }) {
     return result;
   }, []);
 
+  // Notifications are on by default: browsers (iOS Safari especially) only show the permission
+  // prompt from a tap, so ask on the first tap after sign-in. Once per session; the Home card
+  // and Profile button stay as the fallback if the person dismisses it.
+  const autoAskedRef = useRef(false);
+  useEffect(() => {
+    if (!user || Platform.OS !== 'web' || pushState !== 'default' || autoAskedRef.current) return undefined;
+    const ask = () => {
+      if (autoAskedRef.current) return;
+      autoAskedRef.current = true;
+      document.removeEventListener('pointerup', ask, true);
+      enablePush().catch(() => {});
+    };
+    document.addEventListener('pointerup', ask, true);
+    return () => document.removeEventListener('pointerup', ask, true);
+  }, [user, pushState, enablePush]);
+
   const markAllRead = useCallback(() => setUnreadCount(0), []);
   const decrementUnread = useCallback((by = 1) => setUnreadCount((c) => Math.max(0, c - by)), []);
 
