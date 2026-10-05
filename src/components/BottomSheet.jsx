@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Modal, StyleSheet, Dimensions, Pressable, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
-  LinearTransition,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -24,7 +23,6 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Open with a slightly lively spring; close with a critically damped one (nothing to overshoot while leaving).
 const CLOSE_SPRING = { ...SPRING.smooth, overshootClamping: true };
 const CLOSE_MORPH = { ...apple(0.5, 0.96), overshootClamping: true }; // leaving never undershoots the control it returns to
-const GROW = LinearTransition.springify().mass(1).stiffness(224).damping(26);
 const CLOSE_DURATION = 300; // how long the exit spring is given before the Modal unmounts
 
 /**
@@ -50,13 +48,12 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const desktop = useIsDesktop();
   const liftBy = avoidKeyboard ? keyboardInset : 0;
-  // A form sheet that grows out of a control on a phone is a floating dialog, centred in the space the keyboard
-  // leaves (bottom-anchored it ended up behind the keyboard). Until the keyboard reports its height a typical one
-  // is assumed, so the dialog is already where it will rest when the keyboard arrives.
+  // A form sheet that grows out of a control on a phone is a floating dialog resting just above the keyboard.
+  // The keyboard space is a spring-driven value that follows the keyboard (it is 0 until the keyboard reports),
+  // so the dialog rides up with it instead of being re-laid-out on every resize event.
   const centered = !desktop && avoidKeyboard && !!origin;
   const floating = desktop || centered;
-  const kbEst = Math.round(windowHeight * 0.4);
-  const kbSpace = centered ? (liftBy || kbEst) : liftBy;
+  const kbSpace = liftBy;
   // On a desktop browser the sheet is a centred dialog that fades in instead of sliding up.
   const maxHeight = Math.min(desktop ? Math.max(requestedMaxHeight, 640) : requestedMaxHeight, windowHeight - kbSpace - insets.top - 24);
   const hiddenY = desktop ? 14 : maxHeight;
@@ -88,6 +85,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const ox = useSharedValue(0); const oy = useSharedValue(0); const ow = useSharedValue(0); const oh = useSharedValue(0); const orad = useSharedValue(28);
   const tx = useSharedValue(0); const ty = useSharedValue(0); const tw = useSharedValue(0); const th = useSharedValue(0);
   const startedRef = useRef(false);
+  const shTarget = useRef(0);
+  const sh = useSharedValue(0);                 // the settled dialog's height: springs when its content changes size
   const kb = useSharedValue(0);                 // space left for the keyboard under a centred dialog (animated)
   const expectKb = useRef(false);               // the keyboard is about to come up: do not recentre in the gap
 
@@ -103,6 +102,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const finishOpen = () => {
     clearTimeout(openTimerRef.current);
     if (phaseRef.current !== 'morph' || !shouldRenderRef.current) return; // already settled, or on its way out
+    if (restRef.current) { sh.value = restRef.current.h; shTarget.current = restRef.current.h; } // the explicit height carries on from where the morph ended
     setPhase('settled');
     onOpened?.();
   };
@@ -116,8 +116,9 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         startedRef.current = false;
         restRef.current = null;
         if (origin) {
+          translateY.value = 0; // a morphing sheet is never parked below the screen (that is for the plain slide-in)
           expectKb.current = true;
-          kb.value = liftBy || kbEst;
+          kb.value = liftBy;
           setTimeout(() => { expectKb.current = false; }, 1600);
           ox.value = origin.x; oy.value = origin.y; ow.value = origin.width; oh.value = origin.height; orad.value = origin.radius ?? origin.height / 2;
           m.value = 0;
@@ -171,17 +172,23 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   }, [liftBy, centered]);
 
   const contentRef = useRef(null);
-  const placeFrom = (contentH) => {
-    if (phaseRef.current === 'plain' || phaseRef.current === 'morph') return;
+  // The resting rectangle for a given content height.
+  const restFor = (contentH) => {
     const pad = spacing.sm + (floating ? spacing.sm : 28) + (floating || liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md));
     const width = desktop ? Math.min(620, windowWidth - 48) : centered ? Math.min(620, windowWidth - 24) : windowWidth;
     const height = Math.min(contentH + pad, maxHeight);
     const x = (windowWidth - width) / 2;
-    const top = insets.top + 12;
     const y = desktop ? (windowHeight - height) / 2
-      : centered ? top + (windowHeight - kbSpace - top - height) / 2
+      : centered ? windowHeight - liftBy - 8 - (liftBy > 0 ? 0 : insets.bottom) - height
       : windowHeight - height - liftBy;
-    const r = { x, y, w: width, h: height };
+    return { x, y, w: width, h: height };
+  };
+  const restForRef = useRef(restFor);
+  restForRef.current = restFor;
+  const placeFrom = (contentH) => {
+    if (phaseRef.current === 'plain' || phaseRef.current === 'morph') return;
+    const r = restFor(contentH);
+    const { x, y, w: width, h: height } = r;
     restRef.current = r;
     if (phaseRef.current !== 'measure' || startedRef.current || !contentH) return;
     startedRef.current = true;
@@ -195,6 +202,24 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     clearTimeout(openTimerRef.current);
     openTimerRef.current = setTimeout(finishOpen, 1700);
   };
+
+  // Settled: the dialog is as tall as its content, and when that changes (a people list, a picker, a note field) the
+  // glass springs to the new height on the UI thread instead of snapping. Read from the element itself, not onLayout.
+  useEffect(() => {
+    if (phase !== 'settled') return undefined;
+    const id = setInterval(() => {
+      const el = contentRef.current;
+      const h = el && typeof el.offsetHeight === 'number' ? el.offsetHeight : 0;
+      if (!h) return;
+      const r = restForRef.current(h);
+      restRef.current = r; // where the sheet would fly back to on close
+      if (Math.abs(shTarget.current - r.h) < 1) return;
+      shTarget.current = r.h;
+      sh.value = withSpring(r.h, SPRING.layout);
+    }, 70);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const onContentLayout = (e) => placeFrom(e.nativeEvent.layout.height);
   // Do not wait for a layout event: read the height straight off the element as soon as the portal has
@@ -276,6 +301,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   };
 
   const morphing = phase === 'morph';
+  const settledFloating = phase === 'settled' && floating;
   const sheetStyle = useAnimatedStyle(() => {
     if (mode.value === 1) return { opacity: 0, transform: [] };
     if (mode.value === 2) {
@@ -321,7 +347,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       // is merely left out would keep the last inline value, and the dialog would stay the height it landed at
       // (content that appears later, like a people list, then spilled out of the glass).
       return {
-        position: 'relative', left: 'auto', top: 'auto', width: floating ? '100%' : 'auto', height: 'auto',
+        position: 'relative', left: 'auto', top: 'auto', width: floating ? '100%' : 'auto', height: sh.value > 0 ? sh.value : 'auto',
         borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: floating ? 28 : 0, borderBottomRightRadius: floating ? 28 : 0,
         transform: [{ translateY: translateY.value }], opacity: 1,
       };
@@ -337,7 +363,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     : { opacity: 1 }));
 
   const overlayStyle = useAnimatedStyle(() => (centered
-    ? { opacity: overlayOpacity.value, paddingBottom: kb.value }
+    ? { opacity: overlayOpacity.value, paddingBottom: kb.value + 8 + insets.bottom * (1 - Math.min(1, kb.value / 60)) }
     : { opacity: overlayOpacity.value }));
 
   if (!shouldRender) return null;
@@ -351,24 +377,23 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       statusBarTranslucent
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, centered && { justifyContent: 'center', paddingTop: insets.top + 12, paddingHorizontal: 12 }, overlayStyle]}>
+      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, centered && { justifyContent: 'flex-end', paddingTop: insets.top + 12, paddingHorizontal: 12 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
           {...glass('sheet')}
           style={[
             styles.sheet, floating && styles.dialog,
             { maxHeight, marginBottom: centered ? 0 : liftBy }, (liftBy > 0 || centered) && { paddingBottom: spacing.md },
+            phase === 'settled' && floating && { overflow: 'hidden' },
             morphing && { paddingTop: 0, paddingHorizontal: 0, paddingBottom: 0, marginBottom: 0, maxHeight: undefined, overflow: 'hidden' },
             sheetStyle,
           ]}
-          // Once settled, anything that makes the dialog taller or shorter (a people list, a picker) springs it open.
-          layout={phase === 'settled' ? GROW : undefined}
           {...touchHandlers}
         >
           {/* Swipe-down handling is the touch handlers above (works from anywhere once content is at the top). */}
           <Animated.View
             style={[
-              { flexShrink: 1 },
+              { flexShrink: settledFloating ? 0 : 1 }, // settled: natural height, so what is measured is not squeezed by the (animating) glass
               morphing && rest && {
                 position: 'absolute', left: 0, top: 0, width: rest.w, height: rest.h,
                 paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: floating || liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md),
@@ -381,7 +406,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
                 <View style={styles.handle} />
               </View>
             )}
-            <View ref={contentRef} style={{ flexShrink: 1 }} onLayout={onContentLayout}>{children}</View>
+            <View ref={contentRef} style={{ flexShrink: settledFloating ? 0 : 1 }} onLayout={onContentLayout}>{children}</View>
           </Animated.View>
         </Animated.View>
       </Animated.View>

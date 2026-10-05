@@ -7,6 +7,7 @@ import { useTodos } from '../../context/TodoContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
+import { SlideGroup, SlideItem } from '../SlideGroup';
 import useIsDesktop from '../../hooks/useBreakpoint';
 import DueDatePicker from '../DueDatePicker';
 import MentionSuggestions from '../MentionSuggestions';
@@ -247,31 +248,6 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           <Text style={styles.note}>You can propose this. A manager of {business.name} accepts or declines it.</Text>
         )}
 
-        <MentionSuggestions
-          people={suggestions}
-          onPick={(p) => {
-            setText((t) => completeMention(t, p.username));
-            inputRef.current?.focus();
-          }}
-          style={styles.suggestions}
-        />
-        {labelSuggestions.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.menuRow} keyboardShouldPersistTaps="always">
-            {labelSuggestions.map((l) => (
-              <Chip
-                key={l.name}
-                small
-                icon="pricetag-outline"
-                label={l.name}
-                onPress={() => {
-                  setText((t) => completeLabel(t, l.name));
-                  inputRef.current?.focus();
-                }}
-              />
-            ))}
-          </ScrollView>
-        )}
-
         <TextInput
           ref={inputRef}
           value={text}
@@ -445,36 +421,65 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           </ScrollView>
         )}
 
+        {/* One place for every list of people / labels: just above the toolbar, next to the other pickers. */}
+        <MentionSuggestions
+          people={menu ? [] : suggestions}
+          onPick={(p) => {
+            setText((t) => completeMention(t, p.username));
+            inputRef.current?.focus();
+          }}
+          style={styles.suggestions}
+        />
+        {!menu && labelSuggestions.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.menuRow} keyboardShouldPersistTaps="always">
+            {labelSuggestions.map((l) => (
+              <Chip
+                key={l.name}
+                small
+                icon="pricetag-outline"
+                label={l.name}
+                onPress={() => {
+                  setText((t) => completeLabel(t, l.name));
+                  inputRef.current?.focus();
+                }}
+              />
+            ))}
+          </ScrollView>
+        )}
+
+
         <View style={styles.toolbar}>
-          <View style={styles.tools}>
-            <ToolButton icon="calendar-outline" label="Date" active={!!dueDate} onPress={() => setDateOpen(true)} />
-            <ToolButton icon="flag-outline" label="Priority" active={priority < 4} color={PRIORITY[priority]?.color} onPress={() => setMenu(menu === 'priority' ? null : 'priority')} />
+          <SlideGroup style={styles.tools} pillStyle={{ borderRadius: radius.md }}>
+            <ToolButton icon="calendar-outline" label="Date" open={dateOpen} has={!!dueDate} onPress={() => { setMenu(null); setDateOpen(true); }} />
+            <ToolButton icon="flag-outline" label="Priority" open={menu === 'priority'} has={priority < 4} onPress={() => setMenu(menu === 'priority' ? null : 'priority')} />
             {!!businessId && !isSubtask && (
-              <ToolButton icon="person-outline" label="Assign" active={!!bizAssignee} onPress={() => setMenu(menu === 'assignee' ? null : 'assignee')} />
+              <ToolButton icon="person-outline" label="Assign" open={menu === 'assignee'} has={!!bizAssignee} onPress={() => setMenu(menu === 'assignee' ? null : 'assignee')} />
             )}
             {!businessId && !isSubtask && assignable.length > 0 && (
-              <ToolButton icon="person-add-outline" label="Assign" active={!!giveToPerson} onPress={() => setMenu(menu === 'give' ? null : 'give')} />
+              <ToolButton icon="person-add-outline" label="Assign" open={menu === 'give'} has={!!giveToPerson} onPress={() => setMenu(menu === 'give' ? null : 'give')} />
             )}
             {!businessId && !isSubtask && !giveTo && (
-              <ToolButton icon="albums-outline" label="List" active={!!list} onPress={() => setMenu(menu === 'where' ? null : 'where')} />
+              <ToolButton icon="albums-outline" label="List" open={menu === 'where'} has={!!list} onPress={() => setMenu(menu === 'where' ? null : 'where')} />
             )}
-            <ToolButton icon="pricetag-outline" label="Label" active={allLabels.length > 0} onPress={() => setMenu(menu === 'label' ? null : 'label')} />
+            <ToolButton icon="pricetag-outline" label="Label" open={menu === 'label'} has={allLabels.length > 0} onPress={() => setMenu(menu === 'label' ? null : 'label')} />
             {!businessId && (
               <ToolButton
                 icon="at"
                 label="Mention"
-                active={mentionedPeople.length > 0}
+                open={mentionQuery !== null && !menu}
+                has={mentionedPeople.length > 0}
                 onPress={() => {
+                  setMenu(null);
                   setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}@`);
                   inputRef.current?.focus();
                 }}
               />
             )}
             {isSpeechSupported() && (
-              <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" active={listening} color={colors.brand[600]} onPress={toggleListening} />
+              <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" open={listening} onPress={toggleListening} />
             )}
-            <ToolButton icon="ellipsis-horizontal" label="More" active={menu === 'more' || menu === 'notes'} onPress={() => setMenu(menu === 'more' || menu === 'notes' ? null : 'more')} />
-          </View>
+            <ToolButton icon="ellipsis-horizontal" label="More" open={menu === 'more' || menu === 'notes'} onPress={() => setMenu(menu === 'more' || menu === 'notes' ? null : 'more')} />
+          </SlideGroup>
           <AnimatedPressable
             onPress={submit}
             disabled={!parsed.title || saving}
@@ -503,19 +508,23 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   );
 }
 
-function ToolButton({ icon, label, active, color, onPress }) {
+// A toolbar button. The light-red highlight under the open one is the SlideGroup's (it slides between tools); a small
+// dot says the tool already holds a value.
+function ToolButton({ icon, label, open, has, onPress }) {
   const colors = useColors();
-  const tone = active ? (color || colors.brand[600]) : colors.gray[500];
+  const tone = open ? colors.brand[700] : colors.gray[500];
   return (
-    <AnimatedPressable
-      onPress={onPress}
-      hitSlop={4}
-      accessibilityLabel={label}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: radius.md }}
-    >
-      <Ionicons name={icon} size={19} color={tone} />
-      {Platform.OS === 'web' && <Text style={{ fontSize: 12, fontWeight: '600', color: tone, display: 'none' }}>{label}</Text>}
-    </AnimatedPressable>
+    <SlideItem active={open}>
+      <AnimatedPressable
+        onPress={onPress}
+        hitSlop={4}
+        accessibilityLabel={label}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: radius.md }}
+      >
+        <Ionicons name={icon} size={19} color={tone} />
+        {has && <View style={{ position: 'absolute', top: 5, right: 5, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.brand[600] }} />}
+      </AnimatedPressable>
+    </SlideItem>
   );
 }
 

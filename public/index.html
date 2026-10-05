@@ -216,6 +216,9 @@
       [data-glass='scrim'] {
         -webkit-backdrop-filter: blur(10px) saturate(130%); backdrop-filter: blur(10px) saturate(130%);
       }
+      @media (pointer: coarse), (max-width: 1023px) {
+        [data-glass='scrim'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
+      }
       /* Typography: SF-like tracking (large text tightens in JS; this is the body default). */
       #root { letter-spacing: -0.011em; font-synthesis: none; text-rendering: optimizeLegibility; }
       @media (prefers-reduced-transparency: reduce) {
