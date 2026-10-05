@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { View, Modal, StyleSheet, Dimensions, Pressable, useWindowDimensions } from 'react-native';
+import { View, Modal, StyleSheet, Dimensions, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -51,7 +51,10 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   // A form sheet that grows out of a control on a phone is a floating dialog resting just above the keyboard.
   // The keyboard space is a spring-driven value that follows the keyboard (it is 0 until the keyboard reports),
   // so the dialog rides up with it instead of being re-laid-out on every resize event.
-  const centered = !desktop && avoidKeyboard && !!origin;
+  // A tablet in landscape is wide enough for the desktop layout but still has an on-screen keyboard: it takes the
+  // keyboard-aware dialog too (an iPad with the desktop dialog centred on the whole screen hid its pickers behind the keys).
+  const touchScreen = Platform.OS === 'web' && typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const centered = (!desktop || touchScreen) && avoidKeyboard && !!origin;
   const floating = desktop || centered;
   const kbSpace = liftBy;
   // On a desktop browser the sheet is a centred dialog that fades in instead of sliding up.
@@ -178,8 +181,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     const width = desktop ? Math.min(620, windowWidth - 48) : centered ? Math.min(620, windowWidth - 24) : windowWidth;
     const height = Math.min(contentH + pad, maxHeight);
     const x = (windowWidth - width) / 2;
-    const y = desktop ? (windowHeight - height) / 2
-      : centered ? windowHeight - liftBy - 8 - (liftBy > 0 ? 0 : insets.bottom) - height
+    const y = centered ? windowHeight - liftBy - 8 - (liftBy > 0 ? 0 : insets.bottom) - height
+      : desktop ? (windowHeight - height) / 2
       : windowHeight - height - liftBy;
     return { x, y, w: width, h: height };
   };
@@ -385,6 +388,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
             styles.sheet, floating && styles.dialog,
             { maxHeight, marginBottom: centered ? 0 : liftBy }, (liftBy > 0 || centered) && { paddingBottom: spacing.md },
             phase === 'settled' && floating && { overflow: 'hidden' },
+            // Under a keyboard the room can be less than the content (a tall picker): scroll instead of clipping it.
+            phase === 'settled' && centered && { overflowX: 'hidden', overflowY: 'auto' },
             morphing && { paddingTop: 0, paddingHorizontal: 0, paddingBottom: 0, marginBottom: 0, maxHeight: undefined, overflow: 'hidden' },
             sheetStyle,
           ]}
