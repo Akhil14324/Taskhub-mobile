@@ -44,6 +44,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const { lang } = useLang();
   const stopRef = useRef(null);
   const [listening, setListening] = useState(false);
+  const [live, setLive] = useState(''); // words heard so far while dictating
   const [delegateOff, setDelegateOff] = useState(false);
 
   const [text, setText] = useState('');
@@ -81,8 +82,14 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       setGiveQuery('');
       setDelegateOff(false);
       setMenu(null);
-      // Growing out of a control on a phone: let the keyboard wait for the arrival (it would shove the target mid-flight).
-      if (!origin || desktop) setTimeout(() => inputRef.current?.focus(), Platform.OS === 'web' ? 50 : 250);
+      // Take focus as soon as the input exists, never after the animation: iOS refuses to raise the keyboard
+      // outside a tap, but it keeps it up while focus moves from the capsule's input to this one. Retried
+      // because the sheet mounts its content a beat after `visible` flips.
+      const timers = [0, 40, 100, 200, 350, 600].map((ms) => setTimeout(() => {
+        const el = inputRef.current;
+        if (el && !(Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement === el)) el.focus();
+      }, ms));
+      return () => timers.forEach(clearTimeout);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialText]);
@@ -185,15 +192,23 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     const base = text && !text.endsWith(' ') ? `${text} ` : text;
     const stop = startListening({
       lang: lang === 'te' ? 'te-IN' : 'en-IN',
-      onText: (spoken) => setText(base + spoken),
-      onEnd: () => { setListening(false); stopRef.current = null; inputRef.current?.focus(); },
+      onText: (spoken) => { setLive(spoken); setText(base + spoken); },
+      onEnd: () => { setListening(false); setLive(''); stopRef.current = null; inputRef.current?.focus(); },
       onError: (code) => {
         setListening(false);
+        setLive('');
         stopRef.current = null;
-        if (code === 'not-allowed' || code === 'service-not-allowed') showToast({ message: 'Allow the microphone in your browser to dictate', tone: 'error' });
+        const message = code === 'not-allowed' ? 'Allow the microphone for this site (iPhone: Settings > Safari > Microphone)'
+          : code === 'service-not-allowed' ? 'Turn on Dictation and Siri (iPhone: Settings > General > Keyboard > Enable Dictation)'
+          : code === 'no-speech' ? 'Did not catch that, tap the mic and try again'
+          : code === 'audio-capture' ? 'No microphone found'
+          : code === 'network' ? 'Speech needs an internet connection'
+          : code === 'aborted' ? null : 'Voice input is not available here';
+        if (message) showToast({ message, tone: 'error' });
       },
     });
-    if (stop) { stopRef.current = stop; setListening(true); }
+    if (stop) { stopRef.current = stop; setLive(''); setListening(true); }
+    else showToast({ message: 'Voice input is not available here. Open TaskHub in Safari, not the home-screen app', tone: 'error' });
   };
 
   useEffect(() => () => stopRef.current?.(), []);
@@ -223,7 +238,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       origin={origin}
       onMorphStart={onMorphStart}
       onClosed={onClosed}
-      onOpened={() => { if (origin && !desktop) inputRef.current?.focus(); }}
+      onOpened={() => inputRef.current?.focus()}
     >
       <View style={styles.wrap}>
         {hasBusinesses && (
@@ -248,6 +263,12 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           <Text style={styles.note}>You can propose this. A manager of {business.name} accepts or declines it.</Text>
         )}
 
+        {listening && (
+          <View style={styles.liveBox} accessibilityLiveRegion="polite">
+            <Ionicons name="mic" size={16} color={colors.brand[600]} />
+            <Text style={[styles.liveText, !live && { color: colors.gray[400] }]} numberOfLines={3}>{live || 'Listening… speak now'}</Text>
+          </View>
+        )}
         <TextInput
           ref={inputRef}
           value={text}
@@ -531,6 +552,8 @@ function ToolButton({ icon, label, open, has, onPress }) {
 const createStyles = (colors) => StyleSheet.create({
   wrap: { paddingHorizontal: spacing.sm },
   scopeRow: { gap: spacing.xs, paddingBottom: spacing.sm },
+  liveBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: spacing.xs, paddingHorizontal: spacing.xs },
+  liveText: { flex: 1, fontSize: fontSize.sm, color: colors.brand[700] },
   note: { fontSize: fontSize.sm, color: colors.gray[500], paddingBottom: spacing.xs },
   suggestions: { marginBottom: spacing.sm },
   input: {

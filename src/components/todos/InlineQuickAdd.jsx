@@ -67,9 +67,12 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
     node.measureInWindow((x, y, width, height) => {
       onExpand({ rect: { x, y, width, height, radius: height / 2 }, text });
       setText('');
-      inputRef.current?.blur();
+      // No blur here: iOS only raises the keyboard from a tap, so this input keeps focus (and the keyboard up)
+      // until the dialog's own input takes it over. It lets go once the capsule is back (see below).
     });
   };
+
+  useEffect(() => { if (!hidden) inputRef.current?.blur(); }, [hidden]);
 
   return (
     // A plain View carries the ref: it is the one that can report its window rect (an animated one cannot on web).
