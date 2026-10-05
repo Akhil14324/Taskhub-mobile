@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Animated, { FadeInDown, FadeOutLeft, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
+import useReducedMotion from '../../hooks/useReducedMotion';
 import { SPRING } from '../../theme/motion';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, fontSize } from '../../theme/theme';

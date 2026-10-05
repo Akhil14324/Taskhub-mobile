@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay, interpolateColor, useReducedMotion } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay, interpolateColor } from 'react-native-reanimated';
+import useReducedMotion from '../hooks/useReducedMotion';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { spacing, radius, fontSize, type } from '../theme/theme';
 import { glass } from '../theme/glass';

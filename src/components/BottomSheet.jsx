@@ -48,8 +48,15 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const desktop = useIsDesktop();
   const liftBy = avoidKeyboard ? keyboardInset : 0;
+  // A form sheet that grows out of a control on a phone is a floating dialog, centred in the space the keyboard
+  // leaves (bottom-anchored it ended up behind the keyboard). Until the keyboard reports its height a typical one
+  // is assumed, so the dialog is already where it will rest when the keyboard arrives.
+  const centered = !desktop && avoidKeyboard && !!origin;
+  const floating = desktop || centered;
+  const kbEst = Math.round(windowHeight * 0.4);
+  const kbSpace = centered ? (liftBy || kbEst) : liftBy;
   // On a desktop browser the sheet is a centred dialog that fades in instead of sliding up.
-  const maxHeight = Math.min(desktop ? Math.max(requestedMaxHeight, 640) : requestedMaxHeight, windowHeight - liftBy - insets.top - 24);
+  const maxHeight = Math.min(desktop ? Math.max(requestedMaxHeight, 640) : requestedMaxHeight, windowHeight - kbSpace - insets.top - 24);
   const hiddenY = desktop ? 14 : maxHeight;
 
   // Internal render gate: stays true during close animation so Modal doesn't unmount early
@@ -78,6 +85,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const ox = useSharedValue(0); const oy = useSharedValue(0); const ow = useSharedValue(0); const oh = useSharedValue(0); const orad = useSharedValue(28);
   const tx = useSharedValue(0); const ty = useSharedValue(0); const tw = useSharedValue(0); const th = useSharedValue(0);
   const startedRef = useRef(false);
+  const kb = useSharedValue(0);                 // space left for the keyboard under a centred dialog (animated)
+  const expectKb = useRef(false);               // the keyboard is about to come up: do not recentre in the gap
 
   const finishClose = () => {
     clearTimeout(closeTimerRef.current);
@@ -85,6 +94,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     shouldRenderRef.current = false;
     setShouldRender(false);
     setPhase('plain');
+    kb.value = 0;
     onClosed?.();
   };
   const finishOpen = () => {
@@ -101,6 +111,9 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         startedRef.current = false;
         restRef.current = null;
         if (origin) {
+          expectKb.current = true;
+          kb.value = liftBy || kbEst;
+          setTimeout(() => { expectKb.current = false; }, 1600);
           ox.value = origin.x; oy.value = origin.y; ow.value = origin.width; oh.value = origin.height; orad.value = origin.radius ?? origin.height / 2;
           m.value = 0;
           setPhase('measure');
@@ -143,14 +156,25 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   // Where the sheet rests, worked out from its content's measured height (the sheet itself is an animated
   // view, and those do not report layout reliably on web): a dialog is centred, a phone sheet sits on the
   // bottom edge above the keyboard.
+  // Under a centred dialog the keyboard space follows the real keyboard, as a spring (not a re-layout per event).
+  useEffect(() => {
+    if (!centered || !shouldRenderRef.current) return;
+    if (liftBy > 0) { expectKb.current = false; kb.value = withSpring(liftBy, SPRING.smooth); }
+    else if (!expectKb.current) kb.value = withSpring(0, SPRING.smooth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liftBy, centered]);
+
   const contentRef = useRef(null);
   const placeFrom = (contentH) => {
     if (phaseRef.current === 'plain' || phaseRef.current === 'morph') return;
-    const pad = spacing.sm + (desktop ? spacing.sm : 28) + (liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md));
-    const width = desktop ? Math.min(620, windowWidth - 48) : windowWidth;
+    const pad = spacing.sm + (floating ? spacing.sm : 28) + (floating || liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md));
+    const width = desktop ? Math.min(620, windowWidth - 48) : centered ? Math.min(620, windowWidth - 24) : windowWidth;
     const height = Math.min(contentH + pad, maxHeight);
     const x = (windowWidth - width) / 2;
-    const y = desktop ? (windowHeight - height) / 2 : windowHeight - height - liftBy;
+    const top = insets.top + 12;
+    const y = desktop ? (windowHeight - height) / 2
+      : centered ? top + (windowHeight - kbSpace - top - height) / 2
+      : windowHeight - height - liftBy;
     const r = { x, y, w: width, h: height };
     restRef.current = r;
     if (phaseRef.current !== 'measure' || startedRef.current || !contentH) return;
@@ -269,7 +293,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         h = B + (th.value - B) * t2;
         x = cx; y = cy;
         topR = B / 2 + (28 - B / 2) * t2;
-        botR = B / 2 + ((desktop ? 28 : 0) - B / 2) * t2;
+        botR = B / 2 + ((floating ? 28 : 0) - B / 2) * t2;
       }
       return {
         position: 'absolute',
@@ -293,9 +317,9 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     ? { opacity: interpolate(m.value, [0.64, 0.95], [0, 1], Extrapolation.CLAMP) }
     : { opacity: 1 }));
 
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: overlayOpacity.value,
-  }));
+  const overlayStyle = useAnimatedStyle(() => (centered
+    ? { opacity: overlayOpacity.value, paddingBottom: kb.value }
+    : { opacity: overlayOpacity.value }));
 
   if (!shouldRender) return null;
 
@@ -308,13 +332,13 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       statusBarTranslucent
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, overlayStyle]}>
+      <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, centered && { justifyContent: 'center', paddingTop: insets.top + 12, paddingHorizontal: 12 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
           {...glass('sheet')}
           style={[
-            styles.sheet, desktop && styles.dialog,
-            { maxHeight, marginBottom: liftBy }, liftBy > 0 && { paddingBottom: spacing.md },
+            styles.sheet, floating && styles.dialog,
+            { maxHeight, marginBottom: centered ? 0 : liftBy }, (liftBy > 0 || centered) && { paddingBottom: spacing.md },
             morphing && { paddingTop: 0, paddingHorizontal: 0, paddingBottom: 0, marginBottom: 0, maxHeight: undefined, overflow: 'hidden' },
             sheetStyle,
           ]}
@@ -326,12 +350,12 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
               { flexShrink: 1 },
               morphing && rest && {
                 position: 'absolute', left: 0, top: 0, width: rest.w, height: rest.h,
-                paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md),
+                paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: floating || liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md),
               },
               contentStyle,
             ]}
           >
-            {desktop ? <View style={{ height: spacing.sm }} /> : (
+            {floating ? <View style={{ height: spacing.sm }} /> : (
               <View style={styles.handleZone}>
                 <View style={styles.handle} />
               </View>

@@ -5,8 +5,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  useReducedMotion,
 } from 'react-native-reanimated';
+import useReducedMotion from '../hooks/useReducedMotion';
 import * as Haptics from 'expo-haptics';
 import { haptic as webHaptic } from '../utils/feedback';
 import { SPRING } from '../theme/motion';

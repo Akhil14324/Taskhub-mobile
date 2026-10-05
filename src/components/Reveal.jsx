@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, useReducedMotion } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { SPRING } from '../theme/motion';
+import useReducedMotion from '../hooks/useReducedMotion';
 
 /**
  * How a module arrives. One spring drives opacity, a short slide and a slight settle in scale.
@@ -16,8 +17,8 @@ function arrival(p, dx, dy) {
   if (p >= 0.9995) return { opacity: 1, transform: [] };
   const rest = 1 - p;
   return {
-    opacity: Math.min(1, v * 2.5),
-    transform: [{ translateX: dx * rest }, { translateY: dy * rest }, { scale: 0.985 + 0.015 * v }],
+    opacity: Math.min(1, v * 1.8),
+    transform: [{ translateX: dx * rest }, { translateY: dy * rest }],
   };
 }
 

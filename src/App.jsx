@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StatusBar, View, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
@@ -78,7 +79,9 @@ function PreferencesApplier() {
     return () => style.remove();
   }, [prefs.reduceMotion]);
 
-  return null;
+  // Reanimated follows the operating system's "reduce motion" flag by default, which many Windows laptops have on
+  // (animation effects off) and which turned every spring into an instant jump. The app's own setting decides.
+  return <ReducedMotionConfig mode={prefs.reduceMotion ? ReduceMotion.Always : ReduceMotion.Never} />;
 }
 
 function AppRoot() {
