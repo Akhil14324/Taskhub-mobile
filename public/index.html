@@ -216,6 +216,17 @@
       [data-glass='scrim'] {
         -webkit-backdrop-filter: blur(10px) saturate(130%); backdrop-filter: blur(10px) saturate(130%);
       }
+      /* Phones only. Cards and small controls sit on the soft atmosphere (nothing scrolls under them), so their blur is
+         invisible but costs a GPU pass each; a list of them re-blurs every frame while a screen slides. Keep the blur
+         for the chrome (tab island, capsule, bars, sheets). A dialog in flight (data-morphing) drops its blur too and
+         gets it back once it has landed. */
+      @media (pointer: coarse), (max-width: 1023px) {
+        [data-glass='card'], [data-glass='button'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
+        [data-glass='sheet'][data-morphing] {
+          -webkit-backdrop-filter: none; backdrop-filter: none;
+          background-color: rgb(var(--g-panel) / 0.95) !important;
+        }
+      }
       @media (pointer: coarse), (max-width: 1023px) {
         [data-glass='scrim'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
       }

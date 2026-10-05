@@ -380,7 +380,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, centered && { justifyContent: 'flex-end', paddingTop: insets.top + 12, paddingHorizontal: 12 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
-          {...glass('sheet')}
+          dataSet={{ glass: 'sheet', ...(centered && (phase === 'measure' || phase === 'morph') ? { morphing: '1' } : null) }}
           style={[
             styles.sheet, floating && styles.dialog,
             { maxHeight, marginBottom: centered ? 0 : liftBy }, (liftBy > 0 || centered) && { paddingBottom: spacing.md },
