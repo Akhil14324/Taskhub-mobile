@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Modal, StyleSheet, Dimensions, Pressable, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
+  LinearTransition,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -23,6 +24,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Open with a slightly lively spring; close with a critically damped one (nothing to overshoot while leaving).
 const CLOSE_SPRING = { ...SPRING.smooth, overshootClamping: true };
 const CLOSE_MORPH = { ...apple(0.5, 0.96), overshootClamping: true }; // leaving never undershoots the control it returns to
+const GROW = LinearTransition.springify().mass(1).stiffness(224).damping(26);
 const CLOSE_DURATION = 300; // how long the exit spring is given before the Modal unmounts
 
 /**
@@ -62,6 +64,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   // Internal render gate: stays true during close animation so Modal doesn't unmount early
   const [shouldRender, setShouldRender] = useState(false);
   const closeTimerRef = useRef(null);
+  const openTimerRef = useRef(null);
 
   const translateY = useSharedValue(hiddenY);
   const overlayOpacity = useSharedValue(0);
@@ -98,6 +101,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     onClosed?.();
   };
   const finishOpen = () => {
+    clearTimeout(openTimerRef.current);
+    if (phaseRef.current !== 'morph' || !shouldRenderRef.current) return; // already settled, or on its way out
     setPhase('settled');
     onOpened?.();
   };
@@ -128,6 +133,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       }
       overlayOpacity.value = withTiming(1, { duration: 260 });
     } else if (shouldRenderRef.current) {
+      clearTimeout(openTimerRef.current);
       overlayOpacity.value = withTiming(0, { duration: 260 });
       if (phaseRef.current !== 'plain') {
         const r = restRef.current;
@@ -184,6 +190,10 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     setPhase('morph');
     onMorphStart?.();
     m.value = withSpring(1, SPRING.morph, (done) => { if (done) runOnJS(finishOpen)(); });
+    // The spring's completion callback is not guaranteed to reach us (and a dialog stuck in its morph state keeps the
+    // size it landed at, so later content spills out of the glass): settle on a timer as well.
+    clearTimeout(openTimerRef.current);
+    openTimerRef.current = setTimeout(finishOpen, 1700);
   };
 
   const onContentLayout = (e) => placeFrom(e.nativeEvent.layout.height);
@@ -204,7 +214,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
+  useEffect(() => () => { clearTimeout(closeTimerRef.current); clearTimeout(openTimerRef.current); }, []);
 
   useBackClose(visible, onClose);
 
@@ -306,7 +316,16 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         transform: [],
       };
     }
-    if (mode.value === 3) return { transform: [{ translateY: translateY.value }], opacity: 1 };
+    if (mode.value === 3) {
+      // Back to ordinary layout. The morph's absolute size and position are written explicitly away: a style that
+      // is merely left out would keep the last inline value, and the dialog would stay the height it landed at
+      // (content that appears later, like a people list, then spilled out of the glass).
+      return {
+        position: 'relative', left: 'auto', top: 'auto', width: floating ? '100%' : 'auto', height: 'auto',
+        borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: floating ? 28 : 0, borderBottomRightRadius: floating ? 28 : 0,
+        transform: [{ translateY: translateY.value }], opacity: 1,
+      };
+    }
     return {
       transform: [{ translateY: translateY.value }, { scale: desktop ? 0.94 + 0.06 * materialize.value : 1 }],
       opacity: desktop ? Math.min(1, materialize.value * 1.4) : 1,
@@ -342,6 +361,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
             morphing && { paddingTop: 0, paddingHorizontal: 0, paddingBottom: 0, marginBottom: 0, maxHeight: undefined, overflow: 'hidden' },
             sheetStyle,
           ]}
+          // Once settled, anything that makes the dialog taller or shorter (a people list, a picker) springs it open.
+          layout={phase === 'settled' ? GROW : undefined}
           {...touchHandlers}
         >
           {/* Swipe-down handling is the touch handlers above (works from anywhere once content is at the top). */}
