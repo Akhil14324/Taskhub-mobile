@@ -1,0 +1,6 @@
+const fs=require('fs');let p='src/components/todos/TodoDetailSheet.jsx';let s=fs.readFileSync(p,'utf8');
+const r=(a,b)=>{if(!s.includes(a))throw new Error('missing '+a.slice(0,50));s=s.replace(a,()=>b);};
+r("            style={[styles.title, todo.is_done && styles.titleDone]}\n            multiline\n","            ref={titleRef}\n            style={[styles.title, todo.is_done && styles.titleDone]}\n            multiline\n            numberOfLines={1}\n            scrollEnabled={false}\n");
+r("  const [title, setTitle] = useState('');","  const [title, setTitle] = useState('');\n  const titleRef = useRef(null);\n  // The whole task name is always visible: the field is as tall as its text.\n  useEffect(() => {\n    if (typeof document === 'undefined') return undefined;\n    const grow = () => autoGrow(titleRef.current);\n    const id = requestAnimationFrame(grow);\n    const late = setTimeout(grow, 350); // once the sheet has finished sizing itself\n    window.addEventListener('resize', grow);\n    return () => { cancelAnimationFrame(id); clearTimeout(late); window.removeEventListener('resize', grow); };\n  }, [title]);");
+r("import { View, Text, TextInput","import autoGrow from '../../utils/autoGrow';\nimport { View, Text, TextInput");
+fs.writeFileSync(p,s);console.log('ok');

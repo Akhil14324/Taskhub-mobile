@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import autoGrow from '../../utils/autoGrow';
 import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -60,6 +61,16 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
 
   const [tab, setTab] = useState('details');
   const [title, setTitle] = useState('');
+  const titleRef = useRef(null);
+  // The whole task name is always visible: the field is as tall as its text.
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const grow = () => autoGrow(titleRef.current);
+    const id = requestAnimationFrame(grow);
+    const late = setTimeout(grow, 350); // once the sheet has finished sizing itself
+    window.addEventListener('resize', grow);
+    return () => { cancelAnimationFrame(id); clearTimeout(late); window.removeEventListener('resize', grow); };
+  }, [title]);
   const [notes, setNotes] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
@@ -191,8 +202,11 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
             value={title}
             onChangeText={setTitle}
             onBlur={() => title.trim() && title.trim() !== todo.title && save({ title: title.trim() })}
+            ref={titleRef}
             style={[styles.title, todo.is_done && styles.titleDone]}
             multiline
+            numberOfLines={1}
+            scrollEnabled={false}
             editable={editable}
             placeholder="Title"
             placeholderTextColor={colors.gray[400]}

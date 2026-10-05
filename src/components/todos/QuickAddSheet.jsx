@@ -20,6 +20,7 @@ import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
 import { DURATION_PRESETS, formatDuration } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
 import { isSpeechSupported, startListening } from '../../utils/speech';
+import autoGrow, { virtualKeyboardUp } from '../../utils/autoGrow';
 import { useLang } from '../../context/LanguageContext';
 
 const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
@@ -45,6 +46,11 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const stopRef = useRef(null);
   const [listening, setListening] = useState(false);
   const [live, setLive] = useState(''); // words heard so far while dictating
+  const [levels, setLevels] = useState(() => Array(28).fill(0)); // recent loudness, for the wave meter
+  // Single: one to-do (Enter adds it). Multiple: one to-do per line (Enter adds a line on a touch keyboard).
+  const [multi, setMultiState] = useState(() => { try { return localStorage.getItem('quickadd:multi') === '1'; } catch { return false; } });
+  const setMulti = (v) => { setMultiState(v); try { localStorage.setItem('quickadd:multi', v ? '1' : '0'); } catch { /* private mode */ } };
+  const submitNext = useRef(false);
   const [delegateOff, setDelegateOff] = useState(false);
 
   const [text, setText] = useState('');
@@ -102,15 +108,18 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   }, [visible, businessId, fetchAssignees]);
 
   // "ask Ravi to send the invoice friday": the person it is for, and the task without the instruction.
+  // Single: newlines fold into spaces. Multiple: one to-do per line, and the chips below read the first line.
+  const lineList = useMemo(() => (multi ? text.split('\n').map((t) => t.trim()).filter(Boolean) : []), [multi, text]);
+  const flat = multi ? (lineList[0] || '') : text.replace(/\s*\n\s*/g, ' ');
   const delegate = useMemo(
-    () => (delegateOff || isSubtask ? null : detectDelegate(text, businessId ? bizPeople : people, user?.id)),
-    [text, delegateOff, isSubtask, businessId, bizPeople, people, user]
+    () => (delegateOff || isSubtask || multi ? null : detectDelegate(flat, businessId ? bizPeople : people, user?.id)),
+    [flat, multi, delegateOff, isSubtask, businessId, bizPeople, people, user]
   );
   const parsed = useMemo(() => {
-    const out = parseQuickAdd(delegate ? delegate.rest : text, lists);
+    const out = parseQuickAdd(delegate ? delegate.rest : flat, lists);
     if (delegate && out.title) out.title = out.title.charAt(0).toUpperCase() + out.title.slice(1);
     return out;
-  }, [text, delegate, lists]);
+  }, [flat, delegate, lists]);
   const pick = (key, fallback) => (override[key] === false ? null : override[key] ?? parsed[key] ?? fallback ?? null);
   const dueDate = pick('due_date', defaults.due_date);
   const dueTime = dueDate ? pick('due_time') : null;
@@ -125,6 +134,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const allLabels = [...new Set([...parsed.labels, ...extraLabels])];
 
   const mentionQuery = activeMentionQuery(text);
+  const canSend = multi ? lineList.length > 0 : !!parsed.title;
   const suggestions = mentionQuery !== null && !businessId
     ? filterPeople(people, mentionQuery, { excludeIds: [user?.id], limit: 6 })
     : [];
@@ -148,9 +158,50 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const proposing = !!business && !business.can_manage && !isSubtask;
 
   const submit = async () => {
-    if (!parsed.title || saving) return;
+    if (!canSend || saving) return;
     setSaving(true);
     try {
+      if (multi && lineList.length > 1) {
+        // One to-do per line, each read for its own date, priority and labels; the pickers apply to all of them.
+        const pickFor = (lp, key, fallback) => (override[key] === false ? null : override[key] ?? lp[key] ?? fallback ?? null);
+        let added = 0;
+        for (const line of lineList) {
+          const lp = parseQuickAdd(line, lists);
+          if (!lp.title) continue;
+          const due = pickFor(lp, 'due_date', defaults.due_date);
+          const lid = businessId || giveTo ? null : (override.list_id !== undefined ? override.list_id : (lp.list?.id ?? defaults.list_id ?? null));
+          const ments = businessId ? [] : lp.mentions.map((u) => people.find((pp) => pp.username?.toLowerCase() === u.toLowerCase())).filter(Boolean);
+          // eslint-disable-next-line no-await-in-loop
+          await createTodo({
+            title: lp.title.charAt(0).toUpperCase() + lp.title.slice(1),
+            notes,
+            due_date: due,
+            due_time: due ? pickFor(lp, 'due_time') : null,
+            priority: pickFor(lp, 'priority', 4),
+            recurrence: pickFor(lp, 'recurrence'),
+            list_id: lid,
+            section_id: (lid ?? null) === (defaults.list_id ?? null) ? defaults.section_id ?? null : null,
+            parent_id: defaults.parent_id || undefined,
+            business_id: businessId || undefined,
+            assign_to: businessId ? (effectiveBizAssignee || undefined) : undefined,
+            requires_approval: businessId && review !== null ? review : undefined,
+            labels: [...new Set([...lp.labels, ...extraLabels])],
+            deadline_date: pickFor(lp, 'deadline_date'),
+            duration_minutes: pickFor(lp, 'duration_minutes'),
+            mention_ids: giveToPerson ? [] : ments.map((pp) => pp.id),
+            delegate_to: giveToPerson && !businessId ? giveToPerson.id : undefined,
+          });
+          added += 1;
+        }
+        showToast({ message: added + ' to-dos added' });
+        setGiveTo(null);
+        setText('');
+        setNotes('');
+        setOverride((o) => ({ business_id: o.business_id }));
+        setExtraLabels(defaults.labels || []);
+        inputRef.current?.focus();
+        return;
+      }
       await createTodo({
         title: parsed.title,
         notes,
@@ -192,6 +243,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     const base = text && !text.endsWith(' ') ? `${text} ` : text;
     const stop = startListening({
       lang: lang === 'te' ? 'te-IN' : 'en-IN',
+      onLevel: (v) => setLevels((prev) => [...prev.slice(1), v]),
       onText: (spoken) => { setLive(spoken); setText(base + spoken); },
       onEnd: () => { setListening(false); setLive(''); stopRef.current = null; inputRef.current?.focus(); },
       onError: (code) => {
@@ -207,11 +259,24 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         if (message) showToast({ message, tone: 'error' });
       },
     });
-    if (stop) { stopRef.current = stop; setLive(''); setListening(true); }
+    if (stop) { stopRef.current = stop; setLive(''); setLevels(Array(28).fill(0)); setListening(true); }
     else showToast({ message: 'Voice input is not available here. Open TaskHub in Safari, not the home-screen app', tone: 'error' });
   };
 
   useEffect(() => () => stopRef.current?.(), []);
+
+  // The input grows with its text instead of scrolling sideways or inside itself.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible) return undefined;
+    const id = requestAnimationFrame(() => autoGrow(inputRef.current));
+    return () => cancelAnimationFrame(id);
+  }, [text, visible, multi]);
+
+  // A touch keyboard's Enter in Single mode adds the to-do (the text was cleaned in onChangeText first).
+  useEffect(() => {
+    if (submitNext.current) { submitNext.current = false; submit(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
 
   const cycleRecurrence = () => {
     const idx = RECURRENCE_ORDER.indexOf(recurrence);
@@ -263,23 +328,49 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           <Text style={styles.note}>You can propose this. A manager of {business.name} accepts or declines it.</Text>
         )}
 
+        <View style={styles.modeRow}>
+          <Chip small icon="document-text-outline" label="Single" active={!multi} onPress={() => setMulti(false)} />
+          <Chip small icon="list-outline" label="Multiple" active={multi} onPress={() => setMulti(true)} />
+          {multi && <Text style={styles.note}>{lineList.length > 1 ? lineList.length + ' to-dos, one per line' : 'One to-do per line'}</Text>}
+        </View>
         {listening && (
           <View style={styles.liveBox} accessibilityLiveRegion="polite">
-            <Ionicons name="mic" size={16} color={colors.brand[600]} />
-            <Text style={[styles.liveText, !live && { color: colors.gray[400] }]} numberOfLines={3}>{live || 'Listening… speak now'}</Text>
+            <View style={styles.liveHead}>
+              <View style={styles.recDot} />
+              <Text style={styles.recText}>Recording</Text>
+              <View style={styles.wave}>
+                {levels.map((v, i) => (
+                  <View key={i} style={[styles.waveBar, { height: 4 + Math.round(v * 22), opacity: 0.35 + v * 0.65 }]} />
+                ))}
+              </View>
+            </View>
+            <Text style={[styles.liveText, !live && { color: colors.gray[400] }]}>{live || 'Listening… speak now'}</Text>
           </View>
         )}
         <TextInput
           ref={inputRef}
           value={text}
-          onChangeText={setText}
-          placeholder={placeholder}
+          onChangeText={(v) => {
+            // Some touch keyboards do not report Enter as a key: catch the newline it types.
+            if (!multi && v.length === text.length + 1 && v.endsWith('\n') && virtualKeyboardUp()) { submitNext.current = true; setText(v.replace(/\n+$/, '')); return; }
+            setText(v);
+          }}
+          placeholder={multi ? 'One to-do per line, e.g.\nCall supplier tomorrow\nSend the quote friday p1' : placeholder}
           placeholderTextColor={colors.gray[400]}
           style={styles.input}
-          onSubmitEditing={submit}
+          multiline
+          numberOfLines={1}
+          scrollEnabled={false}
           blurOnSubmit={false}
-          returnKeyType="done"
+          returnKeyType={multi ? 'default' : 'send'}
           autoCorrect
+          onKeyPress={(e) => {
+            const k = e.nativeEvent;
+            if (k.key !== 'Enter' || k.shiftKey) return; // Shift+Enter: a new line
+            if (multi && virtualKeyboardUp()) return;    // touch keyboard, Multiple: Enter is a new line
+            e.preventDefault();
+            submit();
+          }}
         />
         {menu === 'notes' && (
           <TextInput
@@ -503,8 +594,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           </SlideGroup>
           <AnimatedPressable
             onPress={submit}
-            disabled={!parsed.title || saving}
-            style={[styles.send, (!parsed.title || saving) && styles.sendDisabled]}
+            disabled={!canSend || saving}
+            style={[styles.send, (!canSend || saving) && styles.sendDisabled]}
           >
             <Ionicons name="arrow-up" size={22} color="#fff" />
           </AnimatedPressable>
@@ -552,8 +643,14 @@ function ToolButton({ icon, label, open, has, onPress }) {
 const createStyles = (colors) => StyleSheet.create({
   wrap: { paddingHorizontal: spacing.sm },
   scopeRow: { gap: spacing.xs, paddingBottom: spacing.sm },
-  liveBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: spacing.xs, paddingHorizontal: spacing.xs },
-  liveText: { flex: 1, fontSize: fontSize.sm, color: colors.brand[700] },
+  modeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingBottom: spacing.xs },
+  liveBox: { gap: 6, paddingVertical: spacing.xs, paddingHorizontal: spacing.xs },
+  liveHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.brand[600] },
+  recText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[700] },
+  wave: { flex: 1, height: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  waveBar: { width: 3, borderRadius: 2, backgroundColor: colors.brand[600] },
+  liveText: { fontSize: fontSize.base, color: colors.brand[700] },
   note: { fontSize: fontSize.sm, color: colors.gray[500], paddingBottom: spacing.xs },
   suggestions: { marginBottom: spacing.sm },
   input: {
