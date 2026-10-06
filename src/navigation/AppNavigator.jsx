@@ -226,6 +226,11 @@ function MainTabs() {
   const navigation = useNavigation();
   const desktop = useIsDesktop();
   const [moreVisible, setMoreVisible] = useState(false);
+  // Closing removes the scrim on press; the browser's trailing click then lands on the "More" tab under it
+  // and would reopen the menu, so ignore opens for a moment after a close.
+  const closedAt = useRef(0);
+  const openMore = () => { if (Date.now() - closedAt.current > 400) setMoreVisible(true); };
+  const closeMore = () => { closedAt.current = Date.now(); setMoreVisible(false); };
 
   const today = todayYmd();
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
@@ -252,7 +257,7 @@ function MainTabs() {
     <>
       <Tab.Navigator
         initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || 'Dashboard'}
-        tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={() => setMoreVisible(true)} />}
+        tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={openMore} />}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.brand[600],
@@ -313,12 +318,12 @@ function MainTabs() {
           component={MorePlaceholder}
           options={{
             tabBarButton: (props) => (
-              <MoreTabButton {...props} onPress={() => setMoreVisible(true)} />
+              <MoreTabButton {...props} onPress={openMore} />
             ),
           }}
         />
       </Tab.Navigator>
-      <MoreMenu visible={moreVisible} onClose={() => setMoreVisible(false)} title={t('more')} items={moreItems} onItemPress={handleMoreItem} />
+      <MoreMenu visible={moreVisible} onClose={closeMore} title={t('more')} items={moreItems} onItemPress={handleMoreItem} />
     </>
   );
 }
