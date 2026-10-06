@@ -18,6 +18,7 @@ import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
 import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
+import ClaudePanel from './ClaudePanel';
 import PromptSheet from './PromptSheet';
 import { Avatar, Chip, PRIORITY, TodoCheckbox, ListGlyph, DueChip } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
@@ -237,6 +238,7 @@ export function TodoDetailBody({ todoId, onClose, variant = 'sheet' }) {
         )}
 
         <GovernancePanel todo={todo} />
+        <ClaudePanel todo={todo} />
 
         <View style={styles.tabs}>
           {TABS.map((t) => (
