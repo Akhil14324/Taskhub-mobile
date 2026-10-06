@@ -48,6 +48,7 @@ export default function OrganizationScreen() {
   const [query, setQuery] = useState('');
 
   const portal = !!structure?.me?.portal;
+  const canEditBiz = !!structure?.me?.can_edit_businesses;
 
   const load = useCallback(async () => {
     try {
@@ -194,7 +195,7 @@ export default function OrganizationScreen() {
             {/* Businesses */}
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Businesses</Text>
-              {portal && (
+              {canEditBiz && (
                 <AnimatedPressable {...glass('inset')} style={styles.addBizBtn} onPress={() => setBizEditor(null)} haptic="light">
                   <Ionicons name="add" size={16} color={colors.brand[600]} />
                   <Text style={styles.addBizText}>Business</Text>
@@ -268,7 +269,7 @@ export default function OrganizationScreen() {
                         <View style={styles.bizActions}>
                           <Chip small icon="clipboard" label="Tasks" onPress={() => navigation.navigate('Main', { screen: 'Todos', params: { business_id: b.id } })} />
                           {iManage && <Chip small icon="person-add" label="Add member" onPress={() => setAddMemberFor(b)} />}
-                          {portal && <Chip small icon="create-outline" label="Edit" onPress={() => setBizEditor(b)} />}
+                          {canEditBiz && <Chip small icon="create-outline" label="Edit" onPress={() => setBizEditor(b)} />}
                         </View>
                       </Animated.View>
                     )}
