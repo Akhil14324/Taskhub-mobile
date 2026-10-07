@@ -227,9 +227,27 @@ function MainTabs() {
   const desktop = useIsDesktop();
   const [moreVisible, setMoreVisible] = useState(false);
   // Closing removes the scrim on press; the browser's trailing click then lands on the "More" tab under it
-  // and would reopen the menu, so ignore opens for a moment after a close.
+  // and would reopen the menu. A click that belongs to a pointer-down from before the close is that ghost
+  // click, whatever its delay, so it is ignored; a fresh tap (pointer-down after the close) opens normally.
   const closedAt = useRef(0);
-  const openMore = () => { if (Date.now() - closedAt.current > 400) setMoreVisible(true); };
+  const lastDownAt = useRef(0);
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onDown = () => { lastDownAt.current = Date.now(); };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('touchstart', onDown, true);
+    document.addEventListener('mousedown', onDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('touchstart', onDown, true);
+      document.removeEventListener('mousedown', onDown, true);
+    };
+  }, []);
+  const openMore = () => {
+    const sinceClose = Date.now() - closedAt.current;
+    if (sinceClose < 1000 && lastDownAt.current <= closedAt.current) return;
+    setMoreVisible(true);
+  };
   const closeMore = () => { closedAt.current = Date.now(); setMoreVisible(false); };
 
   const today = todayYmd();
