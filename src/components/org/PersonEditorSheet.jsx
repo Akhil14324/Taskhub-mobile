@@ -128,7 +128,7 @@ export default function PersonEditorSheet({ visible, onClose, person, businesses
           <TextInput value={form.title} onChangeText={(title) => set({ title })} {...glass('inset')} style={styles.input} placeholder="e.g. Head Chef, Site Engineer" placeholderTextColor={colors.gray[400]} />
         </Field>
 
-        <Text style={styles.label}>Leadership tier</Text>
+        <Text style={styles.label}>Leadership circle level</Text>
         <Text style={styles.hint}>Leaders sit above every business and can see all work.</Text>
         <View style={styles.wrap}>
           <Chip label="None" active={!form.org_level} onPress={() => set({ org_level: null })} />

@@ -16,6 +16,12 @@ import { showToast, confirmDialog } from '../../utils/events';
 import api from '../../api/client';
 import { RichText, ReactionBar, AttachmentList, pickFile, uploadAttachment, collabStyles } from './collab';
 import { glass } from '../../theme/glass';
+import useVoiceInput from '../../hooks/useVoiceInput';
+import VoiceLive from '../VoiceLive';
+import { useLang } from '../../context/LanguageContext';
+
+// People can drop a few ready-made symbols into a comment (the picker is the only place emoji appear).
+const EMOJIS = ['👍', '👏', '🙏', '🎉', '✅', '❌', '🔥', '💯', '❤️', '😀', '😂', '😅', '🤔', '😮', '😢', '👀', '💪', '🚀', '⭐', '⚠️', '📌', '📎', '⏰', '👌', '🙌', '😊', '😍', '🤝', '👋', '📞'];
 
 const THREAD_PREVIEW = 2;
 
@@ -39,6 +45,9 @@ export default function TodoComments({ todo }) {
   const [pending, setPending] = useState([]); // files uploaded for the comment being written
   const [uploading, setUploading] = useState(false);
   const [expanded, setExpanded] = useState({});
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const { lang } = useLang();
+  const voice = useVoiceInput({ lang: lang === 'te' ? 'te-IN' : 'en-IN' });
 
   const load = useCallback(async () => {
     try {
@@ -229,10 +238,28 @@ export default function TodoComments({ todo }) {
           <AttachmentList items={pending} canRemove={() => true} onRemove={(a) => removeFile(a, true)} />
         </View>
       )}
+      {voice.listening && <VoiceLive compact levels={voice.levels} live={voice.live} onStop={voice.stop} />}
+      {emojiOpen && (
+        <View style={styles.emojiGrid}>
+          {EMOJIS.map((e) => (
+            <AnimatedPressable key={e} onPress={() => setText((t) => `${t}${e}`)} style={styles.emojiBtn}>
+              <Text style={{ fontSize: 22 }}>{e}</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      )}
       <View style={styles.inputRow}>
         <AnimatedPressable onPress={() => attach(true)} hitSlop={8} disabled={uploading} accessibilityLabel="Attach a file to the comment">
           <Ionicons name="attach" size={24} color={uploading ? colors.gray[300] : colors.gray[500]} />
         </AnimatedPressable>
+        <AnimatedPressable onPress={() => setEmojiOpen((v) => !v)} hitSlop={8} accessibilityLabel="Emoji">
+          <Ionicons name={emojiOpen ? 'happy' : 'happy-outline'} size={24} color={emojiOpen ? colors.brand[600] : colors.gray[500]} />
+        </AnimatedPressable>
+        {voice.supported && (
+          <AnimatedPressable onPress={() => voice.toggle(text, setText)} hitSlop={8} accessibilityLabel="Speak">
+            <Ionicons name={voice.listening ? 'mic' : 'mic-outline'} size={24} color={voice.listening ? colors.brand[600] : colors.gray[500]} />
+          </AnimatedPressable>
+        )}
         <TextInput
           value={text}
           onChangeText={setText}
@@ -276,6 +303,8 @@ const createStyles = (colors) => StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap', marginTop: 2 },
   questionTag: { fontSize: 9, fontWeight: '800', color: colors.brand[600], backgroundColor: colors.brand[50], paddingHorizontal: 5, paddingVertical: 1, borderRadius: radius.sm, overflow: 'hidden' },
   questionBody: { color: colors.gray[900], fontWeight: '600' },
+  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2, marginHorizontal: spacing.sm, marginBottom: 6, padding: 6, borderRadius: radius.lg, backgroundColor: colors.gray[50], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200] },
+  emojiBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   replying: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: spacing.sm, marginBottom: 4, paddingHorizontal: 10, height: 28, borderRadius: radius.md, backgroundColor: colors.brand[50] },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: 4 },
   input: {

@@ -20,7 +20,7 @@ const MARK_TOP = 'inset 0 3px 0 #dc2626';
  * reorders it; onReorder(ids) gets that column's new order of ids, which is saved for the viewer.
  */
 export default function BoardView({
-  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn, selectedId,
+  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn, onStarter, selectedId,
   currentUserId, emptyText = 'Nothing here',
 }) {
   const colors = useColors();
@@ -137,6 +137,7 @@ export default function BoardView({
                 </AnimatedPressable>
               )}
             </View>
+            {!!col.section?.description && <Text style={styles.columnNote}>{col.section.description}</Text>}
             <View style={styles.cards}>
               {col.items.map((t) => (
                 <Card
@@ -156,6 +157,12 @@ export default function BoardView({
             </View>
           </View>
         ))}
+        {onStarter && (
+          <AnimatedPressable style={styles.addColumn} onPress={onStarter}>
+            <Ionicons name="sparkles-outline" size={18} color={colors.brand[600]} />
+            <Text style={styles.addColumnText}>Start with 3 sections</Text>
+          </AnimatedPressable>
+        )}
         {onAddColumn && (
           <AnimatedPressable style={styles.addColumn} onPress={onAddColumn}>
             <Ionicons name="add" size={20} color={colors.brand[600]} />
@@ -209,7 +216,7 @@ function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onTo
           {!!progress && progress.total > 0 && (
             <View style={styles.metaItem}>
               <Ionicons name="git-branch-outline" size={11} color={colors.gray[500]} />
-              <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
+              <Text style={styles.metaText}>{progress.done}/{progress.total} · {Math.round((progress.done / progress.total) * 100)}%</Text>
             </View>
           )}
           {t.comment_count > 0 && (
@@ -258,6 +265,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   columnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[800], maxWidth: 160 },
+  columnNote: { fontSize: fontSize.sm, color: colors.gray[500], paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
   columnCount: { fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '600' },
   cards: { minHeight: 40 },
   cardWrap: { marginBottom: spacing.sm, borderRadius: radius.lg },

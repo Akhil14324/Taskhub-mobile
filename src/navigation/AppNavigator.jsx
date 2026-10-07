@@ -45,6 +45,9 @@ import TodosScreen from '../screens/TodosScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
+import AccessScreen from '../screens/AccessScreen';
+import EverythingScreen from '../screens/EverythingScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import NotificationsScreen from '../screens/Notifications';
@@ -91,6 +94,9 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
+const FramedLeaderboard = framed(LeaderboardScreen, 1100);
+const FramedAccess = framed(AccessScreen, 1100);
+const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
 const FramedNotifications = framed(NotificationsScreen, 1100);
 const FramedProfile = framed(ProfileScreen, 1000);
@@ -106,6 +112,9 @@ const PushGroupInfo = T(FramedGroupInfo);
 const PushApprovals = T(FramedApprovals);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
+const PushLeaderboard = T(FramedLeaderboard);
+const PushAccess = T(FramedAccess);
+const PushEverything = T(FramedEverything);
 const PushPersonMonitor = T(FramedPersonMonitor);
 const PushNotifications = T(FramedNotifications);
 const PushProfile = T(FramedProfile);
@@ -258,6 +267,9 @@ function MainTabs() {
     { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
+    { label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' },
+    ...(user?.permissions?.manage_access ? [{ label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
+    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
     { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { label: t('profile'), icon: 'person-outline', route: 'Profile' },
     { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
@@ -498,6 +510,9 @@ export default function AppNavigator() {
             <Stack.Screen name="Approvals" component={PushApprovals} />
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
+            <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
+            <Stack.Screen name="Access" component={PushAccess} />
+            <Stack.Screen name="Everything" component={PushEverything} />
             <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />
             <Stack.Screen name="Notifications" component={PushNotifications} />
             <Stack.Screen name="Profile" component={PushProfile} />

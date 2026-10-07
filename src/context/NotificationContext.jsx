@@ -4,6 +4,7 @@ import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast } from '../utils/events';
+import { playReminder } from '../utils/feedback';
 import { openNotificationTarget, getCurrentRoute } from '../navigation/navigationRef';
 import {
   getPushState,
@@ -111,6 +112,7 @@ export function NotificationProvider({ children }) {
     if (!user) return undefined;
     return subscribe('notification:new', (n) => {
       setUnreadCount((c) => c + 1);
+      if (n.type === 'todo_reminder') playReminder();
       if (APPROVAL_TYPES.has(n.type)) refreshCounts();
       const data = n.data || {};
       const route = getCurrentRoute();

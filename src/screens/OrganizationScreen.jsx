@@ -15,12 +15,11 @@ import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import PersonSheet from '../components/org/PersonSheet';
 import PersonEditorSheet from '../components/org/PersonEditorSheet';
 import BusinessEditorSheet from '../components/org/BusinessEditorSheet';
-import OrgLegend from '../components/org/OrgLegend';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import { Avatar, Chip, IconButton, accent, tint } from '../components/kit';
 import useDirectory, { filterPeople, invalidateDirectory } from '../hooks/useDirectory';
 import { showToast } from '../utils/events';
-import { TIER_ICONS, TIER_SHADES, businessIcon, designationIcon } from '../utils/orgMeta';
+import { businessIcon, designationIcon } from '../utils/orgMeta';
 import { glass } from '../theme/glass';
 
 // Accountants and heads are always on show; everyone else sits in the expandable list.
@@ -114,11 +113,6 @@ export default function OrganizationScreen() {
     );
   }
 
-  const tiers = [1, 2, 3].map((level) => ({
-    level,
-    label: structure.leadership.find((l) => l.level === level)?.label,
-    people: structure.leaders.filter((p) => p.org_level === level),
-  })).filter((t) => t.people.length > 0);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -126,7 +120,7 @@ export default function OrganizationScreen() {
         <IconButton icon="chevron-back" onPress={() => navigation.goBack()} />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Organisation</Text>
-          <Text style={styles.subtitle}>{portal ? 'Portal — you can place and manage people' : 'Who’s who across VGrand'}</Text>
+          <Text style={styles.subtitle}>{portal ? 'You can add people and place them in businesses' : 'Who is who across VGrand'}</Text>
         </View>
         {portal && (
           <AnimatedPressable {...glass('accent')} style={styles.addBtn} onPress={() => setEditing(null)} haptic="medium">
@@ -166,30 +160,29 @@ export default function OrganizationScreen() {
           </View>
         ) : (
           <>
-            <OrgLegend structure={structure} />
-
-            {/* Leadership chain */}
-            {tiers.map((tier, i) => (
-              <Animated.View key={tier.level} entering={FadeInDown.delay(i * 90).duration(320)} style={{ alignItems: 'center' }}>
-                {i > 0 && <View style={styles.connector} />}
-                <View style={[styles.tierBadge, { backgroundColor: tint(TIER_SHADES[tier.level], 0.12) }]}>
-                  <Ionicons name={TIER_ICONS[tier.level]} size={12} color={TIER_SHADES[tier.level]} />
-                  <Text style={[styles.tierLabel, { color: TIER_SHADES[tier.level] }]}>{tier.label}</Text>
-                </View>
-                <View style={styles.tierRow}>
-                  {tier.people.map((p) => (
-                    <AnimatedPressable key={p.id} onPress={() => openPerson(p)} haptic="light" style={[styles.leaderCard, { borderColor: tint(TIER_SHADES[tier.level], 0.4) }]}>
-                      <Avatar name={p.name} uri={p.profile_picture} size={tier.level === 1 ? 56 : 46} online={onlineUsers.has(p.id)} />
-                      <Text style={styles.leaderName} numberOfLines={1}>{p.name}</Text>
-                      <Text style={styles.leaderTitle} numberOfLines={1}>{p.display_title}</Text>
-                      {p.id === user?.id && <Text style={styles.youTag}>You</Text>}
-                    </AnimatedPressable>
-                  ))}
+            {/* The leadership circle: everyone who looks after all the businesses, with no titles. */}
+            {structure.leaders.length > 0 && (
+              <Animated.View entering={FadeInDown.duration(320)} style={{ alignItems: 'center' }}>
+                <View {...glass('card')} style={styles.circle}>
+                  <View style={styles.tierBadge}>
+                    <Ionicons name="radio-button-on" size={12} color={colors.brand[700]} />
+                    <Text style={[styles.tierLabel, { color: colors.brand[700] }]}>Leadership circle</Text>
+                  </View>
+                  <Text style={styles.circleNote}>Looks after every business below</Text>
+                  <View style={styles.tierRow}>
+                    {structure.leaders.map((l) => (
+                      <AnimatedPressable key={l.id} onPress={() => openPerson(l)} haptic="light" style={styles.leaderCard}>
+                        <Avatar name={l.name} uri={l.profile_picture} size={50} online={onlineUsers.has(l.id)} />
+                        <Text style={styles.leaderName} numberOfLines={1}>{l.name}</Text>
+                        {l.id === user?.id && <Text style={styles.youTag}>You</Text>}
+                      </AnimatedPressable>
+                    ))}
+                  </View>
                 </View>
               </Animated.View>
-            ))}
+            )}
 
-            {tiers.length > 0 && <View style={styles.connector} />}
+            {structure.leaders.length > 0 && <View style={styles.connector} />}
             <View style={styles.branch} />
 
             {/* Businesses */}
@@ -231,7 +224,7 @@ export default function OrganizationScreen() {
 
                     {/* Heads and accountants are always visible */}
                     <View style={styles.headsRow}>
-                      {b.heads.length === 0 && <Text style={styles.muted}>No head assigned yet</Text>}
+                      {b.heads.length === 0 && <Text style={styles.muted}>No lead yet</Text>}
                       {keyPeople.map((h) => (
                         <AnimatedPressable key={h.id} style={styles.headChip} onPress={() => openPerson(h)} haptic="light">
                           <Avatar name={h.name} uri={h.profile_picture} size={26} online={onlineUsers.has(h.id)} />
@@ -343,28 +336,31 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
   const colors = useColors();
   const { people } = useDirectory();
   const [query, setQuery] = useState('');
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState([]); // people chosen so far
   const [designation, setDesignation] = useState('member');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (business) {
       setQuery('');
-      setPicked(null);
+      setPicked([]);
       setDesignation('member');
     }
   }, [business]);
 
   const existing = new Set((business?.members || []).map((m) => m.id));
-  const results = filterPeople(people, query, { excludeIds: [...existing], limit: 8 });
+  const candidates = people.filter((p) => !existing.has(p.id));
+  const results = filterPeople(candidates, query, { limit: 40 });
   const allowed = designations.filter((d) => portal || d.level > myLevel);
+  const isPicked = (id) => picked.some((p) => p.id === id);
+  const toggle = (p) => setPicked((prev) => (prev.some((x) => x.id === p.id) ? prev.filter((x) => x.id !== p.id) : [...prev, p]));
 
   const save = async () => {
-    if (!picked) return;
+    if (!picked.length) return;
     setSaving(true);
     try {
-      await api.put(`/org/businesses/${business.id}/members/${picked.id}`, { designation });
-      showToast({ message: `${picked.name.split(' ')[0]} added to ${business.name}`, tone: 'success' });
+      await api.post(`/org/businesses/${business.id}/members`, { user_ids: picked.map((p) => p.id), designation });
+      showToast({ message: picked.length === 1 ? `${picked[0].name.split(' ')[0]} added to ${business.name}` : `${picked.length} people added to ${business.name}`, tone: 'success' });
       onClose();
       onDone?.();
     } catch (err) {
@@ -375,40 +371,39 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
   };
 
   return (
-    <BottomSheet visible={!!business} onClose={onClose} maxHeight={640} avoidKeyboard>
+    <BottomSheet visible={!!business} onClose={onClose} maxHeight={680} avoidKeyboard>
       {business && (
         <View style={{ paddingHorizontal: spacing.sm, flexShrink: 1 }}>
-          <Text style={{ fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900] }}>Add to {business.name}</Text>
-          {!picked ? (
+          <Text style={{ fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900] }}>Add people to {business.name}</Text>
+          <Text style={{ fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 }}>Anyone can be in any number of businesses.</Text>
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search people"
+            placeholderTextColor={colors.gray[400]}
+            style={{ marginTop: spacing.md, backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: 11, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' }}
+          />
+          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+            <Chip small icon="people" label={`Everyone (${candidates.length})`} onPress={() => setPicked(candidates)} />
+            {picked.length > 0 && <Chip small icon="close" label="Clear" onPress={() => setPicked([])} />}
+          </View>
+          <ScrollView style={{ flexShrink: 1, marginTop: spacing.sm, maxHeight: 280 }} keyboardShouldPersistTaps="handled">
+            {results.map((p) => (
+              <AnimatedPressable key={p.id} onPress={() => toggle(p)} haptic="light" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm }}>
+                <Avatar name={p.name} uri={p.profile_picture} size={34} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] }}>{p.name}</Text>
+                  <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>@{p.username}</Text>
+                </View>
+                <Ionicons name={isPicked(p.id) ? 'checkbox' : 'square-outline'} size={22} color={isPicked(p.id) ? colors.brand[600] : colors.gray[400]} />
+              </AnimatedPressable>
+            ))}
+            {results.length === 0 && <Text style={{ color: colors.gray[500], paddingVertical: spacing.md }}>Everyone is already here.</Text>}
+          </ScrollView>
+          {picked.length > 0 && (
             <>
-              <TextInput
-                autoFocus
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search people"
-                placeholderTextColor={colors.gray[400]}
-                style={{ marginTop: spacing.md, backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: 11, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' }}
-              />
-              <ScrollView style={{ flexShrink: 1, marginTop: spacing.sm }} keyboardShouldPersistTaps="handled">
-                {results.map((p) => (
-                  <AnimatedPressable key={p.id} onPress={() => setPicked(p)} haptic="light" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm }}>
-                    <Avatar name={p.name} uri={p.profile_picture} size={34} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] }}>{p.name}</Text>
-                      <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>@{p.username}{p.display_title ? ` · ${p.display_title}` : ''}</Text>
-                    </View>
-                  </AnimatedPressable>
-                ))}
-              </ScrollView>
-            </>
-          ) : (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md }}>
-                <Avatar name={picked.name} uri={picked.profile_picture} size={40} />
-                <Text style={{ flex: 1, fontSize: fontSize.md, fontWeight: '700', color: colors.gray[900] }}>{picked.name}</Text>
-                <AnimatedPressable onPress={() => setPicked(null)}><Text style={{ color: colors.brand[600], fontWeight: '600' }}>Change</Text></AnimatedPressable>
-              </View>
-              <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[500], marginTop: spacing.lg, marginBottom: spacing.sm }}>POSITION</Text>
+              <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[500], marginTop: spacing.md, marginBottom: spacing.sm }}>POSITION</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {allowed.map((d) => (
                   <Chip key={d.key} icon={designationIcon(d.key)} label={d.label} active={designation === d.key} onPress={() => setDesignation(d.key)} />
@@ -418,9 +413,9 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
                 onPress={save}
                 disabled={saving}
                 haptic="medium"
-                style={{ marginTop: spacing.xl, marginBottom: spacing.md, paddingVertical: 14, borderRadius: radius.lg, alignItems: 'center', backgroundColor: colors.brand[600], opacity: saving ? 0.6 : 1 }}
+                style={{ marginTop: spacing.lg, marginBottom: spacing.md, paddingVertical: 14, borderRadius: radius.lg, alignItems: 'center', backgroundColor: colors.brand[600], opacity: saving ? 0.6 : 1 }}
               >
-                <Text style={{ color: colors.white, fontWeight: '700', fontSize: fontSize.md }}>{saving ? 'Adding…' : 'Add to business'}</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>{saving ? 'Adding...' : `Add ${picked.length} ${picked.length === 1 ? 'person' : 'people'}`}</Text>
               </AnimatedPressable>
             </>
           )}
@@ -454,6 +449,8 @@ const createStyles = (colors) => StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   connector: { width: 2, height: 22, backgroundColor: colors.gray[300], alignSelf: 'center' },
   branch: { height: 2, backgroundColor: colors.gray[300], marginHorizontal: spacing.xxxl, marginBottom: spacing.lg, borderRadius: 1 },
+  circle: { alignItems: 'center', alignSelf: 'stretch', paddingVertical: spacing.lg, paddingHorizontal: spacing.md, borderRadius: 36, backgroundColor: colors.white },
+  circleNote: { fontSize: 12, color: colors.gray[500], marginTop: 4, marginBottom: spacing.md },
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full, marginBottom: spacing.sm },
   tierLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
   tierRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.md },
@@ -464,7 +461,8 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radius.xl,
     backgroundColor: colors.white,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    borderColor: colors.brand[200],
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 8,

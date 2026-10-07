@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from './AnimatedPressable';
 import { Card } from './UI';
-import { configureFeedback, playSound } from '../utils/feedback';
+import { configureFeedback, playSound, playReminder } from '../utils/feedback';
 
 const CHOICES = [
   { key: 'viewMode', icon: 'leaf-outline', label: 'How much to show', hint: 'Simple hides labels, estimates, filters, calendar and timeline. Full shows everything.', fallback: 'full',
@@ -101,6 +101,19 @@ export default function PreferencesCard() {
         <Switch
           value={prefs.sounds === true}
           onValueChange={(v) => { updatePreferences({ sounds: v }); if (v) { configureFeedback({ ...prefs, sounds: true }); playSound('done'); } }}
+          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
+        />
+      </View>
+
+      <View style={[styles.row, styles.switchRow]}>
+        <Ionicons name="alarm-outline" size={18} color={colors.gray[500]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>Reminder sound</Text>
+          <Text style={styles.hint}>A bell that is different from everything else, when a reminder is due</Text>
+        </View>
+        <Switch
+          value={prefs.reminderSound !== false}
+          onValueChange={(v) => { updatePreferences({ reminderSound: v }); configureFeedback({ ...prefs, reminderSound: v }); if (v) playReminder(); }}
           trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
         />
       </View>

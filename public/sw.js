@@ -85,7 +85,9 @@ self.addEventListener('push', (event) => {
       tag,
       renotify: !!tag,
       data: msg.data,
-      vibrate: [80, 40, 80],
+      // A reminder buzzes longer and stays on screen until it is dismissed, so it is not missed.
+      vibrate: msg.data.type === 'todo_reminder' ? [250, 120, 250, 120, 500] : [80, 40, 80],
+      requireInteraction: msg.data.type === 'todo_reminder',
     });
   })());
 });

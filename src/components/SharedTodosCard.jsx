@@ -16,16 +16,23 @@ const COLLAPSED_COUNT = 5;
  * Shows each to-do in full (notes, due date, priority) and lets the reader copy one or
  * all of the open ones into their own list.
  */
-function SharedTodosCard({ meta, isOwn }) {
+function SharedTodosCard({ meta, isOwn: mine }) {
+  // The card looks the same to the sender and to the person who gets it; the sender just has nothing to add.
+  const isOwn = false;
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors, isOwn), [colors, isOwn]);
-  const { importTodos } = useTodos();
+  const { importTodos, todos } = useTodos();
   const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState(null); // id of the to-do whose notes are showing
   const [addedIds, setAddedIds] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  const items = meta.items || [];
+  // Anyone who can see a shared to-do sees how it stands now, not how it was when it was sent.
+  const byId = useMemo(() => new Map(todos.map((t) => [t.id, t])), [todos]);
+  const items = (meta.items || []).map((i) => {
+    const t = byId.get(i.id);
+    return t ? { ...i, title: t.title, notes: t.notes || i.notes, is_done: t.is_done, due_date: t.due_date, due_time: t.due_time, priority: t.priority } : i;
+  });
   const visible = expanded ? items : items.slice(0, COLLAPSED_COUNT);
   const pending = items.filter((i) => !i.is_done && !addedIds.includes(i.id));
   const allAdded = items.some((i) => !i.is_done) && pending.length === 0;
@@ -54,7 +61,7 @@ function SharedTodosCard({ meta, isOwn }) {
         </Text>
         <Text style={styles.count}>{items.length}</Text>
       </View>
-      {!!meta.owner?.name && !isOwn && <Text style={[styles.owner, { color: subtle }]}>From {meta.owner.name}</Text>}
+      {!!meta.owner?.name && <Text style={[styles.owner, { color: subtle }]}>{mine ? 'Shared by you' : `From ${meta.owner.name}`}</Text>}
 
       {visible.map((item) => {
         const isAdded = addedIds.includes(item.id);
@@ -81,7 +88,7 @@ function SharedTodosCard({ meta, isOwn }) {
               </View>
               {showNotes && <Text style={[styles.notes, { color: subtle }]}>{item.notes}</Text>}
             </AnimatedPressable>
-            {!isOwn && !item.is_done && (
+            {!mine && !item.is_done && (
               <AnimatedPressable onPress={() => add([item])} disabled={busy || isAdded} hitSlop={8} haptic="light" style={styles.itemAdd}>
                 <Ionicons name={isAdded ? 'checkmark' : 'add'} size={16} color={colors.white} />
               </AnimatedPressable>
@@ -96,7 +103,7 @@ function SharedTodosCard({ meta, isOwn }) {
         </AnimatedPressable>
       )}
 
-      {!isOwn && items.some((i) => !i.is_done) && (
+      {!mine && items.some((i) => !i.is_done) && (
         <AnimatedPressable onPress={() => add(pending)} disabled={busy || allAdded} haptic="medium" style={[styles.addBtn, (busy || allAdded) && { opacity: 0.6 }]}>
           <Ionicons name={allAdded ? 'checkmark' : 'add'} size={16} color={colors.white} />
           <Text style={styles.addText}>

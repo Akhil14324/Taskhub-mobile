@@ -19,7 +19,8 @@ import {
 import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
 import { DURATION_PRESETS, formatDuration } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
-import { isSpeechSupported, startListening } from '../../utils/speech';
+import useVoiceInput from '../../hooks/useVoiceInput';
+import VoiceLive from '../VoiceLive';
 import autoGrow, { virtualKeyboardUp } from '../../utils/autoGrow';
 import { useLang } from '../../context/LanguageContext';
 
@@ -43,10 +44,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const inputRef = useRef(null);
   const desktop = useIsDesktop();
   const { lang } = useLang();
-  const stopRef = useRef(null);
-  const [listening, setListening] = useState(false);
-  const [live, setLive] = useState(''); // words heard so far while dictating
-  const [levels, setLevels] = useState(() => Array(28).fill(0)); // recent loudness, for the wave meter
+  const voice = useVoiceInput({ lang: lang === 'te' ? 'te-IN' : 'en-IN', onFinish: () => inputRef.current?.focus() });
+  const { listening, live, levels } = voice;
   // Single: one to-do (Enter adds it). Multiple: one to-do per line (Enter adds a line on a touch keyboard).
   const [multi, setMultiState] = useState(() => { try { return localStorage.getItem('quickadd:multi') === '1'; } catch { return false; } });
   const setMulti = (v) => { setMultiState(v); try { localStorage.setItem('quickadd:multi', v ? '1' : '0'); } catch { /* private mode */ } };
@@ -149,7 +148,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const mentionedPeople = delegateHere && !typedMentions.some((p) => p.id === delegateHere.id)
     ? [...typedMentions, delegateHere]
     : typedMentions;
-  const effectiveAssignId = delegateHere && assignId === null ? delegateHere.id : assignId;
+  // Whoever is @mentioned is ASSIGNED by default (they are accountable); tapping the chip makes it just shared (-1).
+  const effectiveAssignId = assignId === null ? (mentionedPeople[0]?.id ?? null) : assignId === -1 ? null : assignId;
   const effectiveBizAssignee = bizAssignee || (delegate && businessId ? delegate.person.id : null);
   const assignee = bizPeople.find((p) => p.id === effectiveBizAssignee) || null;
   const assignable = useMemo(() => people.filter((p) => p.id !== user?.id), [people, user]);
@@ -238,32 +238,9 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     }
   };
 
-  const toggleListening = () => {
-    if (listening) { stopRef.current?.(); return; }
-    const base = text && !text.endsWith(' ') ? `${text} ` : text;
-    const stop = startListening({
-      lang: lang === 'te' ? 'te-IN' : 'en-IN',
-      onLevel: (v) => setLevels((prev) => [...prev.slice(1), v]),
-      onText: (spoken) => { setLive(spoken); setText(base + spoken); },
-      onEnd: () => { setListening(false); setLive(''); stopRef.current = null; inputRef.current?.focus(); },
-      onError: (code) => {
-        setListening(false);
-        setLive('');
-        stopRef.current = null;
-        const message = code === 'not-allowed' ? 'Allow the microphone for this site (iPhone: Settings > Safari > Microphone)'
-          : code === 'service-not-allowed' ? 'Turn on Dictation and Siri (iPhone: Settings > General > Keyboard > Enable Dictation)'
-          : code === 'no-speech' ? 'Did not catch that, tap the mic and try again'
-          : code === 'audio-capture' ? 'No microphone found'
-          : code === 'network' ? 'Speech needs an internet connection'
-          : code === 'aborted' ? null : 'Voice input is not available here';
-        if (message) showToast({ message, tone: 'error' });
-      },
-    });
-    if (stop) { stopRef.current = stop; setLive(''); setLevels(Array(28).fill(0)); setListening(true); }
-    else showToast({ message: 'Voice input is not available here. Open TaskHub in Safari, not the home-screen app', tone: 'error' });
-  };
+  const toggleListening = () => voice.toggle(text, setText);
 
-  useEffect(() => () => stopRef.current?.(), []);
+
 
   // The input grows with its text instead of scrolling sideways or inside itself.
   useEffect(() => {
@@ -333,20 +310,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           <Chip small icon="list-outline" label="Multiple" active={multi} onPress={() => setMulti(true)} />
           {multi && <Text style={styles.note}>{lineList.length > 1 ? lineList.length + ' to-dos, one per line' : 'One to-do per line'}</Text>}
         </View>
-        {listening && (
-          <View style={styles.liveBox} accessibilityLiveRegion="polite">
-            <View style={styles.liveHead}>
-              <View style={styles.recDot} />
-              <Text style={styles.recText}>Recording</Text>
-              <View style={styles.wave}>
-                {levels.map((v, i) => (
-                  <View key={i} style={[styles.waveBar, { height: 4 + Math.round(v * 22), opacity: 0.35 + v * 0.65 }]} />
-                ))}
-              </View>
-            </View>
-            <Text style={[styles.liveText, !live && { color: colors.gray[400] }]}>{live || 'Listening… speak now'}</Text>
-          </View>
-        )}
+        {listening && <VoiceLive levels={levels} live={live} onStop={voice.stop} />}
         <TextInput
           ref={inputRef}
           value={text}
@@ -420,11 +384,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
               small
               icon={effectiveAssignId === p.id ? 'person-add' : 'person'}
               active={effectiveAssignId === p.id}
-              label={effectiveAssignId === p.id ? `Assigned to ${p.name.split(' ')[0]}` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
-              onPress={() => {
-                if (delegateHere && p.id === delegateHere.id) setDelegateOff(true);
-                else setAssignId(assignId === p.id ? null : p.id);
-              }}
+              label={effectiveAssignId === p.id ? `Assigned to ${p.name.split(' ')[0]} · tap to share` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
+              onPress={() => setAssignId(effectiveAssignId === p.id ? -1 : p.id)}
             />
           ))}
         </ScrollView>
@@ -587,7 +548,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
                 }}
               />
             )}
-            {isSpeechSupported() && (
+            {voice.supported && (
               <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" open={listening} onPress={toggleListening} />
             )}
             <ToolButton icon="ellipsis-horizontal" label="More" open={menu === 'more' || menu === 'notes'} onPress={() => setMenu(menu === 'more' || menu === 'notes' ? null : 'more')} />

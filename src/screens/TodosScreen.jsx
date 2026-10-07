@@ -17,11 +17,13 @@ import { SkeletonList } from '../components/Skeleton';
 import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoTreeList from '../components/todos/TodoTreeList';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
-import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailSheet';
+import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import InlineQuickAdd from '../components/todos/InlineQuickAdd';
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
+import { SectionEditorSheet, SectionMenu } from '../components/todos/SectionTools';
+import ItemMenu from '../components/todos/ItemMenu';
 import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import { openTemplates } from '../utils/events';
@@ -37,7 +39,7 @@ import * as SecureStore from '../utils/secureStorage';
 import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd, formatTime } from '../utils/dates';
 import {
-  BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf,
+  BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf, isAssignedTodo, isSharedTodo,
 } from '../utils/todoMeta';
 import { STATUS } from '../utils/timeline';
 import { showToast, confirmDialog } from '../utils/events';
@@ -78,9 +80,9 @@ export default function TodosScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const {
     todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos,
-    updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, renameSection, deleteSection, saveFilter,
+    updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, updateSection, deleteSection, saveFilter,
     deleteFilter, shareTodos, reorderTodos, fetchCompleted, mergeTodos, setTodoStatus, assignTodoTo, requestDelete,
-    saveBoardOrder,
+    saveBoardOrder, favorites,
   } = useTodos();
 
   // today | upcoming | inbox | shared | done | list:<id> | filter:<id> | label:<name> | biz:<id>
@@ -92,6 +94,9 @@ export default function TodosScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [listEditor, setListEditor] = useState(null);
   const [sectionEditor, setSectionEditor] = useState(null);
+  const [sectionMenu, setSectionMenu] = useState(null);
+  const [itemMenu, setItemMenu] = useState(null); // { kind: 'list' | 'filter' | 'label', item }
+  const [showArchived, setShowArchived] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterEditor, setFilterEditor] = useState(null);
   const [productivityOpen, setProductivityOpen] = useState(false);
@@ -182,8 +187,8 @@ export default function TodosScreen() {
   const counts = useMemo(() => ({
     today: open.filter((t) => t.due_date && t.due_date <= today).length,
     inbox: openPersonal.filter((t) => !t.list_id && !t.parent_id).length,
-    shared: openPersonal.filter((t) => (t.members || []).length > 1).length,
-    assigned: openPersonal.filter((t) => t.created_by !== meId && !t.parent_id).length,
+    shared: openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id).length,
+    assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length,
     lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
   }), [open, openPersonal, lists, today, meId]);
 
@@ -198,10 +203,15 @@ export default function TodosScreen() {
   const hasBusiness = businesses.length > 0;
   const currentList = view.startsWith('list:') ? listById.get(Number(view.slice(5))) : null;
   const listSections = useMemo(
-    () => (currentList ? allSections.filter((s) => s.list_id === currentList.id) : []),
+    () => (currentList ? allSections.filter((s) => s.list_id === currentList.id && !s.archived) : []),
     [allSections, currentList]
   );
-  const inboxSections = useMemo(() => allSections.filter((s) => !s.list_id), [allSections]);
+  const inboxSections = useMemo(() => allSections.filter((s) => !s.list_id && !s.archived), [allSections]);
+  // Archived sections of the place being shown (hidden, with their to-dos, until asked for).
+  const archivedSections = useMemo(
+    () => allSections.filter((s) => s.archived && (currentList ? s.list_id === currentList.id : view === 'inbox' && !s.list_id)),
+    [allSections, currentList, view]
+  );
   // Sections of the place being shown: a list's own, or the Inbox's.
   const placeSections = view === 'inbox' ? inboxSections : listSections;
   const sectioned = !!currentList || view === 'inbox';
@@ -234,8 +244,8 @@ export default function TodosScreen() {
     : view === 'today' ? 'Today'
       : view === 'upcoming' ? 'Upcoming'
         : view === 'inbox' ? 'Inbox'
-          : view === 'shared' ? 'Shared with me'
-            : view === 'assigned' ? 'Assigned to me'
+          : view === 'shared' ? 'Shared'
+            : view === 'assigned' ? 'Assigned'
             : view === 'done' ? 'Completed'
               : activeFilter ? activeFilter.name
                 : labelName ? `+${labelName}`
@@ -352,43 +362,63 @@ export default function TodosScreen() {
     } else if (view === 'inbox') {
       manualOrder = true;
       const inInbox = openPersonal.filter((t) => !t.list_id && match(t));
+      const archivedIds = new Set(archivedSections.map((s) => s.id));
+      const inboxOpen = inInbox.filter((t) => !archivedIds.has(t.section_id));
       if (inboxSections.length === 0) {
-        sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inInbox) });
+        sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inboxOpen) });
       } else {
-        sectionsOut.push({ key: 'nosec', title: null, items: manualSort(inInbox.filter((t) => !t.section_id)) });
-        inboxSections.forEach((sec) => {
-          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
+        sectionsOut.push({ key: 'nosec', title: 'No section', items: manualSort(inboxOpen.filter((t) => !t.section_id)) });
+        inboxSections.forEach((sec, i) => {
+          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, description: sec.description, section: sec, addAbove: () => setSectionEditor({ list_id: null, name: '', position: i }), items: manualSort(inboxOpen.filter((t) => t.section_id === sec.id)) });
+        });
+      }
+      if (showArchived) {
+        archivedSections.forEach((sec) => {
+          sectionsOut.push({ key: `sec:${sec.id}`, title: `${sec.name} (archived)`, description: sec.description, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
         });
       }
       done = personal.filter((t) => t.is_done && !t.list_id);
     } else if (view === 'shared') {
-      const shared = openPersonal.filter((t) => (t.members || []).length > 1 && match(t));
+      const shared = openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id && match(t));
       const fromOthers = shared.filter((t) => t.created_by !== meId);
       const mineShared = shared.filter((t) => t.created_by === meId);
-      if (fromOthers.length) sectionsOut.push({ key: 'from', title: 'Assigned to me by others', items: fromOthers });
+      if (fromOthers.length) sectionsOut.push({ key: 'from', title: 'Shared with me', items: fromOthers });
       if (mineShared.length) sectionsOut.push({ key: 'mine', title: 'I shared with others', items: mineShared });
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
-      done = personal.filter((t) => t.is_done && (t.members || []).length > 1);
+      done = personal.filter((t) => t.is_done && isSharedTodo(t));
     } else if (view === 'assigned') {
-      const fromOthers = openPersonal.filter((t) => t.created_by !== meId && match(t));
-      const byPerson = new Map();
-      fromOthers.forEach((t) => {
-        const key = t.created_by_name || 'Someone';
-        if (!byPerson.has(key)) byPerson.set(key, []);
-        byPerson.get(key).push(t);
-      });
-      byPerson.forEach((items, name) => sectionsOut.push({ key: `from:${name}`, title: `From ${name}`, items }));
+      const assignedAll = openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id && match(t));
+      const toMe = assignedAll.filter((t) => t.assignee_id === meId);
+      const byMe = assignedAll.filter((t) => t.assignee_id !== meId);
+      const group = (list, label, nameOf) => {
+        const byPerson = new Map();
+        list.forEach((t) => {
+          const key = nameOf(t) || 'Someone';
+          if (!byPerson.has(key)) byPerson.set(key, []);
+          byPerson.get(key).push(t);
+        });
+        byPerson.forEach((items, name) => sectionsOut.push({ key: `${label}:${name}`, title: `${label} ${name}`, items }));
+      };
+      group(toMe, 'From', (t) => t.created_by_name);
+      group(byMe, 'Assigned to', (t) => t.assignee_name);
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
-      done = personal.filter((t) => t.is_done && t.created_by !== meId);
+      done = personal.filter((t) => t.is_done && isAssignedTodo(t));
     } else if (currentList) {
       manualOrder = true;
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
+      const archivedIds = new Set(archivedSections.map((s) => s.id));
+      const listOpen = inList.filter((t) => !archivedIds.has(t.section_id));
       if (listSections.length === 0) {
-        sectionsOut.push({ key: 'list', title: null, items: manualSort(inList) });
+        sectionsOut.push({ key: 'list', title: null, items: manualSort(listOpen) });
       } else {
-        sectionsOut.push({ key: 'nosec', title: null, items: manualSort(inList.filter((t) => !t.section_id)) });
-        listSections.forEach((s) => {
-          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, section: s, items: manualSort(inList.filter((t) => t.section_id === s.id)) });
+        sectionsOut.push({ key: 'nosec', title: 'No section', items: manualSort(listOpen.filter((t) => !t.section_id)) });
+        listSections.forEach((s, i) => {
+          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, description: s.description, section: s, addAbove: () => setSectionEditor({ list_id: currentList.id, name: '', position: i }), items: manualSort(listOpen.filter((t) => t.section_id === s.id)) });
+        });
+      }
+      if (showArchived) {
+        archivedSections.forEach((s) => {
+          sectionsOut.push({ key: `sec:${s.id}`, title: `${s.name} (archived)`, description: s.description, section: s, items: manualSort(inList.filter((t) => t.section_id === s.id)) });
         });
       }
       done = personal.filter((t) => t.is_done && t.list_id === currentList.id);
@@ -400,7 +430,7 @@ export default function TodosScreen() {
     }
     const ids = sectionsOut.flatMap((s) => s.items.filter((t) => !t.parent_id || !s.items.some((p) => p.id === t.parent_id)).map((t) => t.id));
     return { sections: sectionsOut, doneItems: done, visibleIds: ids, manual: manualOrder && !q };
-  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, activeFilter, labelName, search, meId, business, bizId]);
+  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, business, bizId]);
 
   const todayItems = useMemo(() => mine.filter((t) => t.due_date === today), [mine, today]);
   const todayDone = todayItems.filter((t) => t.is_done).length;
@@ -413,9 +443,8 @@ export default function TodosScreen() {
   };
 
   const quickAddDefaults = business ? { business_id: business.id, due_date: undefined }
-    : view === 'today' ? { due_date: today }
-      : currentList ? { list_id: currentList.id }
-        : labelName ? { labels: [labelName] } : {};
+    : currentList ? { list_id: currentList.id }
+      : labelName ? { labels: [labelName] } : {}; // no date unless one is typed or picked: it does not land on Today by itself
 
   // ---- selection (bulk actions) --------------------------------------------
   const exitSelect = useCallback(() => {
@@ -538,8 +567,8 @@ export default function TodosScreen() {
         ? { icon: 'trophy', title: 'All done for today', message: `${todayDone} completed. Enjoy the rest of your day.` }
         : { icon: 'sunny', title: 'A clear day', message: 'Add what you want to get done today. Try “Call supplier 4pm p1”.' };
     }
-    if (view === 'assigned') return { icon: 'person-add', title: 'Nothing assigned to you', message: 'When someone above you assigns you a to-do, it shows up here.' };
-    if (view === 'shared') return { icon: 'people', title: 'Nothing shared yet', message: 'Type @name while adding a to-do and it lands in their list too.' };
+    if (view === 'assigned') return { icon: 'person-add', title: 'Nothing assigned', message: 'When you give a to-do to someone, or someone gives you one, it shows up here. Type @name when you add a to-do.' };
+    if (view === 'shared') return { icon: 'people', title: 'Nothing shared yet', message: 'Add @name to a to-do, then tap their name to share it instead of assigning it.' };
     if (view === 'upcoming') return { icon: 'calendar', title: 'Your schedule is clear', message: 'Plan ahead. Add a to-do with a date.' };
     if (activeFilter) return { icon: 'funnel', title: 'No matches', message: 'Nothing open fits this filter right now.' };
     if (labelName) return { icon: 'pricetag', title: 'No open to-dos', message: `Nothing is tagged +${labelName} at the moment.` };
@@ -565,8 +594,8 @@ export default function TodosScreen() {
     }
     if (!business) {
       // Today, Upcoming, filters and labels: the same work laid out by where it stands.
-      const pool = (view === 'assigned' ? openPersonal.filter((t) => t.created_by !== meId)
-        : view === 'shared' ? openPersonal.filter((t) => (t.members || []).length > 1)
+      const pool = (view === 'assigned' ? openPersonal.filter(isAssignedTodo)
+        : view === 'shared' ? openPersonal.filter(isSharedTodo)
         : activeFilter ? applyFilter(open, activeFilter.config, { userId: meId, today })
           : labelName ? open.filter((t) => (t.labels || []).includes(labelName))
             : view === 'today' ? mine.filter((t) => !t.is_done && t.due_date && t.due_date <= today)
@@ -577,8 +606,8 @@ export default function TodosScreen() {
       // The Done column always keeps what was finished lately (struck out), so a card dropped there stays visible.
       const doneRecent = view === 'today' ? doneAll.filter((t) => !t.due_date || t.due_date <= today || (t.done_at && toYmd(new Date(t.done_at)) === today))
         : labelName ? doneAll.filter((t) => (t.labels || []).includes(labelName))
-          : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1)
-            : view === 'assigned' ? doneAll.filter((t) => t.created_by !== meId)
+          : view === 'shared' ? doneAll.filter(isSharedTodo)
+            : view === 'assigned' ? doneAll.filter(isAssignedTodo)
               : doneAll;
       return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
         key: st,
@@ -620,8 +649,8 @@ export default function TodosScreen() {
     const notNested = (t) => !t.parent_id;
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
     if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
-    if (view === 'shared') return personal.filter((t) => (t.members || []).length > 1 && notNested(t));
-    if (view === 'assigned') return personal.filter((t) => t.created_by !== meId && notNested(t));
+    if (view === 'shared') return personal.filter((t) => isSharedTodo(t) && notNested(t));
+    if (view === 'assigned') return personal.filter((t) => isAssignedTodo(t) && notNested(t));
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
     if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
     return mine.filter(notNested);
@@ -671,7 +700,6 @@ export default function TodosScreen() {
     const i = flat.indexOf(focusId);
     const next = flat[Math.max(0, Math.min(flat.length - 1, i < 0 ? 0 : i + delta))];
     setFocusId(next);
-    if (openTodoId && wide) setOpenTodoId(next);
   };
   const focused = todos.find((t) => t.id === focusId);
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
@@ -772,7 +800,7 @@ export default function TodosScreen() {
           <AnimatedPressable onPress={() => setAddOpen({ list_id: currentList?.id, section_id: section.section.id })} hitSlop={8}>
             <Ionicons name="add" size={20} color={colors.gray[400]} />
           </AnimatedPressable>
-          <AnimatedPressable onPress={() => setSectionEditor({ ...section.section })} hitSlop={8}>
+          <AnimatedPressable onPress={() => setSectionMenu(section.section)} hitSlop={8} accessibilityLabel="Section options">
             <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[400]} />
           </AnimatedPressable>
         </View>
@@ -781,6 +809,25 @@ export default function TodosScreen() {
     return null;
   };
   const sectionsWithRight = sections.map((s) => ({ ...s, color: s.overdue ? colors.brand[600] : undefined, right: sectionRight(s) }));
+
+  // Links to the screens for the leaderboard, access control and the everything view (the last two only for people who may use them).
+  const sidebarLinks = [
+    { key: 'leaderboard', icon: 'trophy-outline', label: 'Leaderboard', onPress: () => navigation.navigate('Leaderboard') },
+    user?.permissions?.manage_access && { key: 'access', icon: 'key-outline', label: 'Who can do what', onPress: () => navigation.navigate('Access') },
+    (user?.permissions?.view_all_todos || user?.permissions?.chat_audit) && { key: 'everything', icon: 'eye-outline', label: 'Everything', onPress: () => navigation.navigate('Everything') },
+  ].filter(Boolean);
+
+  /** Three ready-made sections to start from. They are ordinary sections: rename, move or delete them. */
+  const addStarterSections = async (listId) => {
+    try {
+      for (const name of ['To do', 'In progress', 'Waiting']) {
+        // eslint-disable-next-line no-await-in-loop
+        await createSection(listId, name);
+      }
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not add the sections', tone: 'error' });
+    }
+  };
 
   const layoutSwitch = (canBoard || canCalendar || canTimeline) ? (
     <SlidingSegment
@@ -886,11 +933,10 @@ export default function TodosScreen() {
             <ViewTab label="Today" icon="today-outline" count={counts.today} active={view === 'today'} onPress={() => setView('today')} />
             <ViewTab label="Upcoming" icon="calendar-outline" active={view === 'upcoming'} onPress={() => setView('upcoming')} />
             <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
-            {counts.assigned > 0 || view === 'assigned' ? (
-              <ViewTab label="Assigned" icon="person-add-outline" count={counts.assigned} active={view === 'assigned'} onPress={() => setView('assigned')} />
-            ) : null}
-            {(view === 'shared' || inFilterView) && (
-              <ViewTab label={inFilterView ? viewTitle : 'Shared'} icon={inFilterView ? 'funnel-outline' : 'people-outline'} active onPress={() => {}} />
+            <ViewTab label="Assigned" icon="person-add-outline" count={counts.assigned} active={view === 'assigned'} onPress={() => setView('assigned')} />
+            <ViewTab label="Shared" icon="people-outline" count={counts.shared} active={view === 'shared'} onPress={() => setView('shared')} />
+            {inFilterView && (
+              <ViewTab label={viewTitle} icon="funnel-outline" active onPress={() => {}} />
             )}
             <ViewTab label="Completed" icon="checkmark-done-outline" active={view === 'done'} onPress={() => setView('done')} />
             {lists.map((l) => (
@@ -989,7 +1035,8 @@ export default function TodosScreen() {
           : sectioned ? { list_id: currentList?.id, section_id: col.section ? col.section.id : undefined }
             : true)}
         onAddColumn={sectioned ? () => setSectionEditor({ list_id: currentList?.id || null, name: '' }) : undefined}
-        onEditColumn={sectioned ? (s) => setSectionEditor({ ...s }) : undefined}
+        onStarter={sectioned && placeSections.length === 0 ? () => addStarterSections(currentList?.id || null) : undefined}
+        onEditColumn={sectioned ? (s) => setSectionMenu(s) : undefined}
       />
     </ScrollView>
   ) : (
@@ -1054,6 +1101,18 @@ export default function TodosScreen() {
             <AnimatedPressable style={styles.addSection} onPress={() => setSectionEditor({ list_id: currentList?.id || null, name: '' })}>
               <Ionicons name="add" size={18} color={colors.brand[600]} />
               <Text style={styles.addSectionText}>Add section</Text>
+            </AnimatedPressable>
+          )}
+          {sectioned && !search && placeSections.length === 0 && (
+            <AnimatedPressable style={styles.addSection} onPress={() => addStarterSections(currentList?.id || null)}>
+              <Ionicons name="sparkles-outline" size={18} color={colors.brand[600]} />
+              <Text style={styles.addSectionText}>Start with 3 sections: To do, In progress, Waiting</Text>
+            </AnimatedPressable>
+          )}
+          {sectioned && !search && archivedSections.length > 0 && (
+            <AnimatedPressable style={styles.doneToggle} onPress={() => setShowArchived((v) => !v)}>
+              <Ionicons name={showArchived ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.gray[500]} />
+              <Text style={styles.doneToggleText}>Archived sections · {archivedSections.length}</Text>
             </AnimatedPressable>
           )}
 
@@ -1121,7 +1180,7 @@ export default function TodosScreen() {
 
   const detailOpen = !!openTodoId && todos.some((t) => t.id === openTodoId);
   // A wide detail pane needs the room: the lists panel steps aside (without forgetting the person's choice).
-  const sidebarSqueezed = wide && detailOpen && windowWidth < 1760;
+  const sidebarSqueezed = false; // the task opens in a window over the screen, so the panel keeps its room
   const { setHidden: setSidebarSqueezed } = sidebar;
   useEffect(() => { setSidebarSqueezed(sidebarSqueezed); }, [sidebarSqueezed, setSidebarSqueezed]);
 
@@ -1146,15 +1205,13 @@ export default function TodosScreen() {
           onMonitor={() => navigation.navigate('TeamMonitor')}
           onFilters={() => setFiltersOpen(true)}
           simple={simpleView}
+          favorites={favorites}
+          onItemMenu={(kind, item) => setItemMenu({ kind, item })}
+          extraLinks={sidebarLinks}
         />
         </Panel>
       )}
       {main}
-      {wide && detailOpen && (
-        <View {...glass('bar')} style={styles.detailPane}>
-          <TodoDetailBody todoId={openTodoId} onClose={() => setOpenTodoId(null)} variant="panel" />
-        </View>
-      )}
 
       <QuickAddSheet
         visible={!!addOpen}
@@ -1165,7 +1222,7 @@ export default function TodosScreen() {
         onClosed={() => { setCapsuleHidden(false); setAddOrigin(null); setAddText(''); }}
         defaults={typeof addOpen === 'object' ? { ...quickAddDefaults, ...addOpen } : quickAddDefaults}
       />
-      {!wide && <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />}
+      <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />
       <ShareToChatSheet
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -1200,32 +1257,35 @@ export default function TodosScreen() {
           if (view === `filter:${data.id}`) setView('today');
         }}
       />
+      <ItemMenu
+        menu={itemMenu}
+        onClose={() => setItemMenu(null)}
+        view={view}
+        setView={(v) => { setView(v); setScope('mine'); }}
+        onEditList={(l) => setListEditor({ ...l })}
+        onEditFilter={(f) => setFilterEditor(f)}
+      />
       <ProductivitySheet visible={productivityOpen} onClose={() => setProductivityOpen(false)} />
-      <NameSheet
+      <SectionEditorSheet
         value={sectionEditor}
-        title={sectionEditor?.id ? 'Rename section' : 'New section'}
-        placeholder="Section name, e.g. This week"
         onClose={() => setSectionEditor(null)}
         onSave={async (data) => {
           try {
-            if (data.id) await renameSection(data.id, data.name);
-            else await createSection(data.list_id, data.name);
+            if (data.id) await updateSection(data.id, { name: data.name, description: data.description });
+            else await createSection(data.list_id, data.name, { description: data.description, position: data.position });
             setSectionEditor(null);
           } catch (err) {
             showToast({ message: err.response?.data?.error || 'Could not save the section', tone: 'error' });
           }
         }}
-        onDelete={async (data) => {
-          const ok = await confirmDialog({
-            title: `Delete “${data.name}”?`,
-            message: 'Its to-dos stay in the list, without a section.',
-            confirmLabel: 'Delete',
-            destructive: true,
-          });
-          if (!ok) return;
-          await deleteSection(data.id);
-          setSectionEditor(null);
-        }}
+      />
+      <SectionMenu
+        section={sectionMenu}
+        siblings={placeSections}
+        items={sectionMenu ? personal.filter((t) => t.section_id === sectionMenu.id && !t.parent_id && !t.is_done && !t.business_id) : []}
+        onEdit={(sec) => { setSectionMenu(null); setSectionEditor({ ...sec }); }}
+        onAddTodo={(sec) => { setSectionMenu(null); setAddOpen({ list_id: currentList?.id, section_id: sec.id }); }}
+        onClose={() => setSectionMenu(null)}
       />
       <DueDatePicker
         visible={bulkSheet === 'date'}

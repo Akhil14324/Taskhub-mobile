@@ -31,6 +31,7 @@ export function TodoProvider({ children }) {
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);
   const [filters, setFilters] = useState([]);
+  const [favorites, setFavorites] = useState([]); // [{ kind: 'list' | 'filter' | 'label', ref }]
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState(null);
@@ -45,6 +46,7 @@ export function TodoProvider({ children }) {
       setLists(res.data.lists || []);
       setSections(res.data.sections || []);
       setFilters(res.data.filters || []);
+      setFavorites(res.data.favorites || []);
       setBusinesses(res.data.businesses || []);
     } catch (err) {
       console.warn('[todos] fetch failed:', err.message);
@@ -68,6 +70,7 @@ export function TodoProvider({ children }) {
       setLists([]);
       setSections([]);
       setFilters([]);
+      setFavorites([]);
       setBusinesses([]);
       setInsights(null);
       setLoading(true);
@@ -298,11 +301,38 @@ export function TodoProvider({ children }) {
   }, []);
 
   // ---- sections ------------------------------------------------------------
-  const createSection = useCallback(async (listId, name) => {
-    const res = await api.post(listId ? `/todos/lists/${listId}/sections` : '/todos/sections', { name });
-    setSections((prev) => [...prev, res.data.section]);
+  const createSection = useCallback(async (listId, name, extra = {}) => {
+    const res = await api.post(listId ? `/todos/lists/${listId}/sections` : '/todos/sections', {
+      name, description: extra.description, position: extra.position,
+    });
+    // The server may renumber the others to make room, so take its word for the order.
+    if (extra.position !== undefined && extra.position !== null) await fetchTodos();
+    else setSections((prev) => [...prev, res.data.section]);
+    return res.data.section;
+  }, [fetchTodos]);
+
+  /** Change any of { name, description, archived } on a section. */
+  const updateSection = useCallback(async (id, patch) => {
+    const res = await api.put(`/todos/sections/${id}`, patch);
+    setSections((prev) => prev.map((s) => (s.id === id ? res.data.section : s)));
     return res.data.section;
   }, []);
+
+  const duplicateSection = useCallback(async (id) => {
+    const res = await api.post(`/todos/sections/${id}/duplicate`);
+    await fetchTodos();
+    showToast({ message: `Duplicated with ${res.data.copied} to-do${res.data.copied === 1 ? '' : 's'}`, tone: 'success', icon: 'copy' });
+    return res.data.section;
+  }, [fetchTodos]);
+
+  /** Put a board's sections in a new left-to-right order (ids of all of them). */
+  const reorderSections = useCallback(async (ids) => {
+    setSections((prev) => {
+      const rank = new Map(ids.map((id, i) => [id, i + 1]));
+      return prev.map((s) => (rank.has(s.id) ? { ...s, sort_order: rank.get(s.id) } : s)).sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+    });
+    await api.put('/todos/sections/order', { ids }).catch(() => fetchTodos());
+  }, [fetchTodos]);
 
   const renameSection = useCallback(async (id, name) => {
     const res = await api.put(`/todos/sections/${id}`, { name });
@@ -325,6 +355,35 @@ export function TodoProvider({ children }) {
     setFilters((prev) => (id ? prev.map((f) => (f.id === id ? saved : f)) : [...prev, saved]));
     return saved;
   }, []);
+
+  const duplicateFilter = useCallback(async (id) => {
+    const res = await api.post(`/todos/filters/${id}/duplicate`);
+    setFilters((prev) => [...prev, res.data.filter]);
+    return res.data.filter;
+  }, []);
+
+  const isFavorite = useCallback((kind, ref) => favorites.some((f) => f.kind === kind && String(f.ref) === String(ref)), [favorites]);
+
+  const toggleFavorite = useCallback(async (kind, ref) => {
+    const on = !favorites.some((f) => f.kind === kind && String(f.ref) === String(ref));
+    setFavorites((prev) => (on ? [...prev, { kind, ref: String(ref) }] : prev.filter((f) => !(f.kind === kind && String(f.ref) === String(ref)))));
+    try {
+      await api.put('/todos/favorites', { kind, ref: String(ref), favorite: on });
+    } catch {
+      fetchTodos();
+    }
+    return on;
+  }, [favorites, fetchTodos]);
+
+  const renameLabel = useCallback(async (from, to) => {
+    await api.put(`/todos/labels/${encodeURIComponent(from)}`, { name: to });
+    await fetchTodos();
+  }, [fetchTodos]);
+
+  const removeLabel = useCallback(async (name) => {
+    await api.delete(`/todos/labels/${encodeURIComponent(name)}`);
+    await fetchTodos();
+  }, [fetchTodos]);
 
   const deleteFilter = useCallback(async (id) => {
     await api.delete(`/todos/filters/${id}`);
@@ -468,6 +527,15 @@ export function TodoProvider({ children }) {
     lists,
     sections,
     filters,
+    favorites,
+    isFavorite,
+    toggleFavorite,
+    renameLabel,
+    removeLabel,
+    duplicateFilter,
+    updateSection,
+    duplicateSection,
+    reorderSections,
     businesses,
     labels,
     loading,
@@ -512,7 +580,7 @@ export function TodoProvider({ children }) {
     fetchAssignees,
     shareTodos,
     importTodos,
-  }), [todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
+  }), [favorites, isFavorite, toggleFavorite, renameLabel, removeLabel, duplicateFilter, updateSection, duplicateSection, reorderSections, todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
     toggleTodo, deleteTodo, deleteTodos, duplicateTodo, moveToBusiness, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
     createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,

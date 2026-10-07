@@ -22,6 +22,8 @@ export function formatDuration(minutes) {
 // Reminders (minutes before the due time; the at-time reminder always fires)
 // ---------------------------------------------------------------------------
 export const REMINDER_CHOICES = [
+  { minutes: 10, label: '10 min before' },
+  { minutes: 30, label: '30 min before' },
   { minutes: 60, label: '1 hour before' },
   { minutes: 1440, label: '1 day before' },
 ];
@@ -108,6 +110,18 @@ export function subtaskProgress(todo, allTodos) {
   return { done: todo.subtask_done_count || 0, total: todo.subtask_count || 0 };
 }
 
+/**
+ * Assigned and shared are different things. ASSIGNED: someone is accountable for it and it is not the person
+ * who made it. SHARED: several people are on it and nobody was singled out.
+ */
+export function isAssignedTodo(todo) {
+  return !todo?.business_id && !!todo?.assignee_id && todo.assignee_id !== todo.created_by;
+}
+
+export function isSharedTodo(todo) {
+  return !todo?.business_id && (todo?.members || []).length > 1 && !isAssignedTodo(todo);
+}
+
 /** The business a to-do belongs to, or null for a personal one. */
 export function isBusinessTodo(todo) {
   return !!todo?.business_id;
@@ -136,7 +150,7 @@ export const FILTER_DUE_OPTIONS = [
 export const FILTER_ASSIGNED_OPTIONS = [
   { key: 'any', label: 'Anyone' },
   { key: 'mine', label: 'Created by me' },
-  { key: 'others', label: 'Assigned by others' },
+  { key: 'others', label: 'Assigned to me' },
   { key: 'shared', label: 'Shared' },
 ];
 
@@ -164,8 +178,8 @@ export function applyFilter(todos, config, { userId, today }) {
     if (c.list_id === 'inbox' && t.list_id) return false;
     if (typeof c.list_id === 'number' && t.list_id !== c.list_id) return false;
     if (c.assigned === 'mine' && t.created_by !== userId) return false;
-    if (c.assigned === 'others' && t.created_by === userId) return false;
-    if (c.assigned === 'shared' && (t.members || []).length < 2) return false;
+    if (c.assigned === 'others' && !(isAssignedTodo(t) && t.assignee_id === userId)) return false;
+    if (c.assigned === 'shared' && !isSharedTodo(t)) return false;
     return true;
   });
 }

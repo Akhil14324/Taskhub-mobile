@@ -1,4 +1,4 @@
-// Voice input for quick add, using the browser's speech recognition (Chrome, Edge, Safari 14.5+).
+// Voice input, using the browser's speech recognition (Chrome, Edge, Safari 14.5+).
 // Nothing is sent to TaskHub's servers: the browser/OS service turns speech into text.
 import { Platform } from 'react-native';
 
@@ -31,25 +31,37 @@ export function normalizeSpoken(text) {
   return out;
 }
 
+const join = (a, b) => (a && b ? `${a.replace(/\s+$/, '')} ${b.replace(/^\s+/, '')}` : a || b);
+
 /**
- * Start listening. Calls onText(transcriptSoFar) while the person speaks and onEnd() when it stops.
- * Returns a stop() function, or null when speech is not available.
+ * Start listening. `onText(transcriptSoFar)` is called with everything heard in this session while the
+ * person speaks (finished words plus the words still being worked out), and `onEnd()` when listening
+ * stops. Pauses do not end it: on desktop and iPhone the recogniser keeps running until stop() is
+ * called, and if the browser closes it early (Chrome does after a few quiet seconds) it is started
+ * again and the earlier words are kept. Returns stop(), or null when speech is not available.
+ *
+ * `onLevel(0..1)` drives a wave meter: the real microphone level on a laptop; on a phone (where a second
+ * microphone stream can knock the recogniser off) it follows the speech itself.
  */
 export function startListening({ lang = 'en-IN', onText, onEnd, onError, onLevel }) {
   const Recognition = getRecognition();
   if (!Recognition) return null;
-  const rec = new Recognition();
-  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ua = navigator.userAgent;
+  const ios = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/i.test(ua);
+  const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+
+  let stopped = false;
   let heard = false;
   let failed = false;
-  // Loudness for the wave meter, 0..1. A laptop reads the real microphone. On a phone a second microphone
-  // stream can knock the recogniser off (Android) or never start (iOS), so there the meter is driven by the
-  // speech itself: it jumps each time new words arrive and falls back between them.
+  let finalText = '';   // words the recogniser has finished with, kept across restarts
+  let restarts = 0;
+  let rec = null;
   let bump = 0;
   let analyser = null;
   let audio = null;
   let mic = null;
-  const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+
   if (onLevel && !ios && !coarse && navigator.mediaDevices?.getUserMedia) {
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
       if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
@@ -61,54 +73,82 @@ export function startListening({ lang = 'en-IN', onText, onEnd, onError, onLevel
       audio.createMediaStreamSource(stream).connect(analyser);
     }).catch(() => {});
   }
-  let stopped = false;
   const buf = new Uint8Array(128);
+  let smooth = 0;
   const meter = onLevel ? setInterval(() => {
-    let level;
+    let target;
     if (analyser) {
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
       for (let i = 0; i < buf.length; i += 1) { const v = (buf[i] - 128) / 128; sum += v * v; }
-      level = Math.min(1, Math.sqrt(sum / buf.length) * 5);
+      target = Math.min(1, Math.sqrt(sum / buf.length) * 6);
     } else {
-      bump *= 0.82;
-      level = Math.min(1, 0.1 + Math.random() * 0.12 + bump);
+      bump *= 0.9;
+      target = Math.min(1, 0.08 + Math.random() * 0.1 + bump);
     }
-    onLevel(level);
-  }, 66) : null;
+    // Rise quickly, fall slowly: the bars breathe instead of flickering.
+    smooth += (target - smooth) * (target > smooth ? 0.6 : 0.22);
+    onLevel(smooth);
+  }, 50) : null;
+
   const release = () => {
-    stopped = true;
     if (meter) clearInterval(meter);
     mic?.getTracks().forEach((t) => t.stop());
     audio?.close?.().catch?.(() => {});
     onLevel?.(0);
   };
-  rec.lang = lang;
-  rec.interimResults = true;
-  // iOS Safari only delivers live (interim) words when continuous; the person taps the mic again to finish.
-  rec.continuous = ios;
-  rec.maxAlternatives = 1;
-  rec.onresult = (event) => {
-    let text = '';
-    for (let i = 0; i < event.results.length; i += 1) text += event.results[i][0].transcript;
-    if (text.trim()) heard = true;
-    bump = 0.55 + Math.random() * 0.35;
-    onText?.(normalizeSpoken(text));
-  };
-  rec.onerror = (event) => { failed = true; onError?.(event.error || 'error'); };
-  rec.onend = () => {
-    release();
-    if (!heard && !failed) onError?.('no-speech');
-    onEnd?.();
-  };
-  try {
+
+  const begin = () => {
+    rec = new Recognition();
+    rec.lang = lang;
+    rec.interimResults = true;
+    // Android Chrome repeats earlier words in continuous mode, so there each phrase is its own session.
+    rec.continuous = !android;
+    rec.maxAlternatives = 1;
+    rec.onresult = (event) => {
+      let fin = '';
+      let interim = '';
+      for (let i = 0; i < event.results.length; i += 1) {
+        const r = event.results[i];
+        if (r.isFinal) fin += r[0].transcript; else interim += r[0].transcript;
+      }
+      const sessionText = join(fin.trim(), interim.trim());
+      if (sessionText) heard = true;
+      bump = 0.5 + Math.random() * 0.4;
+      onText?.(normalizeSpoken(join(finalText, sessionText)));
+      // Remember finished words so a restart does not lose them.
+      rec.__final = fin.trim();
+    };
+    rec.onerror = (event) => {
+      if (event.error === 'no-speech' && !stopped) return; // quiet moment: onend restarts
+      if (event.error === 'aborted') return;
+      failed = true;
+      onError?.(event.error || 'error');
+    };
+    rec.onend = () => {
+      finalText = join(finalText, rec.__final || '');
+      if (!stopped && !failed && restarts < 40) {
+        restarts += 1;
+        try { begin(); return; } catch { /* fall through and finish */ }
+      }
+      stopped = true;
+      release();
+      if (!heard && !failed) onError?.('no-speech');
+      onEnd?.();
+    };
     rec.start();
+  };
+
+  try {
+    begin();
   } catch (err) {
+    stopped = true;
     release();
     onError?.(err.message);
     return null;
   }
   return () => {
+    stopped = true;
     try { rec.stop(); } catch { /* already stopped */ }
   };
 }

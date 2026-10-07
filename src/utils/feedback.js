@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  *
  * Defaults: haptics on, sounds off (an office is a quiet place), celebrations on.
  */
-let settings = { sounds: false, haptics: true, celebrations: true, reduceMotion: false };
+let settings = { sounds: false, haptics: true, celebrations: true, reduceMotion: false, reminderSound: true };
 
 export function configureFeedback(prefs = {}) {
   settings = {
@@ -15,6 +15,7 @@ export function configureFeedback(prefs = {}) {
     haptics: prefs.haptics !== false,
     celebrations: prefs.celebrations !== false,
     reduceMotion: !!prefs.reduceMotion,
+    reminderSound: prefs.reminderSound !== false,
   };
 }
 export const celebrationsOn = () => settings.celebrations;
@@ -51,6 +52,11 @@ const PHRASES = {
   done: [[659, 0, 0.11, 0.05], [880, 0.07, 0.16, 0.05]],
   day: [[523, 0, 0.16, 0.055], [659, 0.1, 0.16, 0.055], [784, 0.2, 0.18, 0.055], [1047, 0.32, 0.4, 0.06]],
   badge: [[880, 0, 0.12, 0.05], [1175, 0.09, 0.12, 0.05], [1568, 0.18, 0.34, 0.05]],
+  // A reminder is meant to be noticed: a bell-like three-note call, played twice. Nothing else sounds like it.
+  reminder: [
+    [988, 0, 0.22, 0.11], [1319, 0.18, 0.22, 0.11], [1760, 0.36, 0.55, 0.12],
+    [988, 1.1, 0.22, 0.11], [1319, 1.28, 0.22, 0.11], [1760, 1.46, 0.7, 0.12],
+  ],
 };
 
 export function playSound(name) {
@@ -59,6 +65,17 @@ export function playSound(name) {
     const c = audio();
     if (!c) return;
     (PHRASES[name] || []).forEach(([f, s, l, v]) => note(c, f, s, l, v));
+  } catch (e) { /* no audio available */ }
+}
+
+/** The reminder chime: on unless the person turned it off, and independent of the other sounds. */
+export function playReminder() {
+  if (!settings.reminderSound) return;
+  try {
+    const c = audio();
+    if (!c) return;
+    PHRASES.reminder.forEach(([f, s, l, v]) => note(c, f, s, l, v));
+    if (settings.haptics && typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
   } catch (e) { /* no audio available */ }
 }
 

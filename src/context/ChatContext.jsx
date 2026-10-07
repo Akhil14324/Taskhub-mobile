@@ -15,7 +15,7 @@ function previewFromMeta(meta) {
   if (meta?.kind === 'task') return `Task: ${meta.task?.title || ''}`;
   if (meta?.kind !== 'todos') return null;
   const count = meta.items?.length || 0;
-  return count === 1 ? `To-do: ${meta.items[0].title}` : `Shared ${count} to-dos`;
+  return count === 1 ? `To-do: ${meta.items[0].title}` : `Shared ${count} to-dos${meta.title ? ` · ${meta.title}` : ''}`;
 }
 
 export function ChatProvider({ children }) {
@@ -139,7 +139,7 @@ export function ChatProvider({ children }) {
                   ...c,
                   last_message: {
                     id: normalized.id,
-                    body: normalized.body || previewFromMeta(normalized.meta),
+                    body: previewFromMeta(normalized.meta) || normalized.body,
                     attachment_url: normalized.attachmentUrl,
                     attachment_type: normalized.attachmentType,
                     sender_id: normalized.senderId,

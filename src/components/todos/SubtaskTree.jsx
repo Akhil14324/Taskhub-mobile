@@ -149,7 +149,7 @@ export default function SubtaskTree({ parent, onOpen }) {
 
   return (
     <View>
-      <Text style={styles.label}>Sub-tasks{progress.total ? ` · ${progress.done}/${progress.total}` : ''}</Text>
+      <Text style={styles.label}>Sub-tasks{progress.total ? ` · ${progress.done}/${progress.total} · ${percent}%` : ''}</Text>
       {progress.total > 0 && (
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${percent}%` }]} />

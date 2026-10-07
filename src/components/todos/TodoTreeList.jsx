@@ -7,6 +7,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, fontSize } from '../../theme/theme';
 import { SectionHeader } from '../kit';
 import TodoItem from './TodoItem';
+import { AddSectionLine } from './SectionTools';
 import { buildTree, subtaskProgress } from '../../utils/todoMeta';
 
 // Rows spring in when they are added, spring away when they leave, and their neighbours glide into the gap.
@@ -78,6 +79,7 @@ function TodoTreeList({
     <View>
       {sections.map((section) => (
         <View key={section.key}>
+          {!!section.addAbove && <AddSectionLine onPress={section.addAbove} />}
           {!!section.title && (
             <SectionHeader
               title={section.title}
@@ -86,6 +88,7 @@ function TodoTreeList({
               right={section.right}
             />
           )}
+          {!!section.description && <Text style={styles.sectionNote}>{section.description}</Text>}
           {buildTree(section.items, todos).map((node) => renderNode(node, 0, section))}
           {section.items.length === 0 && !!section.empty && <Text style={styles.empty}>{section.empty}</Text>}
         </View>
@@ -95,6 +98,7 @@ function TodoTreeList({
 }
 
 const createStyles = (colors) => StyleSheet.create({
+  sectionNote: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: -4, marginBottom: spacing.sm, paddingLeft: spacing.xs },
   empty: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: spacing.sm, paddingLeft: spacing.xs },
 });
 

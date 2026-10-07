@@ -234,7 +234,7 @@ function TodoItem({
               {hasSubtasks && (
                 <View style={styles.metaItem}>
                   <Ionicons name="git-branch-outline" size={12} color={progress.done === progress.total ? colors.brand[600] : colors.gray[500]} />
-                  <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
+                  <Text style={styles.metaText}>{progress.done}/{progress.total} · {Math.round((progress.done / progress.total) * 100)}%</Text>
                 </View>
               )}
               {!simple && todo.comment_count > 0 && (
