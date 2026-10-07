@@ -1,3 +1,4 @@
+<!-- Claude test -->
 # Taskhub-mobile
 
 Expo React Native app for TaskHub — multi-business task monitoring with real-time chat.
