@@ -304,6 +304,16 @@ export function TodoProvider({ children }) {
     return res.data.section;
   }, []);
 
+  /** `ids` = the sections of one board in their new left-to-right order. */
+  const reorderSections = useCallback(async (ids) => {
+    setSections((prev) => {
+      const byId = new Map(prev.map((s) => [s.id, s]));
+      const moved = ids.map((id, i) => ({ ...byId.get(id), sort_order: i + 1 })).filter((s) => s.id);
+      return [...prev.filter((s) => !ids.includes(s.id)), ...moved];
+    });
+    await api.put('/todos/sections/order', { ids });
+  }, []);
+
   const renameSection = useCallback(async (id, name) => {
     const res = await api.put(`/todos/sections/${id}`, { name });
     setSections((prev) => prev.map((s) => (s.id === id ? res.data.section : s)));
@@ -490,6 +500,7 @@ export function TodoProvider({ children }) {
     deleteList,
     createSection,
     renameSection,
+    reorderSections,
     deleteSection,
     saveFilter,
     deleteFilter,
@@ -514,7 +525,7 @@ export function TodoProvider({ children }) {
     importTodos,
   }), [todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
     toggleTodo, deleteTodo, deleteTodos, duplicateTodo, moveToBusiness, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
-    createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
+    createSection, renameSection, reorderSections, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,
     shareTodos, importTodos]);
 

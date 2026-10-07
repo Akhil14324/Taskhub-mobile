@@ -113,6 +113,19 @@ export function isBusinessTodo(todo) {
   return !!todo?.business_id;
 }
 
+/**
+ * A personal to-do I created and gave to someone else: it lives in their lists, not mine. (One that
+ * somebody shared with me, or gave me, is still mine to see.)
+ */
+export function isGivenAway(todo, meId) {
+  return !todo.business_id && !!todo.assignee_id && todo.assignee_id !== meId && todo.created_by === meId;
+}
+
+/** Inbox = a personal to-do with no list and no date; a dated one is in Today / Upcoming instead. */
+export function isInboxTodo(todo) {
+  return !todo.business_id && !todo.list_id && !todo.due_date && !todo.parent_id;
+}
+
 /** Manually ordered to-dos first (by sort_order), the rest keep their existing order. */
 export function manualSort(items) {
   const ordered = items.filter((t) => t.sort_order != null).sort((a, b) => a.sort_order - b.sort_order);

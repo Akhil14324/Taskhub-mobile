@@ -35,7 +35,7 @@ export function Reveal({ dir = 0, distance = 30, rise = 14, style, children }) {
 }
 
 // Which way the last tab change went, so tabs slide the way the bar suggests.
-const TAB_ORDER = ['Dashboard', 'Todos', 'ChatList'];
+const TAB_ORDER = ['Todos', 'ChatList', 'Browse', 'Dashboard'];
 let lastTab = -1;
 
 /**

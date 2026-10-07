@@ -1,33 +1,49 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
-import { TodoCheckbox, DueChip, Avatar, PRIORITY } from '../kit';
+import { TodoCheckbox, DueChip, Avatar } from '../kit';
 import { formatDuration, deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 import { makeDraggable } from '../../hooks/useWebReorder';
 import { glass } from '../../theme/glass';
 
-const COLUMN_WIDTH = 288;
+const COLUMN_WIDTH = 300;
+const GAP = 14;
+const PEEK = 26; // how much of the next column a phone shows, so it is clear you can swipe
 const MARK_TOP = 'inset 0 3px 0 #dc2626';
 
 /**
- * Kanban board. A column is { key, title, icon?, items, accepts?, canAdd?, section? }; cards are
- * to-dos. Drag a card to another column (desktop) or use its move button (touch): onMove(todo, column)
- * decides what that means (change status, assignee, priority or section). Dragging inside a column
- * reorders it; onReorder(ids) gets that column's new order of ids, which is saved for the viewer.
+ * Kanban board laid out like Todoist's: each column fills the height and scrolls on its own, with
+ * "Add task" under its cards. On a phone (`paged`) a column is nearly the screen wide, the board snaps
+ * one column per swipe and dots underneath show where you are (the + adds a column).
+ * A column is { key, title, icon?, items, canAdd?, section?, bucket? }; cards are to-dos. Drag a card to
+ * another column (desktop) or use its move button (touch): onDrop(id, columnKey, ids) decides what that
+ * means. Dragging inside a column reorders it; onReorder(ids) gets that column's new order of ids.
+ * A card with sub-tasks opens them inside the card from its "1/3" chip (subtasksOf(todo) = its children).
  */
 export default function BoardView({
-  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn, selectedId,
-  currentUserId, emptyText = 'Nothing here',
+  columns, progressOf, subtasksOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn,
+  addColumnLabel = 'Add section', selectedId, currentUserId, paged = false, emptyText = 'No tasks yet',
 }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: windowWidth } = useWindowDimensions();
   const rootRef = useRef(null);
+  const scrollRef = useRef(null);
   const handlers = useRef({ onDrop, onReorder });
   handlers.current = { onDrop, onReorder };
+  const [height, setHeight] = useState(0);
+  const [page, setPage] = useState(0);
+  const [expanded, setExpanded] = useState(() => new Set());
+  const colWidth = paged ? Math.max(240, windowWidth - spacing.lg * 2 - PEEK) : COLUMN_WIDTH;
+  const toggleExpanded = (id) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Drag and drop (desktop browsers).
   useEffect(() => {
@@ -116,129 +132,182 @@ export default function BoardView({
     };
   }, []);
 
+  const goToPage = (i) => scrollRef.current?.scrollTo?.({ x: i * (colWidth + GAP), animated: true });
+  const dotsH = paged ? 34 : 0;
+  const colHeight = Math.max(260, height - dotsH - spacing.sm);
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.board} keyboardShouldPersistTaps="handled">
-      <View ref={rootRef} style={styles.boardInner}>
-        {columns.map((col) => (
-          <View key={col.key} style={styles.column} dataSet={{ boardCol: String(col.key) }}>
-            <View style={styles.columnHead}>
-              {!!col.icon && <Ionicons name={col.icon} size={15} color={colors.gray[500]} />}
-              <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
-              <Text style={styles.columnCount}>{col.items.length}</Text>
-              <View style={{ flex: 1 }} />
-              {!!col.section && onEditColumn && (
-                <AnimatedPressable onPress={() => onEditColumn(col.section)} hitSlop={8}>
-                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[400]} />
-                </AnimatedPressable>
-              )}
-              {col.canAdd !== false && onAdd && (
-                <AnimatedPressable onPress={() => onAdd(col)} hitSlop={8}>
-                  <Ionicons name="add" size={22} color={colors.gray[500]} />
+    <View style={{ flex: 1 }} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={!paged}
+        style={[{ flexGrow: 0 }, paged && styles.snap]}
+        contentContainerStyle={[styles.board, paged && { paddingHorizontal: spacing.lg }]}
+        keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={32}
+        onScroll={paged ? (e) => {
+          const i = Math.round(e.nativeEvent.contentOffset.x / (colWidth + GAP));
+          if (i !== page) setPage(i);
+        } : undefined}
+      >
+        <View ref={rootRef} style={styles.boardInner}>
+          {columns.map((col) => (
+            <View key={col.key} style={[styles.column, { width: colWidth, height: colHeight }, paged && styles.snapItem]} dataSet={{ boardCol: String(col.key) }}>
+              <View style={styles.columnHead}>
+                {!!col.icon && <Ionicons name={col.icon} size={15} color={colors.gray[500]} />}
+                <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
+                <Text style={styles.columnCount}>{col.items.length}</Text>
+                <View style={{ flex: 1 }} />
+                {!!(col.section || col.bucket) && onEditColumn && (
+                  <AnimatedPressable onPress={() => onEditColumn(col.section || col.bucket)} hitSlop={8} accessibilityLabel="Column options">
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[400]} />
+                  </AnimatedPressable>
+                )}
+              </View>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.cards} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {col.items.map((t) => (
+                  <Card
+                    key={t.id}
+                    todo={t}
+                    colKey={col.key}
+                    progress={progressOf?.(t)}
+                    subtasks={expanded.has(t.id) ? subtasksOf?.(t) || [] : null}
+                    onToggleSubtasks={() => toggleExpanded(t.id)}
+                    selected={selectedId === t.id}
+                    currentUserId={currentUserId}
+                    onOpen={onOpen}
+                    onToggle={onToggle}
+                    onMove={onMove}
+                    styles={styles}
+                  />
+                ))}
+                {col.items.length === 0 && <Text style={styles.empty}>{emptyText}</Text>}
+                {!paged && col.canAdd !== false && onAdd && (
+                  <AnimatedPressable style={styles.addTask} onPress={() => onAdd(col)} accessibilityLabel={`Add task to ${col.title}`}>
+                    <Ionicons name="add" size={19} color={colors.brand[600]} />
+                    <Text style={styles.addTaskText}>Add task</Text>
+                  </AnimatedPressable>
+                )}
+              </ScrollView>
+              {paged && col.canAdd !== false && onAdd && (
+                <AnimatedPressable {...glass('button')} style={styles.addTaskPill} onPress={() => onAdd(col)} accessibilityLabel={`Add task to ${col.title}`}>
+                  <Ionicons name="add" size={20} color={colors.gray[700]} />
+                  <Text style={styles.addTaskPillText}>Add task</Text>
                 </AnimatedPressable>
               )}
             </View>
-            <View style={styles.cards}>
-              {col.items.map((t) => (
-                <Card
-                  key={t.id}
-                  todo={t}
-                  colKey={col.key}
-                  progress={progressOf?.(t)}
-                  selected={selectedId === t.id}
-                  currentUserId={currentUserId}
-                  onOpen={onOpen}
-                  onToggle={onToggle}
-                  onMove={onMove}
-                  styles={styles}
-                />
-              ))}
-              {col.items.length === 0 && <Text style={styles.empty}>{emptyText}</Text>}
-            </View>
-          </View>
-        ))}
-        {onAddColumn && (
-          <AnimatedPressable style={styles.addColumn} onPress={onAddColumn}>
-            <Ionicons name="add" size={20} color={colors.brand[600]} />
-            <Text style={styles.addColumnText}>Add section</Text>
-          </AnimatedPressable>
-        )}
-      </View>
-    </ScrollView>
+          ))}
+          {onAddColumn && !paged && (
+            <AnimatedPressable style={styles.addColumn} onPress={onAddColumn}>
+              <Ionicons name="add" size={20} color={colors.brand[600]} />
+              <Text style={styles.addColumnText}>{addColumnLabel}</Text>
+            </AnimatedPressable>
+          )}
+        </View>
+      </ScrollView>
+      {paged && (
+        <View style={styles.dots}>
+          {columns.map((col, i) => (
+            <Pressable key={col.key} onPress={() => goToPage(i)} hitSlop={6} accessibilityLabel={col.title}>
+              <View style={[styles.dot, i === page && styles.dotOn]} />
+            </Pressable>
+          ))}
+          {onAddColumn && (
+            <Pressable onPress={onAddColumn} hitSlop={8} accessibilityLabel={addColumnLabel}>
+              <Ionicons name="add" size={16} color={colors.gray[400]} />
+            </Pressable>
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
-function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onToggle, onMove, styles }) {
+function Card({ todo: t, colKey, progress, subtasks, onToggleSubtasks, selected, currentUserId, onOpen, onToggle, onMove, styles }) {
   const colors = useColors();
   const canTick = t.permissions ? t.permissions.can_change_status : true;
   const tag = t.review_state === 'proposed' ? 'Suggested'
     : t.status === 'in_review' && !t.is_done ? 'In review'
       : t.status === 'blocked' && !t.is_done ? 'Stuck'
         : t.status === 'on_hold' && !t.is_done ? 'On hold' : null;
+  const deadline = deadlineState(t);
+  const hasKids = !!progress && progress.total > 0;
   return (
     <View ref={makeDraggable} dataSet={{ boardCard: String(t.id), col: String(colKey) }} style={styles.cardWrap}>
-      <Pressable {...glass('card')} style={[styles.card, selected && styles.cardSelected]} onPress={() => onOpen(t)}>
-        <View style={styles.cardTop}>
-          <TodoCheckbox
-            checked={t.is_done}
-            priority={t.priority}
-            onPress={() => (canTick ? onToggle(t) : onOpen(t))}
-            size={20}
-          />
-          <Text style={[styles.cardTitle, t.is_done && styles.cardDone]} numberOfLines={3}>{t.title}</Text>
-        </View>
-        <View style={styles.cardMeta}>
-          <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
-          {!!deadlineState(t) && (
-            <View style={styles.metaItem}>
-              <Ionicons name="alert-circle" size={11} color={deadlineState(t).color} />
-              <Text style={[styles.metaText, { color: deadlineState(t).color, fontWeight: '800' }]}>{deadlineState(t).label}</Text>
-            </View>
-          )}
-          {t.priority < 4 && !t.is_done && (
-            <View style={styles.metaItem}>
-              <Ionicons name="flag" size={11} color={PRIORITY[t.priority].color} />
-              <Text style={[styles.metaText, { color: PRIORITY[t.priority].color, fontWeight: '700' }]}>{PRIORITY[t.priority].short}</Text>
-            </View>
-          )}
-          {!!t.duration_minutes && (
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={11} color={colors.gray[500]} />
-              <Text style={styles.metaText}>{formatDuration(t.duration_minutes)}</Text>
-            </View>
-          )}
-          {!!progress && progress.total > 0 && (
-            <View style={styles.metaItem}>
-              <Ionicons name="git-branch-outline" size={11} color={colors.gray[500]} />
-              <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
-            </View>
-          )}
-          {t.comment_count > 0 && (
-            <View style={styles.metaItem}>
-              <Ionicons name="chatbubble-outline" size={11} color={colors.gray[500]} />
-              <Text style={styles.metaText}>{t.comment_count}</Text>
-            </View>
-          )}
-          {!!tag && (
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          )}
-          <View style={{ flex: 1 }} />
-          {!!t.assignee_name && t.assignee_id !== currentUserId && (
-            <Avatar name={t.assignee_name} uri={t.assignee_picture} size={20} />
-          )}
-          {onMove && (
-            <AnimatedPressable onPress={() => onMove(t)} hitSlop={8} accessibilityLabel="Move to another column">
-              <Ionicons name="swap-horizontal" size={17} color={colors.gray[400]} />
-            </AnimatedPressable>
-          )}
-        </View>
-        {(t.labels || []).length > 0 && (
-          <View style={styles.labels}>
-            {t.labels.slice(0, 3).map((l) => <Text key={l} style={styles.label}>+{l}</Text>)}
+      <View {...glass('card')} style={[styles.card, selected && styles.cardSelected]}>
+        <Pressable onPress={() => onOpen(t)} style={styles.cardMain}>
+          <View style={styles.cardTop}>
+            <TodoCheckbox
+              checked={t.is_done}
+              priority={t.priority}
+              onPress={() => (canTick ? onToggle(t) : onOpen(t))}
+              size={20}
+            />
+            <Text style={[styles.cardTitle, t.is_done && styles.cardDone]} numberOfLines={3}>{t.title}</Text>
           </View>
-        )}
-      </Pressable>
+          {!!t.notes && <Text style={styles.cardNotes} numberOfLines={2}>{t.notes}</Text>}
+          <View style={styles.cardMeta}>
+            {hasKids && (
+              <AnimatedPressable onPress={onToggleSubtasks} hitSlop={6} style={styles.metaItem} accessibilityLabel={subtasks ? 'Hide sub-tasks' : 'Show sub-tasks'}>
+                <Ionicons name="git-branch-outline" size={12} color={colors.gray[500]} />
+                <Text style={styles.metaText}>{progress.done}/{progress.total}</Text>
+                <Ionicons name={subtasks ? 'chevron-down' : 'chevron-forward'} size={11} color={colors.gray[500]} />
+              </AnimatedPressable>
+            )}
+            {t.comment_count > 0 && (
+              <View style={styles.metaItem}>
+                <Ionicons name="chatbox-outline" size={12} color={colors.gray[500]} />
+                <Text style={styles.metaText}>{t.comment_count}</Text>
+              </View>
+            )}
+            <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
+            {!!deadline && (
+              <View style={styles.metaItem}>
+                <Ionicons name="alert-circle" size={11} color={deadline.color} />
+                <Text style={[styles.metaText, { color: deadline.color, fontWeight: '800' }]}>{deadline.label}</Text>
+              </View>
+            )}
+            {!!t.duration_minutes && (
+              <View style={styles.metaItem}>
+                <Ionicons name="time-outline" size={11} color={colors.gray[500]} />
+                <Text style={styles.metaText}>{formatDuration(t.duration_minutes)}</Text>
+              </View>
+            )}
+            {(t.labels || []).slice(0, 3).map((l) => (
+              <View key={l} style={styles.metaItem}>
+                <Ionicons name="pricetag-outline" size={11} color={colors.brand[600]} />
+                <Text style={[styles.metaText, { color: colors.brand[600] }]}>{l}</Text>
+              </View>
+            ))}
+            {!!tag && (
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }} />
+            {!!t.assignee_name && t.assignee_id !== currentUserId && (
+              <Avatar name={t.assignee_name} uri={t.assignee_picture} size={20} />
+            )}
+            {onMove && (
+              <AnimatedPressable onPress={() => onMove(t)} hitSlop={8} accessibilityLabel="Move to another column">
+                <Ionicons name="swap-horizontal" size={16} color={colors.gray[400]} />
+              </AnimatedPressable>
+            )}
+          </View>
+        </Pressable>
+        {!!subtasks && subtasks.map((s) => (
+          <Pressable key={s.id} onPress={() => onOpen(s)} style={styles.sub}>
+            <TodoCheckbox
+              checked={s.is_done}
+              priority={s.priority}
+              onPress={() => ((s.permissions ? s.permissions.can_change_status : true) ? onToggle(s) : onOpen(s))}
+              size={18}
+            />
+            <Text style={[styles.subTitle, s.is_done && styles.cardDone]} numberOfLines={2}>{s.title}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -250,47 +319,51 @@ export const BOARD_STATUS_COLUMNS = ['todo', 'in_progress', 'in_review', 'blocke
 }));
 
 const createStyles = (colors) => StyleSheet.create({
-  board: { paddingBottom: spacing.xl, paddingRight: spacing.lg, minHeight: 320 },
-  boardInner: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  column: {
-    width: COLUMN_WIDTH, backgroundColor: colors.gray[100], borderRadius: radius.xl, padding: spacing.sm,
-    minHeight: 120,
-  },
-  columnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[800], maxWidth: 160 },
-  columnCount: { fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '600' },
-  cards: { minHeight: 40 },
+  board: { paddingRight: spacing.lg },
+  // Phones: the board snaps one column per swipe (CSS scroll snap; react-native-web passes it through).
+  snap: { scrollSnapType: 'x mandatory', scrollPaddingLeft: spacing.lg },
+  snapItem: { scrollSnapAlign: 'start' },
+  boardInner: { flexDirection: 'row', gap: GAP, alignItems: 'flex-start' },
+  column: { borderRadius: radius.lg },
+  columnHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs, paddingTop: spacing.xs, paddingBottom: spacing.md },
+  columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900], flexShrink: 1 },
+  columnCount: { fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '500' },
+  cards: { paddingBottom: spacing.lg },
   cardWrap: { marginBottom: spacing.sm, borderRadius: radius.lg },
   card: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
-    padding: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.gray[200],
+    overflow: 'hidden',
   },
+  cardMain: { padding: spacing.md },
   cardSelected: { borderColor: colors.brand[500], borderWidth: 1.5 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  cardTitle: { flex: 1, fontSize: fontSize.base, color: colors.gray[900], lineHeight: 19, fontWeight: '500' },
-  cardDone: { textDecorationLine: 'line-through', color: colors.gray[400], fontWeight: '400' },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
+  cardTitle: { flex: 1, fontSize: fontSize.base, color: colors.gray[900], lineHeight: 20, fontWeight: '400' },
+  cardNotes: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 2, marginLeft: 20 + spacing.sm, lineHeight: 16 },
+  cardDone: { textDecorationLine: 'line-through', color: colors.gray[400] },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 6, marginLeft: 20 + spacing.sm, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 11, color: colors.gray[500] },
   tag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: colors.brand[100] },
   tagText: { fontSize: 11, fontWeight: '600', color: colors.brand[700] },
-  labels: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
-  label: { fontSize: 11, fontWeight: '600', color: colors.brand[600] },
-  empty: { fontSize: fontSize.sm, color: colors.gray[400], textAlign: 'center', paddingVertical: spacing.lg },
-  addColumn: {
-    width: 150,
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.gray[300],
+  sub: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 9, paddingHorizontal: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[200],
   },
-  addColumnText: { color: colors.brand[600], fontWeight: '600', fontSize: fontSize.sm },
+  subTitle: { flex: 1, fontSize: fontSize.sm, color: colors.gray[800], lineHeight: 18 },
+  empty: { fontSize: fontSize.sm, color: colors.gray[400], paddingVertical: spacing.md, paddingHorizontal: spacing.xs },
+  addTask: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
+  addTaskText: { fontSize: fontSize.sm, color: colors.gray[500] },
+  addTaskPill: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, marginTop: spacing.sm,
+    borderRadius: radius.lg, backgroundColor: colors.gray[100],
+  },
+  addTaskPillText: { fontSize: fontSize.base, color: colors.gray[700], fontWeight: '500' },
+  addColumn: { width: 220, height: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm },
+  addColumnText: { color: colors.gray[500], fontWeight: '500', fontSize: fontSize.base },
+  dots: { height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.gray[300] },
+  dotOn: { backgroundColor: colors.gray[700] },
 });

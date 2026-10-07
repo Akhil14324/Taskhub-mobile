@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { ActivityIndicator, Text, View, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { syncNavigationBack } from '../utils/backStack';
 import { navigationRef } from './navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -17,7 +17,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
-import { useTodos } from '../context/TodoContext';
+import TodayIcon from '../components/TodayIcon';
+import useTodoCounts from '../hooks/useTodoCounts';
+import { useTodoView, TAB_VIEWS } from '../utils/todoView';
 import { useNotifications } from '../context/NotificationContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
@@ -26,10 +28,8 @@ import AppSidebar from '../components/AppSidebar';
 import GlobalHost from '../components/GlobalHost';
 import '../utils/shareTarget';
 import useIsDesktop from '../hooks/useBreakpoint';
-import { MoreMenu } from '../components/UI';
 import { addNotificationResponseListener } from '../services/notifications';
 import { openNotificationTarget } from './navigationRef';
-import { todayYmd } from '../utils/dates';
 import { glass } from '../theme/glass';
 import { SPRING } from '../theme/motion';
 import { withScreenTransition as T } from '../components/Reveal';
@@ -42,6 +42,7 @@ import HomeScreen from '../screens/HomeScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import RecapScreen from '../screens/RecapScreen';
 import TodosScreen from '../screens/TodosScreen';
+import BrowseScreen from '../screens/BrowseScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
@@ -101,6 +102,7 @@ const FramedRecap = framed(RecapScreen, 920);
 const TabHome = T(HomeScreen, 'tab', 'Dashboard');
 const TabTodos = T(TodosScreen, 'tab', 'Todos');
 const TabChat = T(FramedChatList, 'tab', 'ChatList');
+const TabBrowse = T(BrowseScreen, 'tab', 'Browse');
 const PushChatThread = T(FramedChatThread);
 const PushGroupInfo = T(FramedGroupInfo);
 const PushApprovals = T(FramedApprovals);
@@ -119,7 +121,7 @@ const Tab = createBottomTabNavigator();
  * Tab bar icon. A glass pill blooms behind the focused icon and the icon pops with a spring;
  * the badge springs in and bounces when its count changes.
  */
-function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
+function AnimatedTabIcon({ name, glyph, focused, color, size = 22, badge, dot }) {
   const pill = useSharedValue(focused ? 1 : 0);
   const badgeScale = useSharedValue(badge ? 1 : 0);
   const prevBadgeRef = useRef(badge);
@@ -150,7 +152,8 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
   return (
     <View style={tabStyles.iconWrap}>
       <Animated.View style={iconStyle}>
-        <Ionicons name={name} size={size} color={color} />
+        {glyph || <Ionicons name={name} size={size} color={color} />}
+        {!badge && dot && <View style={tabStyles.dot} pointerEvents="none" />}
         {badge > 0 && (
           <Animated.View style={[tabStyles.badge, badgeStyle]} pointerEvents="none">
             <Text style={tabStyles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
@@ -162,37 +165,54 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
 }
 
 /**
- * The floating tab island. One light-red highlight sits behind the current tab and slides (stretching toward
- * the new one) when you change module; each tab squishes like water under the finger.
+ * The phone tab bar, laid out like Todoist: Inbox, Today, Upcoming, Chat and Browse. Inbox / Today / Upcoming
+ * are views of the one To-do screen; a project, business or filter opened from Browse keeps Browse lit.
+ * One light-red highlight sits behind the current tab and slides (stretching toward the new one).
  */
-function GlassTabBar({ state, descriptors, navigation, onMore }) {
+function GlassTabBar({ state, navigation }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t } = useLang();
+  const todoView = useTodoView();
+  const counts = useTodoCounts();
+  const { totalUnread: chatUnread } = useChat();
+  const { unreadCount, approvalCount } = useNotifications();
+  const current = state.routes[state.index]?.name;
+  const onTodos = current === 'Todos';
+  const items = [
+    { key: 'inbox', label: 'Inbox', icon: 'file-tray', active: onTodos && todoView === 'inbox', press: () => navigation.navigate('Todos', { view: 'inbox' }) },
+    { key: 'today', label: 'Today', today: true, badge: counts.today, active: onTodos && todoView === 'today', press: () => navigation.navigate('Todos', { view: 'today' }) },
+    { key: 'upcoming', label: 'Upcoming', icon: 'calendar', active: onTodos && todoView === 'upcoming', press: () => navigation.navigate('Todos', { view: 'upcoming' }) },
+    { key: 'chat', label: t('chat'), icon: 'chatbubble', badge: chatUnread, active: current === 'ChatList', press: () => navigation.navigate('ChatList') },
+    {
+      key: 'browse',
+      label: 'Browse',
+      icon: 'menu',
+      dot: unreadCount + approvalCount > 0,
+      active: current === 'Browse' || current === 'Dashboard' || (onTodos && !TAB_VIEWS.includes(todoView)),
+      press: () => navigation.navigate('Browse'),
+    },
+  ];
   return (
     <View
       {...glass('capsule')}
       style={{ height: 66, marginHorizontal: 14, marginBottom: Math.max(insets.bottom, 10), borderRadius: 33, backgroundColor: colors.white }}
     >
       <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isMore = route.name === 'More';
-          const focused = !isMore && state.index === index;
-          const color = focused ? colors.brand[700] : colors.gray[500];
-          const label = isMore ? t('more') : (typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name);
-          const onPress = () => {
-            if (isMore) { onMore(); return; }
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
-          };
+        {items.map((it) => {
+          const color = it.active ? colors.brand[700] : colors.gray[500];
           return (
-            <SlideItem key={route.key} active={focused} style={{ flex: 1 }}>
-              <AnimatedPressable onPress={onPress} haptic="light" water accessibilityLabel={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 28, paddingVertical: 4 }}>
-                {isMore
-                  ? <Ionicons name="ellipsis-horizontal-outline" size={22} color={color} />
-                  : options.tabBarIcon?.({ focused, color, size: 22 })}
-                <Text style={{ fontSize: 10, fontWeight: focused ? '700' : '600', letterSpacing: 0.15, marginTop: 2, color }}>{label}</Text>
+            <SlideItem key={it.key} active={it.active} style={{ flex: 1 }}>
+              <AnimatedPressable onPress={it.press} haptic="light" water accessibilityLabel={it.label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 28, paddingVertical: 4 }}>
+                <AnimatedTabIcon
+                  focused={it.active}
+                  color={color}
+                  name={it.icon ? (it.active ? it.icon : `${it.icon}-outline`) : undefined}
+                  glyph={it.today ? <TodayIcon size={22} color={color} active={it.active} /> : null}
+                  badge={it.badge}
+                  dot={it.dot}
+                />
+                <Text style={{ fontSize: 10, fontWeight: it.active ? '700' : '600', letterSpacing: 0.15, marginTop: 2, color }}>{it.label}</Text>
               </AnimatedPressable>
             </SlideItem>
           );
@@ -202,152 +222,21 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
   );
 }
 
-function MoreTabButton({ onPress, accessibilityState }) {
-  const colors = useColors();
-  const { t } = useLang();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const focused = accessibilityState?.selected;
-  return (
-    <AnimatedPressable onPress={onPress} style={styles.tabBtn} haptic="light">
-      <Ionicons name="ellipsis-horizontal-outline" size={22} color={focused ? colors.brand[600] : colors.gray[400]} />
-      <Text style={[styles.tabLabel, { color: focused ? colors.brand[600] : colors.gray[400] }]}>{t('more')}</Text>
-    </AnimatedPressable>
-  );
-}
-
 function MainTabs() {
-  const { user, logout } = useAuth();
-  const { t } = useLang();
-  const colors = useColors();
-  const { totalUnread: chatUnread } = useChat();
-  const { todos } = useTodos();
-  const { unreadCount, approvalCount } = useNotifications();
-  const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const { user } = useAuth();
   const desktop = useIsDesktop();
-  const [moreVisible, setMoreVisible] = useState(false);
-  // Closing removes the scrim on press; the browser's trailing click then lands on the "More" tab under it
-  // and would reopen the menu. A click that belongs to a pointer-down from before the close is that ghost
-  // click, whatever its delay, so it is ignored; a fresh tap (pointer-down after the close) opens normally.
-  const closedAt = useRef(0);
-  const lastDownAt = useRef(0);
-  useEffect(() => {
-    if (typeof document === 'undefined') return undefined;
-    const onDown = () => { lastDownAt.current = Date.now(); };
-    document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('touchstart', onDown, true);
-    document.addEventListener('mousedown', onDown, true);
-    return () => {
-      document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('touchstart', onDown, true);
-      document.removeEventListener('mousedown', onDown, true);
-    };
-  }, []);
-  const openMore = () => {
-    const sinceClose = Date.now() - closedAt.current;
-    if (sinceClose < 1000 && lastDownAt.current <= closedAt.current) return;
-    setMoreVisible(true);
-  };
-  const closeMore = () => { closedAt.current = Date.now(); setMoreVisible(false); };
-
-  const today = todayYmd();
-  const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
-
-  const moreItems = [
-    { label: 'Progress', icon: 'sunny-outline', route: 'Progress' },
-    { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
-    { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
-    ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
-    { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
-    { label: t('profile'), icon: 'person-outline', route: 'Profile' },
-    { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
-  ];
-
-  const handleMoreItem = (item) => {
-    if (item.action === 'logout') {
-      logout();
-    } else {
-      navigation.navigate(item.route);
-    }
-  };
-
   return (
-    <>
-      <Tab.Navigator
-        initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || 'Dashboard'}
-        tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={openMore} />}
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.brand[600],
-          tabBarInactiveTintColor: colors.gray[400],
-          // A floating glass island instead of an edge-to-edge bar: translucent, blurred, specular rim.
-          tabBarStyle: {
-            height: 64,
-            marginHorizontal: 14,
-            marginBottom: Math.max(insets.bottom, 10),
-            paddingTop: 7,
-            paddingBottom: 7,
-            borderRadius: 32,
-            backgroundColor: 'transparent',
-            borderTopColor: 'transparent',
-            borderTopWidth: 0,
-            elevation: 0,
-          },
-          tabBarBackground: () => <View {...glass('capsule')} style={[StyleSheet.absoluteFill, { borderRadius: 32, backgroundColor: colors.white }]} />,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '600',
-            letterSpacing: 0.15,
-          },
-        }}
-      >
-        <Tab.Screen
-          name="Dashboard"
-          component={TabHome}
-          options={{
-            tabBarLabel: t('home'),
-            tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} badge={unreadCount} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Todos"
-          component={TabTodos}
-          options={{
-            tabBarLabel: 'To-do',
-            tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge + approvalCount} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="ChatList"
-          component={TabChat}
-          options={{
-            tabBarLabel: t('chat'),
-            tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'chatbubble' : 'chatbubble-outline'} focused={focused} color={color} badge={chatUnread} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="More"
-          component={MorePlaceholder}
-          options={{
-            tabBarButton: (props) => (
-              <MoreTabButton {...props} onPress={openMore} />
-            ),
-          }}
-        />
-      </Tab.Navigator>
-      <MoreMenu visible={moreVisible} onClose={closeMore} title={t('more')} items={moreItems} onItemPress={handleMoreItem} />
-    </>
+    <Tab.Navigator
+      initialRouteName={{ chat: 'ChatList', home: 'Dashboard' }[user?.preferences?.startPage] || 'Todos'}
+      tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Todos" component={TabTodos} />
+      <Tab.Screen name="ChatList" component={TabChat} />
+      <Tab.Screen name="Browse" component={TabBrowse} />
+      <Tab.Screen name="Dashboard" component={TabHome} />
+    </Tab.Navigator>
   );
-}
-
-function MorePlaceholder() {
-  return null;
 }
 
 // Custom transition: soft slide + fade (spring-based on iOS, timing on Android)
@@ -388,23 +277,10 @@ const screenTransition = Platform.select({
   },
 });
 
-const createStyles = (colors) => StyleSheet.create({
-  tabBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-    paddingBottom: 4,
-  },
-  tabLabel: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-});
-
 const tabStyles = StyleSheet.create({
   iconWrap: { width: 52, height: 30, alignItems: 'center', justifyContent: 'center' },
   pill: { position: 'absolute', width: 52, height: 30, borderRadius: 15 },
+  dot: { position: 'absolute', top: -2, right: -4, width: 9, height: 9, borderRadius: 5, backgroundColor: '#dc2626', borderWidth: 1.5, borderColor: '#ffffff' },
   badge: {
     position: 'absolute',
     top: -6,

@@ -6,7 +6,6 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
-import { useNotifications } from '../context/NotificationContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import api from '../api/client';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -17,7 +16,7 @@ import { SkeletonList } from '../components/Skeleton';
 import ShareToChatSheet from '../components/ShareToChatSheet';
 import TodoTreeList from '../components/todos/TodoTreeList';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
-import TodoDetailSheet, { TodoDetailBody } from '../components/todos/TodoDetailSheet';
+import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import InlineQuickAdd from '../components/todos/InlineQuickAdd';
 import FiltersSheet, { FilterEditorSheet } from '../components/todos/FiltersSheet';
 import ProductivitySheet from '../components/todos/ProductivitySheet';
@@ -26,26 +25,29 @@ import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import { openTemplates } from '../utils/events';
 import BulkBar from '../components/todos/BulkBar';
-import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
 import { useNowTick } from '../components/todos/TimeHealth';
 import { PickerSheet, NameSheet } from '../components/todos/Pickers';
-import { Chip, IconButton, EmptyHero, ProgressRing, ListGlyph, LIST_ICONS, PRIORITY } from '../components/kit';
+import { Chip, IconButton, EmptyHero, ProgressRing, LIST_ICONS, PRIORITY } from '../components/kit';
+import FiltersLabelsPage from '../components/todos/FiltersLabelsPage';
 import useWebReorder, { makeDraggable } from '../hooks/useWebReorder';
 import useShortcuts from '../hooks/useShortcuts';
 import * as SecureStore from '../utils/secureStorage';
-import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
+import useIsDesktop from '../hooks/useBreakpoint';
+import useTodoCounts from '../hooks/useTodoCounts';
+import { setTodoView, TAB_VIEWS } from '../utils/todoView';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd, formatTime } from '../utils/dates';
 import {
-  BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf,
+  BUILTIN_FILTERS, FILTER_DEFAULT, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf, isGivenAway,
 } from '../utils/todoMeta';
 import { STATUS } from '../utils/timeline';
-import { showToast, confirmDialog } from '../utils/events';
+import {
+  defaultBuckets, bucketFor, newBucketId, insertBucket, moveBucket, canRemoveBucket,
+} from '../utils/boardBuckets';
+import ColumnSheet from '../components/todos/ColumnSheet';
+import { showToast, confirmDialog, on } from '../utils/events';
 import { glass } from '../theme/glass';
 import { Reveal } from '../components/Reveal';
-import SlidingSegment from '../components/SlidingSegment';
-import { Panel, usePanel } from '../components/Panel';
-import { SlideGroup, SlideItem } from '../components/SlideGroup';
 
 const BOARD_GROUPS = [
   { key: 'status', label: 'Status', icon: 'git-commit-outline' },
@@ -53,6 +55,8 @@ const BOARD_GROUPS = [
   { key: 'priority', label: 'Priority', icon: 'flag-outline' },
 ];
 const BOARD_STATUSES = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold', 'done'];
+const PERSONAL_BOARD_STATUSES = ['todo', 'in_progress', 'blocked', 'done'];
+const BUCKET_KEY = 'todos.buckets';
 
 /** Open first, then finished; each keeps its existing (due date, priority) order. */
 const openFirst = (items) => [...items.filter((t) => !t.is_done), ...items.filter((t) => t.is_done)];
@@ -62,7 +66,7 @@ const byBoardPos = (items) => [...items].sort((a, b) => {
   return ap - bp;
 });
 
-const LAYOUT_KEY = 'todos.layout';
+const LAYOUT_KEY = 'todos.layouts';
 const LAYOUTS = ['list', 'board', 'calendar', 'timeline'];
 
 export default function TodosScreen() {
@@ -72,13 +76,11 @@ export default function TodosScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { approvalCount } = useNotifications();
   const desktop = useIsDesktop();
-  const wide = useIsWide();
   const { width: windowWidth } = useWindowDimensions();
   const {
     todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos,
-    updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, renameSection, deleteSection, saveFilter,
+    updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, renameSection, reorderSections, deleteSection, saveFilter,
     deleteFilter, shareTodos, reorderTodos, fetchCompleted, mergeTodos, setTodoStatus, assignTodoTo, requestDelete,
     saveBoardOrder,
   } = useTodos();
@@ -92,24 +94,48 @@ export default function TodosScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [listEditor, setListEditor] = useState(null);
   const [sectionEditor, setSectionEditor] = useState(null);
+  const [columnEditor, setColumnEditor] = useState(null); // a board column (section or status bucket) being edited
+  // Status-board buckets: { [scope]: { columns, cards } }, per device (see utils/boardBuckets.js).
+  const [bucketStore, setBucketStore] = useState({});
+  useEffect(() => {
+    SecureStore.getItemAsync(BUCKET_KEY)
+      .then((raw) => { const v = raw ? JSON.parse(raw) : null; if (v && typeof v === 'object') setBucketStore(v); })
+      .catch(() => {});
+  }, []);
+  const saveBuckets = useCallback((scope, patch) => {
+    setBucketStore((prev) => {
+      const next = { ...prev, [scope]: { ...(prev[scope] || {}), ...patch } };
+      SecureStore.setItemAsync(BUCKET_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterEditor, setFilterEditor] = useState(null);
   const [productivityOpen, setProductivityOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
   const [focusId, setFocusId] = useState(null);
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
-  const [layout, setLayout] = useState('list'); // list | board | calendar | timeline
-  // The person's own choice, remembered on this device. A view that cannot show it falls back to the
-  // list for now without forgetting the choice.
+  // Each view remembers its own layout on this device (like Todoist's per-project "Display"). Places with
+  // sections (Inbox, a project) and businesses open as a board; date views as a list. A view that cannot
+  // show the chosen layout falls back to the list without forgetting the choice.
+  const [layouts, setLayouts] = useState({});
   useEffect(() => {
-    SecureStore.getItemAsync(LAYOUT_KEY).then((v) => { if (LAYOUTS.includes(v)) setLayout(v); }).catch(() => {});
+    SecureStore.getItemAsync(LAYOUT_KEY)
+      .then((raw) => { const v = raw ? JSON.parse(raw) : null; if (v && typeof v === 'object') setLayouts(v); })
+      .catch(() => {});
   }, []);
   const chooseLayout = useCallback((key) => {
-    setLayout(key);
-    SecureStore.setItemAsync(LAYOUT_KEY, key).catch(() => {});
-  }, []);
+    setLayouts((prev) => {
+      const next = { ...prev, [view]: key };
+      SecureStore.setItemAsync(LAYOUT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [view]);
+  const placeView = view === 'inbox' || view.startsWith('list:') || view.startsWith('biz:');
+  const layout = LAYOUTS.includes(layouts[view]) ? layouts[view] : placeView ? 'board' : 'list';
   const [boardGroup, setBoardGroup] = useState('status');
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [selectMode, setSelectMode] = useState(false);
@@ -121,7 +147,6 @@ export default function TodosScreen() {
   const [weeks, setWeeks] = useState(6);
   const [deletePrompt, setDeletePrompt] = useState(null);
   const [priorityFor, setPriorityFor] = useState(null);
-  const sidebar = usePanel('todos.sidebar'); // the lists panel; remembered, and closes like a drawer
   // Quick add grows out of the floating capsule: its window rect, what was typed, and whether the capsule is covered.
   const [addOrigin, setAddOrigin] = useState(null);
   const [addText, setAddText] = useState('');
@@ -164,6 +189,26 @@ export default function TodosScreen() {
     navigation.setParams({ business_id: undefined });
   }, [route.params?.business_id, navigation]);
 
+  // The tab bar, Browse and the desktop sidebar pick the view through the `view` param.
+  useEffect(() => {
+    const v = route.params?.view;
+    if (!v) return;
+    setView(v);
+    setScope(v.startsWith('biz:') ? 'business' : 'mine');
+    setSearching(false);
+    setSearch('');
+    navigation.setParams({ view: undefined });
+  }, [route.params?.view, navigation]);
+
+  useEffect(() => {
+    if (!route.params?.newList) return;
+    setListEditor({ name: '', color: 'red', emoji: 'list' });
+    navigation.setParams({ newList: undefined });
+  }, [route.params?.newList, navigation]);
+
+  useEffect(() => { setTodoView(view); }, [view]);
+  useEffect(() => on('todos:add', () => setAddOpen(true)), []);
+
   useEffect(() => {
     const create = route.params?.create;
     if (!create) return;
@@ -173,29 +218,16 @@ export default function TodosScreen() {
 
   // ---- derived collections -------------------------------------------------
   const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
-  const personal = useMemo(() => todos.filter((t) => !t.business_id), [todos]);
+  // A to-do I handed to someone else is in their lists only, so it never shows in mine.
+  const personal = useMemo(() => todos.filter((t) => !t.business_id && !isGivenAway(t, meId)), [todos, meId]);
   // What lands in my own date views: my personal to-dos plus business work given to me.
-  const mine = useMemo(() => todos.filter((t) => !t.business_id || (t.assignee_id === meId && t.review_state === 'accepted')), [todos, meId]);
+  const mine = useMemo(() => todos.filter((t) => !isGivenAway(t, meId) && (!t.business_id || (t.assignee_id === meId && t.review_state === 'accepted'))), [todos, meId]);
   const open = useMemo(() => mine.filter((t) => !t.is_done), [mine]);
   const openPersonal = useMemo(() => personal.filter((t) => !t.is_done), [personal]);
 
-  const counts = useMemo(() => ({
-    today: open.filter((t) => t.due_date && t.due_date <= today).length,
-    inbox: openPersonal.filter((t) => !t.list_id && !t.parent_id).length,
-    shared: openPersonal.filter((t) => (t.members || []).length > 1).length,
-    assigned: openPersonal.filter((t) => t.created_by !== meId && !t.parent_id).length,
-    lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
-  }), [open, openPersonal, lists, today, meId]);
+  const counts = useTodoCounts();
+  const bizCounts = counts.biz;
 
-  const bizCounts = useMemo(() => {
-    const out = {};
-    businesses.forEach((b) => {
-      out[b.id] = todos.filter((t) => t.business_id === b.id && !t.parent_id && !t.is_done && t.review_state !== 'rejected').length;
-    });
-    return out;
-  }, [businesses, todos]);
-
-  const hasBusiness = businesses.length > 0;
   const currentList = view.startsWith('list:') ? listById.get(Number(view.slice(5))) : null;
   const listSections = useMemo(
     () => (currentList ? allSections.filter((s) => s.list_id === currentList.id) : []),
@@ -211,9 +243,10 @@ export default function TodosScreen() {
     : null;
   const labelName = view.startsWith('label:') ? view.slice(6) : null;
 
-  // Layouts a view can be shown in.
-  const canBoard = view !== 'done';
-  const canCalendar = view !== 'done' && !simpleView;
+  // Layouts a view can be shown in. Filters & Labels is a page of links, not a list of to-dos.
+  const browsePage = view === 'filters';
+  const canBoard = view !== 'done' && !browsePage;
+  const canCalendar = view !== 'done' && !browsePage && !simpleView;
   const canTimeline = !simpleView && (!!business || view === 'today' || view === 'upcoming' || !!currentList);
   const effectiveLayout = layout === 'board' && canBoard ? 'board'
     : layout === 'calendar' && canCalendar ? 'calendar'
@@ -237,6 +270,7 @@ export default function TodosScreen() {
           : view === 'shared' ? 'Shared with me'
             : view === 'assigned' ? 'Assigned to me'
             : view === 'done' ? 'Completed'
+            : browsePage ? 'Filters & Labels'
               : activeFilter ? activeFilter.name
                 : labelName ? `+${labelName}`
                   : currentList ? currentList.name : 'To-do';
@@ -351,7 +385,8 @@ export default function TodosScreen() {
       if (later.length) sectionsOut.push({ key: 'later', title: 'Later', items: later });
     } else if (view === 'inbox') {
       manualOrder = true;
-      const inInbox = openPersonal.filter((t) => !t.list_id && match(t));
+      // Only to-dos with no date: giving one a date moves it to Today / Upcoming.
+      const inInbox = openPersonal.filter((t) => !t.list_id && !t.due_date && match(t));
       if (inboxSections.length === 0) {
         sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inInbox) });
       } else {
@@ -360,7 +395,7 @@ export default function TodosScreen() {
           sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
         });
       }
-      done = personal.filter((t) => t.is_done && !t.list_id);
+      done = personal.filter((t) => t.is_done && !t.list_id && !t.due_date);
     } else if (view === 'shared') {
       const shared = openPersonal.filter((t) => (t.members || []).length > 1 && match(t));
       const fromOthers = shared.filter((t) => t.created_by !== meId);
@@ -551,10 +586,31 @@ export default function TodosScreen() {
     : visibleIds.length ? visibleIds : doneItems.map((t) => t.id);
 
   // ---- board ---------------------------------------------------------------
+  const bucketScope = business ? `biz:${bizId}` : 'personal';
+  const bucketCols = useMemo(
+    () => bucketStore[bucketScope]?.columns
+      || defaultBuckets(business ? BOARD_STATUSES : PERSONAL_BOARD_STATUSES, (s) => STATUS[s].label),
+    [bucketStore, bucketScope, business]
+  );
+  const bucketCards = bucketStore[bucketScope]?.cards;
+  const statusBoard = !sectioned && (!business || boardGroup === 'status');
+  /** The status board's columns, each with the cards that sit in it. */
+  const bucketColumns = (src, extra = {}) => {
+    const byCol = new Map(bucketCols.map((c) => [c.id, []]));
+    src.forEach((t) => { byCol.get(bucketFor(t, bucketCols, bucketCards)?.id)?.push(t); });
+    return bucketCols.map((c) => ({
+      key: c.id,
+      title: c.name,
+      icon: STATUS[c.base]?.icon,
+      bucket: c,
+      canAdd: c.base === 'todo' ? extra.canAdd : false,
+      items: byBoardPos(byCol.get(c.id) || []),
+    }));
+  };
   const boardColumns = useMemo(() => {
     if (!onBoard) return [];
     if (sectioned) {
-      const items = personal.filter((t) => (currentList ? t.list_id === currentList.id : !t.list_id) && !t.parent_id);
+      const items = personal.filter((t) => (currentList ? t.list_id === currentList.id : (!t.list_id && !t.due_date)) && !t.parent_id);
       const colItems = (sectionId) => byBoardPos(openFirst(items.filter((t) => (t.section_id || null) === sectionId)));
       const cols = [];
       if (placeSections.length === 0 || items.some((t) => !t.section_id)) {
@@ -580,12 +636,7 @@ export default function TodosScreen() {
           : view === 'shared' ? doneAll.filter((t) => (t.members || []).length > 1)
             : view === 'assigned' ? doneAll.filter((t) => t.created_by !== meId)
               : doneAll;
-      return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
-        key: st,
-        title: STATUS[st].label,
-        icon: STATUS[st].icon,
-        items: byBoardPos(st === 'done' ? doneRecent : pool.filter((t) => (t.status || 'todo') === st)),
-      }));
+      return bucketColumns([...pool, ...doneRecent], { canAdd: true });
     }
     // Business board.
     const items = todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
@@ -602,16 +653,16 @@ export default function TodosScreen() {
       return [1, 2, 3, 4].map((p) => ({ key: `p${p}`, title: PRIORITY[p].label, icon: 'flag-outline', items: byBoardPos(openFirst(items.filter((t) => t.priority === p))) }));
     }
     const recentDone = addDays(today, -14);
-    return BOARD_STATUSES.map((s) => ({
-      key: s,
-      title: STATUS[s].label,
-      icon: STATUS[s].icon,
-      canAdd: s === 'todo' && true,
-      items: byBoardPos(items.filter((t) => (s === 'done'
-        ? t.is_done && (!t.done_at || toYmd(new Date(t.done_at)) >= recentDone)
-        : !t.is_done && t.status === s))),
-    }));
-  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today]);
+    // Proposals waiting for a manager come first, so the board never hides them.
+    const proposed = todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'proposed');
+    const reviewCol = proposed.length
+      ? [{ key: 'proposed', title: 'Awaiting review', icon: 'hourglass-outline', canAdd: false, items: byBoardPos(proposed) }]
+      : [];
+    return [...reviewCol, ...bucketColumns(
+      items.filter((t) => !t.is_done || !t.done_at || toYmd(new Date(t.done_at)) >= recentDone),
+      { canAdd: true }
+    )];
+  }, [bucketCols, bucketCards, onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today]);
 
   // ---- calendar ------------------------------------------------------------
   const calendarItems = useMemo(() => {
@@ -619,7 +670,7 @@ export default function TodosScreen() {
     if (business) return todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
     const notNested = (t) => !t.parent_id;
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
-    if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
+    if (view === 'inbox') return personal.filter((t) => !t.list_id && !t.due_date && notNested(t));
     if (view === 'shared') return personal.filter((t) => (t.members || []).length > 1 && notNested(t));
     if (view === 'assigned') return personal.filter((t) => t.created_by !== meId && notNested(t));
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
@@ -633,6 +684,10 @@ export default function TodosScreen() {
   const applyBoardMove = useCallback(async (todoId, colKey) => {
     const t = todos.find((x) => x.id === todoId);
     if (!t) return;
+    if (colKey === 'proposed' || t.review_state === 'proposed') {
+      showToast({ message: 'Open the proposal to accept or decline it', icon: 'hourglass' });
+      return;
+    }
     try {
       if (sectioned) {
         await updateTodo(t.id, { section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
@@ -641,21 +696,33 @@ export default function TodosScreen() {
         else await assignTodoTo(t.id, Number(String(colKey).slice(1)));
       } else if (business && boardGroup === 'priority') {
         await updateTodo(t.id, { priority: Number(String(colKey).slice(1)) });
-      } else if (colKey === 'done') {
-        if (!t.is_done) await toggleTodo(t);
-      } else if (colKey === 'blocked') {
-        showToast({ message: 'Open the task and raise a blocker to block it', icon: 'hand-left' });
-      } else if (colKey === 'in_review') {
-        showToast({ message: 'Finishing a task that needs review sends it to review', icon: 'eye' });
       } else {
-        if (t.is_done) await toggleTodo(t);
-        if (t.status !== colKey) await setTodoStatus(t, colKey);
+        // A column is a bucket; what a drop does is decided by the status the bucket behaves like.
+        const bucket = bucketCols.find((c) => c.id === colKey);
+        const st = bucket ? bucket.base : colKey;
+        if (st === 'done') {
+          if (!t.is_done) await toggleTodo(t);
+        } else if (st === 'blocked') {
+          if (!t.is_done && t.status === 'blocked') { /* already there */ } else {
+            showToast({ message: 'Open the task and raise a blocker to block it', icon: 'hand-left' });
+            return;
+          }
+        } else if (st === 'in_review') {
+          if (!(t.status === 'in_review' && !t.is_done)) {
+            showToast({ message: 'Finishing a task that needs review sends it to review', icon: 'eye' });
+            return;
+          }
+        } else {
+          if (t.is_done) await toggleTodo(t);
+          if (t.status !== st) await setTodoStatus(t, st);
+        }
+        if (bucket) saveBuckets(bucketScope, { cards: { ...(bucketCards || {}), [t.id]: bucket.id } });
       }
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'You cannot move that', tone: 'error' });
       fetchTodos();
     }
-  }, [todos, sectioned, business, boardGroup, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos]);
+  }, [todos, sectioned, business, boardGroup, bucketCols, bucketCards, bucketScope, saveBuckets, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos]);
 
   const onBoardDrop = useCallback(async (todoId, colKey, ids) => {
     await applyBoardMove(todoId, colKey);
@@ -664,6 +731,62 @@ export default function TodosScreen() {
 
   const onBoardReorder = useCallback((ids) => saveBoardOrder(ids), [saveBoardOrder]);
 
+  // ---- board columns: sections (Inbox, lists) and status buckets -------------
+  const saveColumn = async (v) => {
+    try {
+      if (v.kind === 'section') {
+        if (v.id) {
+          await renameSection(v.id, v.name);
+        } else {
+          const created = await createSection(v.list_id, v.name);
+          if (v.afterId !== null && v.afterId !== undefined) {
+            const ids = placeSections.map((s) => s.id);
+            ids.splice(v.afterId === '__start' ? 0 : ids.indexOf(v.afterId) + 1, 0, created.id);
+            await reorderSections(ids);
+          }
+        }
+      } else if (v.id) {
+        saveBuckets(bucketScope, { columns: bucketCols.map((c) => (c.id === v.id ? { ...c, name: v.name, base: v.base } : c)) });
+      } else {
+        const bucket = { id: newBucketId(), name: v.name, base: v.base || 'todo' };
+        saveBuckets(bucketScope, {
+          columns: v.afterId === '__start' ? [bucket, ...bucketCols] : insertBucket(bucketCols, bucket, v.afterId),
+        });
+      }
+      setColumnEditor(null);
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not save the column', tone: 'error' });
+    }
+  };
+  const deleteColumn = async (v) => {
+    const ok = await confirmDialog({
+      title: `Delete “${v.name}”?`,
+      message: v.kind === 'section' ? 'Its to-dos stay in the list, without a section.' : 'Its cards move to the first column that fits their status.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    if (v.kind === 'section') await deleteSection(v.id);
+    else saveBuckets(bucketScope, { columns: bucketCols.filter((c) => c.id !== v.id) });
+    setColumnEditor(null);
+  };
+  const moveColumn = async (v, dir) => {
+    try {
+      if (v.kind === 'section') {
+        const ids = placeSections.map((s) => s.id);
+        const i = ids.indexOf(v.id);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= ids.length) return;
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+        await reorderSections(ids);
+      } else {
+        saveBuckets(bucketScope, { columns: moveBucket(bucketCols, v.id, dir) });
+      }
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not move the column', tone: 'error' });
+    }
+  };
+
   // ---- keyboard shortcuts (desktop) ----------------------------------------
   const flat = visibleIds;
   const stepFocus = (delta) => {
@@ -671,7 +794,7 @@ export default function TodosScreen() {
     const i = flat.indexOf(focusId);
     const next = flat[Math.max(0, Math.min(flat.length - 1, i < 0 ? 0 : i + delta))];
     setFocusId(next);
-    if (openTodoId && wide) setOpenTodoId(next);
+    if (openTodoId) setOpenTodoId(next);
   };
   const focused = todos.find((t) => t.id === focusId);
   const setLayoutKey = (key, ok) => { if (ok) chooseLayout(key); };
@@ -680,7 +803,6 @@ export default function TodosScreen() {
     'todo.quickAdd': () => (inlineAddRef.current ? inlineAddRef.current.focus() : setAddOpen(true)),
     'todo.new': () => setAddOpen(true),
     'todo.search': () => { setSearching(true); },
-    'todo.sidebar': () => sidebar.toggle(),
     'todo.next': () => stepFocus(1),
     'todo.prev': () => stepFocus(-1),
     'todo.open': () => { if (focused) openTodo(focused); else return false; return undefined; },
@@ -705,18 +827,22 @@ export default function TodosScreen() {
   }, desktop);
 
   // ---- overflow menu -------------------------------------------------------
-  const menuOptions = [
+  const menuOptions = browsePage ? [
+    { key: 'newFilter', label: 'New filter', icon: 'add-circle-outline' },
+  ] : [
+    { key: 'search', label: 'Search in this view', icon: 'search-outline' },
+    ...(sectioned ? [{ key: 'section', label: 'Add section', icon: 'albums-outline' }] : []),
     { key: 'filters', label: 'Filters and shared with me', icon: 'funnel-outline' },
     { key: 'templates', label: 'Start from a template', icon: 'copy-outline' },
     { key: 'select', label: 'Select to-dos', icon: 'checkbox-outline' },
     { key: 'productivity', label: 'Productivity and daily goal', icon: 'stats-chart-outline' },
     { key: 'share', label: 'Share this view to chat', icon: 'paper-plane-outline' },
-    ...(sectioned ? [{ key: 'section', label: 'Add section', icon: 'albums-outline' }] : []),
-    ...(currentList ? [{ key: 'edit', label: 'Edit list', icon: 'create-outline' }] : []),
+    ...(currentList ? [{ key: 'edit', label: 'Edit project', icon: 'create-outline' }] : []),
     ...(typeof activeFilter?.id === 'number' ? [{ key: 'editFilter', label: 'Edit filter', icon: 'create-outline' }] : []),
   ];
   const onMenu = (key) => {
-    if (key === 'filters') setFiltersOpen(true);
+    if (key === 'search') { setSearching(true); setSearch(''); } else if (key === 'newFilter') setFilterEditor({ name: '', config: { ...FILTER_DEFAULT } });
+    else if (key === 'filters') setFiltersOpen(true);
     else if (key === 'templates') openTemplates({ business_id: bizId || undefined });
     else if (key === 'select') setSelectMode(true);
     else if (key === 'productivity') setProductivityOpen(true);
@@ -742,8 +868,6 @@ export default function TodosScreen() {
     return groups;
   }, [history.items]);
 
-  const inFilterView = !!activeFilter || !!labelName;
-  const showScopeSwitch = hasBusiness && !desktop;
   const subtitle = selectMode ? 'Tap to-dos to select them'
     : business ? `${bizCounts[business.id] || 0} open · ${business.can_manage ? 'You manage this business' : 'Everyone here sees these tasks'}`
       : view === 'today' ? `${WEEKDAYS[new Date().getDay()]}, ${new Date().getDate()} ${MONTHS_SHORT[new Date().getMonth()]} · ${counts.today} left`
@@ -782,37 +906,34 @@ export default function TodosScreen() {
   };
   const sectionsWithRight = sections.map((s) => ({ ...s, color: s.overdue ? colors.brand[600] : undefined, right: sectionRight(s) }));
 
-  const layoutSwitch = (canBoard || canCalendar || canTimeline) ? (
-    <SlidingSegment
-      style={styles.layoutSwitch}
-      pillStyle={{ top: 3, bottom: 3, borderRadius: radius.md }}
-      value={effectiveLayout}
-      items={[
-        { key: 'list', icon: 'list', label: 'List', ok: true },
-        { key: 'board', icon: 'grid', label: 'Board', ok: canBoard },
-        { key: 'calendar', icon: 'calendar', label: 'Calendar', ok: canCalendar },
-        { key: 'timeline', icon: 'analytics', label: 'Timeline', ok: canTimeline },
-      ].filter((l) => l.ok).map((l) => ({
-        key: l.key,
-        content: <LayoutButton icon={l.icon} label={l.label} compact={windowWidth < 1400 && effectiveLayout !== l.key} active={effectiveLayout === l.key} onPress={() => chooseLayout(l.key)} />,
-      }))}
-    />
-  ) : null;
+  // Todoist's "Display" menu: the layout of this view (remembered per view) and, for a business board, how it groups.
+  const displayOptions = [
+    { key: 'list', label: 'List', icon: 'list-outline', ok: true },
+    { key: 'board', label: 'Board', icon: 'grid-outline', ok: canBoard },
+    { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', ok: canCalendar },
+    { key: 'timeline', label: 'Timeline', icon: 'analytics-outline', ok: canTimeline },
+  ].filter((o) => o.ok).map((o) => ({ ...o, active: effectiveLayout === o.key }))
+    .concat(onBoard && business ? BOARD_GROUPS.map((g) => ({ key: `group:${g.key}`, label: `Group by ${g.label.toLowerCase()}`, icon: g.icon, active: boardGroup === g.key })) : []);
+  const canDisplay = canBoard || canCalendar || canTimeline;
+  const onDisplay = (key) => {
+    if (String(key).startsWith('group:')) setBoardGroup(String(key).slice(6));
+    else chooseLayout(key);
+  };
+  const currentDisplay = displayOptions.find((o) => o.active && !String(o.key).startsWith('group:'));
 
   // ---- parts ---------------------------------------------------------------
+  // A project, business, filter or Completed opened from Browse gets a way back to it (the PWA has no browser back).
+  const showBack = !desktop && !TAB_VIEWS.includes(view) && !selectMode;
   const header = (
-    <View style={styles.header}>
-      {desktop && !selectMode && (
-        <IconButton
-          icon={sidebar.open ? 'chevron-back' : 'chevron-forward'}
-          onPress={sidebar.toggle}
-          accessibilityLabel={sidebar.open ? 'Hide the lists panel' : 'Show the lists panel'}
-          style={{ marginRight: spacing.xs, marginLeft: -spacing.sm }}
-        />
+    <View style={[styles.header, desktop && styles.headerDesktop]}>
+      {showBack && (
+        <IconButton icon="chevron-back" onPress={() => navigation.navigate('Browse')} accessibilityLabel="Back to Browse" style={{ marginLeft: -spacing.sm }} />
       )}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.title} numberOfLines={1}>{selectMode ? `${selected.size} selected` : viewTitle}</Text>
-        <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.title, desktop && styles.titleDesktop]} numberOfLines={1}>{selectMode ? `${selected.size} selected` : viewTitle}</Text>
+        {(selectMode || view === 'today' || !!business || view === 'done' || !!activeFilter) && (
+          <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+        )}
       </View>
       {selectMode ? (
         <AnimatedPressable onPress={exitSelect} style={styles.cancelBtn}>
@@ -822,14 +943,21 @@ export default function TodosScreen() {
         <>
           {view === 'today' && todayItems.length > 0 && (
             <AnimatedPressable onPress={() => setProductivityOpen(true)} accessibilityLabel="Productivity">
-              <ProgressRing percent={todayPercent} size={40} stroke={4} color={colors.brand[600]}>
+              <ProgressRing percent={todayPercent} size={36} stroke={4} color={colors.brand[600]}>
                 <Text style={styles.ringText}>{todayPercent}%</Text>
               </ProgressRing>
             </AnimatedPressable>
           )}
-          {desktop && layoutSwitch}
-          <IconButton icon={searching ? 'close' : 'search'} onPress={() => { setSearching((s) => !s); setSearch(''); }} accessibilityLabel="Search" />
-          <IconButton icon="ellipsis-horizontal" onPress={() => setMenuOpen(true)} accessibilityLabel="More options" />
+          {searching && <IconButton icon="close" onPress={() => { setSearching(false); setSearch(''); }} accessibilityLabel="Close search" />}
+          {canDisplay && (desktop ? (
+            <AnimatedPressable onPress={() => setDisplayOpen(true)} style={styles.displayBtn} accessibilityLabel="Display">
+              <Ionicons name={currentDisplay?.icon || 'options-outline'} size={17} color={colors.gray[600]} />
+              <Text style={styles.displayText}>Display: {currentDisplay?.label || 'List'}</Text>
+            </AnimatedPressable>
+          ) : (
+            <IconButton icon="options-outline" onPress={() => setDisplayOpen(true)} accessibilityLabel="Display" />
+          ))}
+          <IconButton icon={desktop ? 'ellipsis-horizontal' : 'ellipsis-vertical'} onPress={() => setMenuOpen(true)} accessibilityLabel="More options" />
         </>
       )}
     </View>
@@ -846,78 +974,6 @@ export default function TodosScreen() {
         placeholderTextColor={colors.gray[400]}
         style={styles.searchInput}
       />
-    </View>
-  ) : null;
-
-  const mobileNav = !desktop ? (
-    <View>
-      {showScopeSwitch && (
-        <SlidingSegment
-          style={styles.segment}
-          pillStyle={{ top: 3, bottom: 3, borderRadius: radius.md }}
-          value={scope}
-          items={[{ key: 'mine', label: 'My to-dos', icon: 'person-outline' }, { key: 'business', label: 'Business', icon: 'briefcase-outline' }].map((s) => ({
-            key: s.key,
-            style: { flex: 1 },
-            content: (
-              <AnimatedPressable
-                style={styles.segmentBtn}
-                onPress={() => {
-                  setScope(s.key);
-                  if (s.key === 'business' && !bizId) setView(`biz:${businesses[0].id}`);
-                  if (s.key === 'mine' && bizId) setView('today');
-                }}
-              >
-                <Ionicons name={s.icon} size={15} color={scope === s.key ? colors.brand[700] : colors.gray[500]} />
-                <Text style={[styles.segmentText, scope === s.key && styles.segmentTextOn]}>{s.label}</Text>
-              </AnimatedPressable>
-            ),
-          }))}
-        />
-      )}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsWrap}>
-        <SlideGroup style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} pillStyle={{ borderRadius: radius.full }}>
-        {scope === 'business' && hasBusiness ? (
-          businesses.map((b) => (
-            <ViewTab key={b.id} label={b.name} icon="briefcase-outline" count={bizCounts[b.id]} active={view === `biz:${b.id}`} onPress={() => setView(`biz:${b.id}`)} />
-          ))
-        ) : (
-          <>
-            <ViewTab label="Today" icon="today-outline" count={counts.today} active={view === 'today'} onPress={() => setView('today')} />
-            <ViewTab label="Upcoming" icon="calendar-outline" active={view === 'upcoming'} onPress={() => setView('upcoming')} />
-            <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
-            {counts.assigned > 0 || view === 'assigned' ? (
-              <ViewTab label="Assigned" icon="person-add-outline" count={counts.assigned} active={view === 'assigned'} onPress={() => setView('assigned')} />
-            ) : null}
-            {(view === 'shared' || inFilterView) && (
-              <ViewTab label={inFilterView ? viewTitle : 'Shared'} icon={inFilterView ? 'funnel-outline' : 'people-outline'} active onPress={() => {}} />
-            )}
-            <ViewTab label="Completed" icon="checkmark-done-outline" active={view === 'done'} onPress={() => setView('done')} />
-            {lists.map((l) => (
-              <ViewTab
-                key={l.id}
-                glyph={<ListGlyph list={l} size={15} color={view === `list:${l.id}` ? colors.brand[700] : colors.brand[600]} />}
-                label={l.name}
-                count={counts.lists[l.id]}
-                active={view === `list:${l.id}`}
-                onPress={() => setView(`list:${l.id}`)}
-              />
-            ))}
-            <Chip icon="add" label="List" color={colors.gray[500]} onPress={() => setListEditor({ name: '', color: 'red', emoji: 'list' })} />
-          </>
-        )}
-        </SlideGroup>
-      </ScrollView>
-      {!desktop && layoutSwitch && <View style={styles.mobileLayout}>{layoutSwitch}</View>}
-    </View>
-  ) : null;
-
-  const boardToolbar = onBoard && business ? (
-    <View style={styles.boardBar}>
-      <Text style={styles.boardBarLabel}>Group by</Text>
-      {BOARD_GROUPS.map((g) => (
-        <Chip key={g.key} small icon={g.icon} label={g.label} active={boardGroup === g.key} onPress={() => setBoardGroup(g.key)} />
-      ))}
     </View>
   ) : null;
 
@@ -968,28 +1024,42 @@ export default function TodosScreen() {
       />
     </ScrollView>
   ) : onBoard ? (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={[styles.content, { paddingBottom: 140 + insets.bottom }]}
-      refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {boardToolbar}
+    <View style={[styles.boardArea, desktop && styles.boardAreaDesktop]}>
       <BoardView
         columns={boardColumns}
         progressOf={(t) => subtaskProgress(t, todos)}
+        subtasksOf={(t) => todos.filter((c) => c.parent_id === t.id)}
         onOpen={openTodo}
         onToggle={toggleTodo}
-        onMove={setMoveCard}
+        onMove={desktop ? undefined : setMoveCard}
         onDrop={onBoardDrop}
         onReorder={onBoardReorder}
         selectedId={openTodoId}
         currentUserId={meId}
+        paged={!desktop}
         onAdd={(col) => setAddOpen(business
           ? { business_id: business.id }
           : sectioned ? { list_id: currentList?.id, section_id: col.section ? col.section.id : undefined }
             : true)}
-        onAddColumn={sectioned ? () => setSectionEditor({ list_id: currentList?.id || null, name: '' }) : undefined}
-        onEditColumn={sectioned ? (s) => setSectionEditor({ ...s }) : undefined}
+        addColumnLabel={sectioned ? 'Add section' : 'Add column'}
+        onAddColumn={sectioned
+          ? () => setColumnEditor({ kind: 'section', list_id: currentList?.id || null, name: '' })
+          : statusBoard ? () => setColumnEditor({ kind: 'bucket', name: '', base: 'todo' }) : undefined}
+        onEditColumn={sectioned
+          ? (s) => setColumnEditor({ kind: 'section', ...s })
+          : statusBoard ? (b) => setColumnEditor({ kind: 'bucket', ...b }) : undefined}
+      />
+    </View>
+  ) : browsePage ? (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={[styles.content, desktop && styles.contentDesktop, { paddingBottom: 140 + insets.bottom }]}
+    >
+      <FiltersLabelsPage
+        counts={counts}
+        onPick={(v) => { setView(v); setScope('mine'); }}
+        onEdit={(f) => setFilterEditor(f)}
+        onNew={() => setFilterEditor({ name: '', config: { ...FILTER_DEFAULT } })}
       />
     </ScrollView>
   ) : (
@@ -1091,9 +1161,8 @@ export default function TodosScreen() {
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
-      {mobileNav}
       <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>
-      {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
+      {view !== 'done' && !browsePage && !onBoard && !selectMode && effectiveLayout !== 'timeline' && (
         <View pointerEvents="box-none" style={[styles.composer, { bottom: desktop ? 20 : 12 }]}>
           <InlineQuickAdd
             ref={inlineAddRef}
@@ -1119,42 +1188,9 @@ export default function TodosScreen() {
     </View>
   );
 
-  const detailOpen = !!openTodoId && todos.some((t) => t.id === openTodoId);
-  // A wide detail pane needs the room: the lists panel steps aside (without forgetting the person's choice).
-  const sidebarSqueezed = wide && detailOpen && windowWidth < 1760;
-  const { setHidden: setSidebarSqueezed } = sidebar;
-  useEffect(() => { setSidebarSqueezed(sidebarSqueezed); }, [sidebarSqueezed, setSidebarSqueezed]);
-
   return (
     <View style={[styles.container, desktop && styles.containerDesktop]}>
-      {desktop && (
-        <Panel p={sidebar.p} width={252}>
-        <WorkSidebar
-          view={view}
-          onView={(v) => { setView(v); setScope(v.startsWith('biz:') ? 'business' : 'mine'); }}
-          counts={counts}
-          lists={lists}
-          filters={filters}
-          labels={labels}
-          businesses={businesses}
-          bizCounts={bizCounts}
-          approvalCount={approvalCount}
-          canMonitor={!!user?.can_monitor}
-          onAdd={() => setAddOpen(true)}
-          onNewList={() => setListEditor({ name: '', color: 'red', emoji: 'list' })}
-          onApprovals={() => navigation.navigate('Approvals')}
-          onMonitor={() => navigation.navigate('TeamMonitor')}
-          onFilters={() => setFiltersOpen(true)}
-          simple={simpleView}
-        />
-        </Panel>
-      )}
       {main}
-      {wide && detailOpen && (
-        <View {...glass('bar')} style={styles.detailPane}>
-          <TodoDetailBody todoId={openTodoId} onClose={() => setOpenTodoId(null)} variant="panel" />
-        </View>
-      )}
 
       <QuickAddSheet
         visible={!!addOpen}
@@ -1165,7 +1201,8 @@ export default function TodosScreen() {
         onClosed={() => { setCapsuleHidden(false); setAddOrigin(null); setAddText(''); }}
         defaults={typeof addOpen === 'object' ? { ...quickAddDefaults, ...addOpen } : quickAddDefaults}
       />
-      {!wide && <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />}
+      <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} onStep={flat.length > 1 ? stepFocus : undefined} />
+      <PickerSheet visible={displayOpen} onClose={() => setDisplayOpen(false)} title="Display" options={displayOptions} onPick={onDisplay} />
       <ShareToChatSheet
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -1201,6 +1238,16 @@ export default function TodosScreen() {
         }}
       />
       <ProductivitySheet visible={productivityOpen} onClose={() => setProductivityOpen(false)} />
+      <ColumnSheet
+        value={columnEditor}
+        places={(columnEditor?.kind === 'section' ? placeSections : bucketCols).map((c) => ({ id: c.id, name: c.name }))}
+        lockBase={!!columnEditor?.id && !!STATUS[columnEditor.id]}
+        canDelete={columnEditor?.kind === 'section' || canRemoveBucket(bucketCols, columnEditor?.id)}
+        onClose={() => setColumnEditor(null)}
+        onSave={saveColumn}
+        onDelete={deleteColumn}
+        onMove={moveColumn}
+      />
       <NameSheet
         value={sectionEditor}
         title={sectionEditor?.id ? 'Rename section' : 'New section'}
@@ -1308,49 +1355,6 @@ export default function TodosScreen() {
   );
 }
 
-function LayoutButton({ icon, label, active, onPress, compact }) {
-  const colors = useColors();
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      water
-      accessibilityLabel={`${label} layout`}
-      style={{
-        flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md,
-      }}
-    >
-      <Ionicons name={`${icon}${active ? '' : '-outline'}`} size={15} color={active ? colors.brand[700] : colors.gray[500]} />
-      {!compact && <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: active ? colors.brand[700] : colors.gray[500] }}>{label}</Text>}
-    </AnimatedPressable>
-  );
-}
-
-function ViewTab({ label, icon, glyph, count, active, onPress }) {
-  const colors = useColors();
-  return (
-    <SlideItem active={active}>
-    <AnimatedPressable
-      onPress={onPress}
-      water
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 13,
-        paddingVertical: 8,
-        borderRadius: radius.full,
-      }}
-    >
-      {glyph || (icon && <Ionicons name={icon} size={15} color={active ? colors.brand[700] : colors.brand[600]} />)}
-      <Text style={{ fontSize: fontSize.sm, fontWeight: active ? '700' : '600', color: active ? colors.brand[700] : colors.gray[700], maxWidth: 140 }} numberOfLines={1}>{label}</Text>
-      {count > 0 && (
-        <Text style={{ fontSize: 11, fontWeight: '700', color: active ? colors.brand[600] : colors.gray[400] }}>{count}</Text>
-      )}
-    </AnimatedPressable>
-    </SlideItem>
-  );
-}
-
 function ListEditor({ value, onClose, onSave, onDelete }) {
   const colors = useColors();
   const [draft, setDraft] = useState(value);
@@ -1432,10 +1436,10 @@ const createStyles = (colors) => StyleSheet.create({
   ringText: { fontSize: 10, fontWeight: '800', color: colors.gray[700] },
   cancelBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   cancelText: { fontSize: fontSize.base, fontWeight: '700', color: colors.brand[600] },
-  layoutSwitch: {
-    flexDirection: 'row', alignItems: 'center', gap: 2, padding: 3, borderRadius: radius.md, backgroundColor: colors.gray[100], marginRight: spacing.sm,
-  },
-  mobileLayout: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, alignItems: 'flex-start' },
+  headerDesktop: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm },
+  titleDesktop: { fontSize: 26, letterSpacing: -0.4 },
+  displayBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.md, marginRight: spacing.xs },
+  displayText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[600] },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1449,16 +1453,10 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.gray[200],
   },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' },
-  segment: {
-    flexDirection: 'row', gap: 4, marginHorizontal: spacing.lg, marginTop: spacing.md, padding: 3, borderRadius: radius.lg, backgroundColor: colors.gray[100],
-  },
-  segmentBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: radius.md },
-  segmentText: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[500] },
-  segmentTextOn: { color: colors.brand[700], fontWeight: '700' },
-  tabsWrap: { flexGrow: 0 },
-  tabs: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center' },
   content: { paddingHorizontal: spacing.lg },
-  contentDesktop: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+  contentDesktop: { paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
+  boardArea: { flex: 1, paddingTop: spacing.sm },
+  boardAreaDesktop: { paddingLeft: spacing.xxl - spacing.sm },
   boardBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, flexWrap: 'wrap' },
   boardBarLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[500] },
   boardBarHint: { fontSize: fontSize.sm, color: colors.gray[400], marginLeft: spacing.sm },
@@ -1473,7 +1471,4 @@ const createStyles = (colors) => StyleSheet.create({
   loadMoreText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[600] },
   dragHandle: { paddingTop: 2, paddingRight: 2, cursor: 'grab' },
   tip: { fontSize: fontSize.xs, color: colors.gray[400], textAlign: 'center', marginTop: spacing.xxl },
-  detailPane: {
-    width: 460, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.gray[200], backgroundColor: colors.white,
-  },
 });

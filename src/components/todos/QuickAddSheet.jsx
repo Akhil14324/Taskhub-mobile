@@ -154,6 +154,9 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const assignee = bizPeople.find((p) => p.id === effectiveBizAssignee) || null;
   const assignable = useMemo(() => people.filter((p) => p.id !== user?.id), [people, user]);
   const giveToPerson = giveTo ? assignable.find((p) => p.id === giveTo) || null : null;
+  const delegateToId = businessId ? null
+    : giveToPerson ? giveToPerson.id
+      : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : null);
   const giveMatches = useMemo(() => filterPeople(assignable, giveQuery.replace(/^@/, ''), { limit: 30 }), [assignable, giveQuery]);
   const proposing = !!business && !business.can_manage && !isSubtask;
 
@@ -213,15 +216,15 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         section_id: sectionId,
         parent_id: defaults.parent_id || undefined,
         business_id: businessId || undefined,
-        assign_to: businessId
-          ? (effectiveBizAssignee || undefined)
-          : giveToPerson ? undefined : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),
+        assign_to: businessId ? (effectiveBizAssignee || undefined) : undefined,
         requires_approval: businessId && review !== null ? review : undefined,
         labels: allLabels,
         deadline_date: deadline,
         duration_minutes: duration,
-        mention_ids: giveToPerson ? [] : mentionedPeople.map((p) => p.id),
-        delegate_to: giveToPerson && !businessId ? giveToPerson.id : undefined,
+        mention_ids: businessId || delegateToId ? [] : mentionedPeople.map((p) => p.id),
+        // Assigning a personal to-do hands it over: it lands in their Inbox / Today and stays off my lists.
+        // Merely @mentioning someone shares it instead.
+        delegate_to: delegateToId || undefined,
       });
       setGiveTo(null);
       setAssignId(null);
@@ -420,7 +423,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
               small
               icon={effectiveAssignId === p.id ? 'person-add' : 'person'}
               active={effectiveAssignId === p.id}
-              label={effectiveAssignId === p.id ? `Assigned to ${p.name.split(' ')[0]}` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
+              label={effectiveAssignId === p.id ? `Assigned to ${p.name.split(' ')[0]} · not on your list` : `Shared with ${p.name.split(' ')[0]} · tap to assign`}
               onPress={() => {
                 if (delegateHere && p.id === delegateHere.id) setDelegateOff(true);
                 else setAssignId(assignId === p.id ? null : p.id);
