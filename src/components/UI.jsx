@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect } from 'react';
+import { memo, useMemo, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -106,12 +106,25 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
   const insets = useSafeAreaInsets();
   const sheetTranslateY = useSharedValue(400);
   const overlayOpacity = useSharedValue(0);
+  // Stays mounted while the sheet slides away: the scrim then still catches the tap that closed it (and its
+  // trailing click) instead of the control underneath, and every open starts from the bottom again.
+  const [mounted, setMounted] = useState(visible);
+  const unmountTimer = useRef(null);
 
   useEffect(() => {
+    clearTimeout(unmountTimer.current);
     if (visible) {
+      sheetTranslateY.value = 400;
+      overlayOpacity.value = 0;
+      setMounted(true);
       sheetTranslateY.value = withSpring(0, SPRING.sheet);
       overlayOpacity.value = withTiming(1, { duration: 220 });
+    } else {
+      sheetTranslateY.value = withTiming(400, { duration: 220, easing: Easing.in(Easing.cubic) });
+      overlayOpacity.value = withTiming(0, { duration: 220 });
+      unmountTimer.current = setTimeout(() => setMounted(false), 260);
     }
+    return () => clearTimeout(unmountTimer.current);
   }, [visible, sheetTranslateY, overlayOpacity]);
 
   const sheetStyle = useAnimatedStyle(() => ({
@@ -123,10 +136,10 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }, overlayStyle]}>
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <Animated.View {...glass('sheet')} style={[styles.sheet, desktop ? { width: '100%', maxWidth: 420, borderRadius: 28, paddingBottom: spacing.md } : { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={visible ? onClose : undefined} />
+        <Animated.View pointerEvents={visible ? 'auto' : 'none'} {...glass('sheet')} style={[styles.sheet, desktop ? { width: '100%', maxWidth: 420, borderRadius: 28, paddingBottom: spacing.md } : { paddingBottom: spacing.xxl + insets.bottom }, sheetStyle]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{title || t('more')}</Text>
             <AnimatedPressable onPress={onClose} style={styles.sheetCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close" haptic="light">
