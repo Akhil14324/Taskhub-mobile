@@ -95,6 +95,7 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
             <Avatar name={person.name} uri={person.profile_picture} size={64} online={onlineUsers.has(person.id)} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{person.name}{isMe ? ' (you)' : ''}</Text>
+              <Text style={styles.title}>{person.display_title || person.tier || 'Team member'}</Text>
               <Text style={styles.username}>
                 @{person.username}
                 {onlineUsers.has(person.id) ? ' · online' : person.last_seen ? ` · seen ${timeAgo(person.last_seen)}` : ''}
@@ -108,7 +109,7 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
                 <View key={m.business_id} style={[styles.membership, { backgroundColor: tint(accent(m.business_color), 0.12) }]}>
                   <View style={[styles.dot, { backgroundColor: accent(m.business_color) }]} />
                   <Text style={[styles.membershipText, { color: accent(m.business_color) }]}>
-                    {m.business_name}
+                    {m.title || m.designation_label} · {m.business_name}
                   </Text>
                 </View>
               ))}

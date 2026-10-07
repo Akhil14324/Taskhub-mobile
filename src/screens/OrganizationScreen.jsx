@@ -15,12 +15,17 @@ import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import PersonSheet from '../components/org/PersonSheet';
 import PersonEditorSheet from '../components/org/PersonEditorSheet';
 import BusinessEditorSheet from '../components/org/BusinessEditorSheet';
+import OrgLegend from '../components/org/OrgLegend';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import { Avatar, Chip, IconButton, accent, tint } from '../components/kit';
 import useDirectory, { filterPeople, invalidateDirectory } from '../hooks/useDirectory';
 import { showToast } from '../utils/events';
-import { TIER_SHADES, businessIcon, designationIcon } from '../utils/orgMeta';
+import { TIER_ICONS, TIER_SHADES, businessIcon, designationIcon } from '../utils/orgMeta';
 import { glass } from '../theme/glass';
+
+// Accountants and heads are always on show; everyone else sits in the expandable list.
+const KEY_DESIGNATIONS = ['head', 'accountant'];
+
 
 export default function OrganizationScreen() {
   const colors = useColors();
@@ -111,6 +116,7 @@ export default function OrganizationScreen() {
 
   const tiers = [1, 2, 3].map((level) => ({
     level,
+    label: structure.leadership.find((l) => l.level === level)?.label,
     people: structure.leaders.filter((p) => p.org_level === level),
   })).filter((t) => t.people.length > 0);
 
@@ -152,7 +158,7 @@ export default function OrganizationScreen() {
                 <Avatar name={p.name} uri={p.profile_picture} size={40} online={onlineUsers.has(p.id)} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.personName}>{p.name}</Text>
-                  <Text style={styles.personTitle}>@{p.username}</Text>
+                  <Text style={styles.personTitle}>@{p.username}{p.display_title ? ` · ${p.display_title}` : ''}</Text>
                 </View>
               </AnimatedPressable>
             ))}
@@ -160,15 +166,22 @@ export default function OrganizationScreen() {
           </View>
         ) : (
           <>
+            <OrgLegend structure={structure} />
+
             {/* Leadership chain */}
             {tiers.map((tier, i) => (
               <Animated.View key={tier.level} entering={FadeInDown.delay(i * 90).duration(320)} style={{ alignItems: 'center' }}>
                 {i > 0 && <View style={styles.connector} />}
+                <View style={[styles.tierBadge, { backgroundColor: tint(TIER_SHADES[tier.level], 0.12) }]}>
+                  <Ionicons name={TIER_ICONS[tier.level]} size={12} color={TIER_SHADES[tier.level]} />
+                  <Text style={[styles.tierLabel, { color: TIER_SHADES[tier.level] }]}>{tier.label}</Text>
+                </View>
                 <View style={styles.tierRow}>
                   {tier.people.map((p) => (
                     <AnimatedPressable key={p.id} onPress={() => openPerson(p)} haptic="light" style={[styles.leaderCard, { borderColor: tint(TIER_SHADES[tier.level], 0.4) }]}>
                       <Avatar name={p.name} uri={p.profile_picture} size={tier.level === 1 ? 56 : 46} online={onlineUsers.has(p.id)} />
                       <Text style={styles.leaderName} numberOfLines={1}>{p.name}</Text>
+                      <Text style={styles.leaderTitle} numberOfLines={1}>{p.display_title}</Text>
                       {p.id === user?.id && <Text style={styles.youTag}>You</Text>}
                     </AnimatedPressable>
                   ))}
@@ -191,7 +204,11 @@ export default function OrganizationScreen() {
             </View>
             {structure.businesses.map((b, i) => {
               const open = !!expanded[b.id];
+              const groups = structure.designations
+                .map((d) => ({ ...d, members: b.members.filter((m) => m.designation === d.key && !KEY_DESIGNATIONS.includes(d.key)) }))
+                .filter((g) => g.members.length);
               const iManage = portal || (user?.manages_business_ids || []).includes(b.id);
+              const keyPeople = b.members.filter((m) => KEY_DESIGNATIONS.includes(m.designation));
               return (
                 <Animated.View key={b.id} entering={FadeInDown.delay(200 + i * 70).duration(300)} layout={LinearTransition}>
                   <View {...glass('card')} style={styles.bizCard}>
@@ -212,17 +229,43 @@ export default function OrganizationScreen() {
                       </View>
                     </AnimatedPressable>
 
+                    {/* Heads and accountants are always visible */}
+                    <View style={styles.headsRow}>
+                      {b.heads.length === 0 && <Text style={styles.muted}>No head assigned yet</Text>}
+                      {keyPeople.map((h) => (
+                        <AnimatedPressable key={h.id} style={styles.headChip} onPress={() => openPerson(h)} haptic="light">
+                          <Avatar name={h.name} uri={h.profile_picture} size={26} online={onlineUsers.has(h.id)} />
+                          <View>
+                            <Text style={styles.headName} numberOfLines={1}>{h.name}</Text>
+                            <View style={styles.roleLine}>
+                              <Ionicons name={designationIcon(h.designation)} size={10} color={colors.gray[500]} />
+                              <Text style={styles.headRole}>{h.membership_title || h.designation_label}</Text>
+                            </View>
+                          </View>
+                        </AnimatedPressable>
+                      ))}
+                    </View>
+
                     {open && (
                       <Animated.View entering={FadeIn.duration(200)}>
-                        <View style={styles.memberGrid}>
-                          {b.members.map((m) => (
-                            <AnimatedPressable key={m.id} style={styles.member} onPress={() => openPerson(m)} haptic="light">
-                              <Avatar name={m.name} uri={m.profile_picture} size={38} online={onlineUsers.has(m.id)} />
-                              <Text style={styles.memberName} numberOfLines={1}>{m.name.split(' ')[0]}</Text>
-                            </AnimatedPressable>
-                          ))}
-                        </View>
-                        {b.members.length === 0 &&<Text style={[styles.muted, { marginTop: spacing.md }]}>No team members yet.</Text>}
+                        {groups.map((g) => (
+                          <View key={g.key} style={{ marginTop: spacing.md }}>
+                            <View style={styles.roleLine}>
+                              <Ionicons name={designationIcon(g.key)} size={12} color={colors.gray[500]} />
+                              <Text style={styles.groupLabel}>{g.label}s · {g.members.length}</Text>
+                            </View>
+                            <View style={styles.memberGrid}>
+                              {g.members.map((m) => (
+                                <AnimatedPressable key={m.id} style={styles.member} onPress={() => openPerson(m)} haptic="light">
+                                  <Avatar name={m.name} uri={m.profile_picture} size={38} online={onlineUsers.has(m.id)} />
+                                  <Text style={styles.memberName} numberOfLines={1}>{m.name.split(' ')[0]}</Text>
+                                  {!!m.membership_title && <Text style={styles.memberTitle} numberOfLines={1}>{m.membership_title}</Text>}
+                                </AnimatedPressable>
+                              ))}
+                            </View>
+                          </View>
+                        ))}
+                        {groups.length === 0 && <Text style={[styles.muted, { marginTop: spacing.md }]}>No team members yet.</Text>}
                         <View style={styles.bizActions}>
                           <Chip small icon="clipboard" label="Tasks" onPress={() => navigation.navigate('Main', { screen: 'Todos', params: { business_id: b.id } })} />
                           {iManage && <Chip small icon="person-add" label="Add member" onPress={() => setAddMemberFor(b)} />}
@@ -352,7 +395,7 @@ function AddMemberSheet({ business, designations, myLevel, portal, onClose, onDo
                     <Avatar name={p.name} uri={p.profile_picture} size={34} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] }}>{p.name}</Text>
-                      <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>@{p.username}</Text>
+                      <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>@{p.username}{p.display_title ? ` · ${p.display_title}` : ''}</Text>
                     </View>
                   </AnimatedPressable>
                 ))}

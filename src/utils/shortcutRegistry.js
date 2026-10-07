@@ -39,6 +39,7 @@ export const ACTIONS = [
   { id: 'todo.p2', group: 'To-do list', label: 'Priority 2', scope: 'todos', combos: ['2'] },
   { id: 'todo.p3', group: 'To-do list', label: 'Priority 3', scope: 'todos', combos: ['3'] },
   { id: 'todo.p4', group: 'To-do list', label: 'Priority 4', scope: 'todos', combos: ['4'] },
+  { id: 'todo.sidebar', group: 'To-do list', label: 'Hide or show the lists panel', scope: 'todos', combos: ['['] },
   { id: 'view.list', group: 'To-do layouts', label: 'List layout', scope: 'todos', combos: ['v l'] },
   { id: 'view.board', group: 'To-do layouts', label: 'Board layout', scope: 'todos', combos: ['v b'] },
   { id: 'view.calendar', group: 'To-do layouts', label: 'Calendar layout', scope: 'todos', combos: ['v c'] },
