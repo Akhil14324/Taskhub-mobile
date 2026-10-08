@@ -84,7 +84,7 @@ export function SectionMenu({ section, siblings, items = [], onEdit, onAddTodo, 
     index > 0 && { key: 'left', label: 'Move earlier', icon: 'arrow-up-outline' },
     index >= 0 && index < siblings.length - 1 && { key: 'right', label: 'Move later', icon: 'arrow-down-outline' },
     { key: 'duplicate', label: 'Duplicate', icon: 'copy-outline' },
-    businesses.length > 0 && items.length > 0 && { key: 'business', label: 'Move to a business', icon: 'briefcase-outline' },
+    !section.business_id && businesses.length > 0 && items.length > 0 && { key: 'business', label: 'Move to a business', icon: 'briefcase-outline' },
     { key: 'archive', label: section.archived ? 'Bring back' : 'Archive', icon: section.archived ? 'arrow-undo-outline' : 'archive-outline' },
     { key: 'delete', label: 'Delete', icon: 'trash-outline', destructive: true },
   ].filter(Boolean);

@@ -302,11 +302,11 @@ export function TodoProvider({ children }) {
 
   // ---- sections ------------------------------------------------------------
   const createSection = useCallback(async (listId, name, extra = {}) => {
-    const res = await api.post(listId ? `/todos/lists/${listId}/sections` : '/todos/sections', {
-      name, description: extra.description, position: extra.position,
-    });
+    const url = extra.businessId ? `/todos/businesses/${extra.businessId}/sections`
+      : listId ? `/todos/lists/${listId}/sections` : '/todos/sections';
+    const res = await api.post(url, { name, description: extra.description, position: extra.position });
     // The server may renumber the others to make room, so take its word for the order.
-    if (extra.position !== undefined && extra.position !== null) await fetchTodos();
+    if (extra.businessId || (extra.position !== undefined && extra.position !== null)) await fetchTodos();
     else setSections((prev) => [...prev, res.data.section]);
     return res.data.section;
   }, [fetchTodos]);

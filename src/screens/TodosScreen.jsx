@@ -24,6 +24,7 @@ import ProductivitySheet from '../components/todos/ProductivitySheet';
 import BoardView from '../components/todos/BoardView';
 import { SectionEditorSheet, SectionMenu } from '../components/todos/SectionTools';
 import ItemMenu from '../components/todos/ItemMenu';
+import useSectionReorder from '../hooks/useSectionReorder';
 import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import { openTemplates } from '../utils/events';
@@ -39,7 +40,7 @@ import * as SecureStore from '../utils/secureStorage';
 import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd, formatTime } from '../utils/dates';
 import {
-  BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf, isAssignedTodo, isSharedTodo,
+  BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf, isAssignedTodo, isSharedTodo, labelsFrom, FILTER_DEFAULT,
 } from '../utils/todoMeta';
 import { STATUS } from '../utils/timeline';
 import { showToast, confirmDialog } from '../utils/events';
@@ -49,11 +50,12 @@ import SlidingSegment from '../components/SlidingSegment';
 import { Panel, usePanel } from '../components/Panel';
 import { SlideGroup, SlideItem } from '../components/SlideGroup';
 
-const BOARD_GROUPS = [
+const BOARD_GROUPS_BASE = [
   { key: 'status', label: 'Status', icon: 'git-commit-outline' },
   { key: 'assignee', label: 'Person', icon: 'person-outline' },
   { key: 'priority', label: 'Priority', icon: 'flag-outline' },
 ];
+const BOARD_GROUPS = [...BOARD_GROUPS_BASE, { key: 'section', label: 'Section', icon: 'albums-outline' }];
 const BOARD_STATUSES = ['todo', 'in_progress', 'in_review', 'blocked', 'on_hold', 'done'];
 
 /** Open first, then finished; each keeps its existing (due date, priority) order. */
@@ -82,7 +84,7 @@ export default function TodosScreen() {
     todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos,
     updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, updateSection, deleteSection, saveFilter,
     deleteFilter, shareTodos, reorderTodos, fetchCompleted, mergeTodos, setTodoStatus, assignTodoTo, requestDelete,
-    saveBoardOrder, favorites,
+    saveBoardOrder, favorites, reorderSections,
   } = useTodos();
 
   // today | upcoming | inbox | shared | done | list:<id> | filter:<id> | label:<name> | biz:<id>
@@ -142,6 +144,28 @@ export default function TodosScreen() {
 
   const bizId = view.startsWith('biz:') ? Number(view.slice(4)) : null;
   const business = bizId ? businesses.find((b) => b.id === bizId) || null : null;
+
+  // A business can have sections, saved filters and labels like a person's own work. Sections belong to the business.
+  const [bizFilter, setBizFilter] = useState(null); // { kind: 'filter' | 'label', key }
+  const [listGroup, setListGroup] = useState('date'); // business list layout: 'date' | 'section'
+  useEffect(() => { setBizFilter(null); }, [bizId]);
+  const bizAll = useMemo(() => (bizId ? todos.filter((t) => t.business_id === bizId) : []), [todos, bizId]);
+  const bizSections = useMemo(() => allSections.filter((s) => s.business_id === bizId && !s.archived), [allSections, bizId]);
+  const bizArchived = useMemo(() => allSections.filter((s) => s.business_id === bizId && s.archived), [allSections, bizId]);
+  const bizLabels = useMemo(() => labelsFrom(bizAll), [bizAll]);
+  const bizTodos = useMemo(() => {
+    if (!bizFilter) return bizAll;
+    const roots = bizAll.filter((t) => !t.parent_id);
+    let keep = roots;
+    if (bizFilter.kind === 'label') keep = roots.filter((t) => (t.labels || []).includes(bizFilter.key));
+    else {
+      const f = BUILTIN_FILTERS.find((b) => b.id === bizFilter.key) || filters.find((x) => String(x.id) === String(bizFilter.key));
+      if (f) keep = applyFilter(roots, f.config, { userId: meId, today });
+    }
+    const ids = new Set(keep.map((t) => t.id));
+    keep.forEach((r) => descendantsOf(r.id, bizAll).forEach((d) => ids.add(d.id)));
+    return bizAll.filter((t) => ids.has(t.id));
+  }, [bizAll, bizFilter, filters, meId, today]);
 
   // Deep links: from a notification (highlightId), from a business or person card (business_id, create).
   useEffect(() => {
@@ -206,10 +230,10 @@ export default function TodosScreen() {
     () => (currentList ? allSections.filter((s) => s.list_id === currentList.id && !s.archived) : []),
     [allSections, currentList]
   );
-  const inboxSections = useMemo(() => allSections.filter((s) => !s.list_id && !s.archived), [allSections]);
+  const inboxSections = useMemo(() => allSections.filter((s) => !s.list_id && !s.business_id && !s.archived), [allSections]);
   // Archived sections of the place being shown (hidden, with their to-dos, until asked for).
   const archivedSections = useMemo(
-    () => allSections.filter((s) => s.archived && (currentList ? s.list_id === currentList.id : view === 'inbox' && !s.list_id)),
+    () => allSections.filter((s) => s.archived && !s.business_id && (currentList ? s.list_id === currentList.id : view === 'inbox' && !s.list_id)),
     [allSections, currentList, view]
   );
   // Sections of the place being shown: a list's own, or the Inbox's.
@@ -309,11 +333,11 @@ export default function TodosScreen() {
     let manualOrder = false;
 
     if (q) {
-      const pool = bizId ? todos.filter((t) => t.business_id === bizId) : todos;
+      const pool = bizId ? bizTodos : todos;
       sectionsOut.push({ key: 'results', title: `Results for “${search.trim()}”`, items: pool.filter((t) => !t.is_done && match(t)) });
       done = pool.filter((t) => t.is_done && match(t));
     } else if (business) {
-      const items = todos.filter((t) => t.business_id === bizId);
+      const items = bizTodos;
       const roots = items.filter((t) => !t.parent_id);
       const proposed = roots.filter((t) => t.review_state !== 'accepted');
       const live = roots.filter((t) => t.review_state === 'accepted');
@@ -325,6 +349,26 @@ export default function TodosScreen() {
       if (proposed.length) {
         sectionsOut.push({ key: 'proposed', title: 'Awaiting review', items: withKids(proposed), count: proposed.length });
       }
+      if (listGroup === 'section') {
+        // By section: "No section" first, then each of the business's sections, open work above finished work.
+        const manage = !!business.can_manage;
+        const archivedIds = new Set(bizArchived.map((s) => s.id));
+        const shownArchived = showArchived ? bizArchived : [];
+        const inSection = (id) => openFirst(live.filter((t) => (t.business_section_id || null) === id));
+        sectionsOut.push({ key: 'nosec', title: bizSections.length || shownArchived.length ? 'No section' : null, top: manage, reorderable: manage, items: withKids(openFirst(live.filter((t) => !t.business_section_id))) });
+        bizSections.forEach((s, i) => {
+          sectionsOut.push({
+            key: `sec:${s.id}`, title: s.name, description: s.description, section: manage ? s : undefined, reorderable: manage,
+            addAbove: manage ? () => setSectionEditor({ business_id: bizId, name: '', position: i }) : undefined,
+            items: withKids(inSection(s.id)),
+          });
+        });
+        shownArchived.forEach((s) => {
+          sectionsOut.push({ key: `sec:${s.id}`, title: `${s.name} (archived)`, description: s.description, section: manage ? s : undefined, items: withKids(inSection(s.id)) });
+        });
+        void archivedIds;
+        done = [];
+      } else {
       const overdue = live.filter((t) => !t.is_done && t.due_date && t.due_date < today);
       if (overdue.length) sectionsOut.push({ key: 'overdue', title: 'Overdue', items: withKids(overdue), count: overdue.length, overdue: true });
       const dates = [...new Set(live.filter((t) => t.due_date && t.due_date >= today).map((t) => t.due_date))].sort();
@@ -338,6 +382,7 @@ export default function TodosScreen() {
       const undated = openFirst(live.filter((t) => !t.due_date && (!t.is_done || (t.done_at && toYmd(new Date(t.done_at)) >= addDays(today, -7)))));
       if (undated.length) sectionsOut.push({ key: 'nodate', title: 'No date', items: withKids(undated), count: undated.length });
       done = live.filter((t) => t.is_done && ((t.due_date && t.due_date < today) || (!t.due_date && t.done_at && toYmd(new Date(t.done_at)) < addDays(today, -7))));
+      }
     } else if (view === 'today') {
       const overdue = open.filter((t) => t.due_date && t.due_date < today && match(t));
       const todayItems = openFirst(mine.filter((t) => match(t) && (
@@ -367,9 +412,9 @@ export default function TodosScreen() {
       if (inboxSections.length === 0) {
         sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inboxOpen) });
       } else {
-        sectionsOut.push({ key: 'nosec', title: 'No section', items: manualSort(inboxOpen.filter((t) => !t.section_id)) });
+        sectionsOut.push({ key: 'nosec', title: 'No section', top: true, reorderable: true, items: manualSort(inboxOpen.filter((t) => !t.section_id)) });
         inboxSections.forEach((sec, i) => {
-          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, description: sec.description, section: sec, addAbove: () => setSectionEditor({ list_id: null, name: '', position: i }), items: manualSort(inboxOpen.filter((t) => t.section_id === sec.id)) });
+          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, description: sec.description, section: sec, reorderable: true, addAbove: () => setSectionEditor({ list_id: null, name: '', position: i }), items: manualSort(inboxOpen.filter((t) => t.section_id === sec.id)) });
         });
       }
       if (showArchived) {
@@ -411,9 +456,9 @@ export default function TodosScreen() {
       if (listSections.length === 0) {
         sectionsOut.push({ key: 'list', title: null, items: manualSort(listOpen) });
       } else {
-        sectionsOut.push({ key: 'nosec', title: 'No section', items: manualSort(listOpen.filter((t) => !t.section_id)) });
+        sectionsOut.push({ key: 'nosec', title: 'No section', top: true, reorderable: true, items: manualSort(listOpen.filter((t) => !t.section_id)) });
         listSections.forEach((s, i) => {
-          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, description: s.description, section: s, addAbove: () => setSectionEditor({ list_id: currentList.id, name: '', position: i }), items: manualSort(listOpen.filter((t) => t.section_id === s.id)) });
+          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, description: s.description, section: s, reorderable: true, addAbove: () => setSectionEditor({ list_id: currentList.id, name: '', position: i }), items: manualSort(listOpen.filter((t) => t.section_id === s.id)) });
         });
       }
       if (showArchived) {
@@ -430,7 +475,7 @@ export default function TodosScreen() {
     }
     const ids = sectionsOut.flatMap((s) => s.items.filter((t) => !t.parent_id || !s.items.some((p) => p.id === t.parent_id)).map((t) => t.id));
     return { sections: sectionsOut, doneItems: done, visibleIds: ids, manual: manualOrder && !q };
-  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, business, bizId]);
+  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, business, bizId, bizTodos, bizSections, bizArchived, listGroup]);
 
   const todayItems = useMemo(() => mine.filter((t) => t.due_date === today), [mine, today]);
   const todayDone = todayItems.filter((t) => t.is_done).length;
@@ -496,6 +541,11 @@ export default function TodosScreen() {
 
   // ---- ordering by drag (desktop web) --------------------------------------
   const onReorder = useCallback((ids) => reorderTodos(ids), [reorderTodos]);
+  const onSectionsReorder = useCallback((ids) => { reorderSections(ids); }, [reorderSections]);
+  useSectionReorder(listAreaRef, {
+    enabled: !selectMode && !onBoard && !onTimeline && !loading && view !== 'done' && (sectioned || (!!business && listGroup === 'section' && !!business.can_manage)),
+    onReorder: onSectionsReorder,
+  });
   useWebReorder(listAreaRef, { enabled: manual && !selectMode && !onBoard && !onTimeline && !loading && view !== 'done', onReorder });
 
   const toggleCollapse = useCallback((todo) => {
@@ -617,7 +667,13 @@ export default function TodosScreen() {
       }));
     }
     // Business board.
-    const items = todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
+    const items = bizTodos.filter((t) => !t.parent_id && t.review_state === 'accepted');
+    if (boardGroup === 'section') {
+      const manage = !!business.can_manage;
+      const cols = [{ key: 'none', title: 'No section', icon: 'albums-outline', items: byBoardPos(openFirst(items.filter((t) => !t.business_section_id))) }];
+      bizSections.forEach((s) => cols.push({ key: `s${s.id}`, title: s.name, section: manage ? s : undefined, icon: 'albums-outline', items: byBoardPos(openFirst(items.filter((t) => t.business_section_id === s.id))) }));
+      return cols;
+    }
     if (boardGroup === 'assignee') {
       const people = new Map();
       items.forEach((t) => { if (t.assignee_id) people.set(t.assignee_id, t.assignee_name || 'Someone'); });
@@ -640,12 +696,12 @@ export default function TodosScreen() {
         ? t.is_done && (!t.done_at || toYmd(new Date(t.done_at)) >= recentDone)
         : !t.is_done && t.status === s))),
     }));
-  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today]);
+  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today, bizTodos, bizSections]);
 
   // ---- calendar ------------------------------------------------------------
   const calendarItems = useMemo(() => {
     if (!onCalendar) return [];
-    if (business) return todos.filter((t) => t.business_id === bizId && !t.parent_id && t.review_state === 'accepted');
+    if (business) return bizTodos.filter((t) => !t.parent_id && t.review_state === 'accepted');
     const notNested = (t) => !t.parent_id;
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
     if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
@@ -654,7 +710,7 @@ export default function TodosScreen() {
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
     if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
     return mine.filter(notNested);
-  }, [onCalendar, business, bizId, todos, personal, mine, open, currentList, view, activeFilter, labelName, meId, today]);
+  }, [onCalendar, business, bizId, bizTodos, todos, personal, mine, open, currentList, view, activeFilter, labelName, meId, today]);
 
   const colByKey = useMemo(() => new Map(boardColumns.map((c) => [String(c.key), c])), [boardColumns]);
 
@@ -665,6 +721,8 @@ export default function TodosScreen() {
     try {
       if (sectioned) {
         await updateTodo(t.id, { section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
+      } else if (business && boardGroup === 'section') {
+        await updateTodo(t.id, { business_section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
       } else if (business && boardGroup === 'assignee') {
         if (colKey === 'open') await updateTodo(t.id, { assigned_user_id: null });
         else await assignTodoTo(t.id, Number(String(colKey).slice(1)));
@@ -797,7 +855,7 @@ export default function TodosScreen() {
     if (section.section) {
       return (
         <View style={styles.sectionActions}>
-          <AnimatedPressable onPress={() => setAddOpen({ list_id: currentList?.id, section_id: section.section.id })} hitSlop={8}>
+          <AnimatedPressable onPress={() => setAddOpen(section.section.business_id ? { business_id: section.section.business_id, business_section_id: section.section.id } : { list_id: currentList?.id, section_id: section.section.id })} hitSlop={8}>
             <Ionicons name="add" size={20} color={colors.gray[400]} />
           </AnimatedPressable>
           <AnimatedPressable onPress={() => setSectionMenu(section.section)} hitSlop={8} accessibilityLabel="Section options">
@@ -967,6 +1025,45 @@ export default function TodosScreen() {
     </View>
   ) : null;
 
+  // Inside a business: how to group the list, which saved filter or label narrows it, and the archived sections.
+  const bizBar = business && !onTimeline ? (
+    <View style={styles.bizBar}>
+      {!onBoard && !onCalendar && (
+        <View style={styles.bizRow}>
+          <Text style={styles.boardBarLabel}>Group by</Text>
+          <Chip small icon="calendar-outline" label="Date" active={listGroup === 'date'} onPress={() => setListGroup('date')} />
+          <Chip small icon="albums-outline" label="Section" active={listGroup === 'section'} onPress={() => setListGroup('section')} />
+          {listGroup === 'section' && business.can_manage && (
+            <Chip small icon="add" label="Add section" onPress={() => setSectionEditor({ business_id: bizId, name: '' })} />
+          )}
+          {listGroup === 'section' && business.can_manage && bizSections.length === 0 && (
+            <Chip small icon="sparkles-outline" label="Start with 3 sections" onPress={async () => {
+              try { for (const n of ['To do', 'In progress', 'Waiting']) await createSection(null, n, { businessId: bizId }); } catch (err) { showToast({ message: err.response?.data?.error || 'Could not add the sections', tone: 'error' }); }
+            }} />
+          )}
+          {bizArchived.length > 0 && <Chip small icon="archive-outline" label={`Archived · ${bizArchived.length}`} active={showArchived} onPress={() => setShowArchived((v) => !v)} />}
+        </View>
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bizRow}>
+        <Text style={styles.boardBarLabel}>Show</Text>
+        <Chip small icon="apps-outline" label="All" active={!bizFilter} onPress={() => setBizFilter(null)} />
+        {BUILTIN_FILTERS.slice(0, 3).map((f) => (
+          <Chip key={f.id} small icon={`${f.icon}-outline`} label={f.name} active={bizFilter?.kind === 'filter' && bizFilter.key === f.id} onPress={() => setBizFilter({ kind: 'filter', key: f.id })} />
+        ))}
+        {filters.map((f) => (
+          <Chip key={f.id} small icon="funnel-outline" label={f.name} active={bizFilter?.kind === 'filter' && String(bizFilter.key) === String(f.id)} onPress={() => setBizFilter({ kind: 'filter', key: String(f.id) })} />
+        ))}
+        {bizLabels.map((l) => (
+          <Chip key={l.name} small icon="pricetag-outline" label={l.name} active={bizFilter?.kind === 'label' && bizFilter.key === l.name} onPress={() => setBizFilter({ kind: 'label', key: l.name })} />
+        ))}
+        <Chip small icon="add" label="New filter" onPress={() => setFilterEditor({ name: '', config: { ...FILTER_DEFAULT } })} />
+        {bizFilter?.kind === 'filter' && !BUILTIN_FILTERS.some((b) => b.id === bizFilter.key) && (
+          <Chip small icon="create-outline" label="Edit this filter" onPress={() => setFilterEditor(filters.find((x) => String(x.id) === String(bizFilter.key)) || null)} />
+        )}
+      </ScrollView>
+    </View>
+  ) : null;
+
   const timelineToolbar = onTimeline ? (
     <View style={styles.boardBar}>
       <Text style={styles.boardBarLabel}>Show</Text>
@@ -1031,12 +1128,14 @@ export default function TodosScreen() {
         selectedId={openTodoId}
         currentUserId={meId}
         onAdd={(col) => setAddOpen(business
-          ? { business_id: business.id }
+          ? { business_id: business.id, ...(col.section ? { business_section_id: col.section.id } : {}) }
           : sectioned ? { list_id: currentList?.id, section_id: col.section ? col.section.id : undefined }
             : true)}
-        onAddColumn={sectioned ? () => setSectionEditor({ list_id: currentList?.id || null, name: '' }) : undefined}
+        onAddColumn={sectioned ? () => setSectionEditor({ list_id: currentList?.id || null, name: '' })
+          : business && boardGroup === 'section' && business.can_manage ? () => setSectionEditor({ business_id: bizId, name: '' }) : undefined}
+        onReorderColumns={sectioned || (business && boardGroup === 'section' && business.can_manage) ? (ids) => reorderSections(ids) : undefined}
         onStarter={sectioned && placeSections.length === 0 ? () => addStarterSections(currentList?.id || null) : undefined}
-        onEditColumn={sectioned ? (s) => setSectionMenu(s) : undefined}
+        onEditColumn={sectioned || (business && boardGroup === 'section') ? (s) => setSectionMenu(s) : undefined}
       />
     </ScrollView>
   ) : (
@@ -1151,6 +1250,7 @@ export default function TodosScreen() {
       {header}
       {searchBox}
       {mobileNav}
+      {bizBar}
       <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>
       {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
         <View pointerEvents="box-none" style={[styles.composer, { bottom: desktop ? 20 : 12 }]}>
@@ -1244,7 +1344,8 @@ export default function TodosScreen() {
           try {
             const saved = await saveFilter(data);
             setFilterEditor(null);
-            setView(`filter:${saved.id}`);
+            if (business) setBizFilter({ kind: 'filter', key: String(saved.id) });
+            else setView(`filter:${saved.id}`);
           } catch (err) {
             showToast({ message: err.response?.data?.error || 'Could not save the filter', tone: 'error' });
           }
@@ -1254,6 +1355,7 @@ export default function TodosScreen() {
           if (!ok) return;
           await deleteFilter(data.id);
           setFilterEditor(null);
+          if (bizFilter?.kind === 'filter' && String(bizFilter.key) === String(data.id)) setBizFilter(null);
           if (view === `filter:${data.id}`) setView('today');
         }}
       />
@@ -1272,7 +1374,7 @@ export default function TodosScreen() {
         onSave={async (data) => {
           try {
             if (data.id) await updateSection(data.id, { name: data.name, description: data.description });
-            else await createSection(data.list_id, data.name, { description: data.description, position: data.position });
+            else await createSection(data.list_id || null, data.name, { description: data.description, position: data.position, businessId: data.business_id });
             setSectionEditor(null);
           } catch (err) {
             showToast({ message: err.response?.data?.error || 'Could not save the section', tone: 'error' });
@@ -1281,10 +1383,10 @@ export default function TodosScreen() {
       />
       <SectionMenu
         section={sectionMenu}
-        siblings={placeSections}
-        items={sectionMenu ? personal.filter((t) => t.section_id === sectionMenu.id && !t.parent_id && !t.is_done && !t.business_id) : []}
+        siblings={sectionMenu?.business_id ? bizSections : placeSections}
+        items={sectionMenu && !sectionMenu.business_id ? personal.filter((t) => t.section_id === sectionMenu.id && !t.parent_id && !t.is_done && !t.business_id) : []}
         onEdit={(sec) => { setSectionMenu(null); setSectionEditor({ ...sec }); }}
-        onAddTodo={(sec) => { setSectionMenu(null); setAddOpen({ list_id: currentList?.id, section_id: sec.id }); }}
+        onAddTodo={(sec) => { setSectionMenu(null); setAddOpen(sec.business_id ? { business_id: sec.business_id, business_section_id: sec.id } : { list_id: currentList?.id, section_id: sec.id }); }}
         onClose={() => setSectionMenu(null)}
       />
       <DueDatePicker
@@ -1519,6 +1621,8 @@ const createStyles = (colors) => StyleSheet.create({
   tabs: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center' },
   content: { paddingHorizontal: spacing.lg },
   contentDesktop: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+  bizBar: { paddingHorizontal: spacing.lg, gap: 4, paddingBottom: spacing.xs },
+  bizRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', paddingVertical: 3 },
   boardBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, flexWrap: 'wrap' },
   boardBarLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[500] },
   boardBarHint: { fontSize: fontSize.sm, color: colors.gray[400], marginLeft: spacing.sm },

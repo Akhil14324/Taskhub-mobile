@@ -20,14 +20,70 @@ const MARK_TOP = 'inset 0 3px 0 #dc2626';
  * reorders it; onReorder(ids) gets that column's new order of ids, which is saved for the viewer.
  */
 export default function BoardView({
-  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onAdd, onAddColumn, onEditColumn, onStarter, selectedId,
+  columns, progressOf, onOpen, onToggle, onMove, onDrop, onReorder, onReorderColumns, onAdd, onAddColumn, onEditColumn, onStarter, selectedId,
   currentUserId, emptyText = 'Nothing here',
 }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const rootRef = useRef(null);
-  const handlers = useRef({ onDrop, onReorder });
-  handlers.current = { onDrop, onReorder };
+  const handlers = useRef({ onDrop, onReorder, onReorderColumns });
+  handlers.current = { onDrop, onReorder, onReorderColumns };
+
+  // Drag a column by its title to a new place (desktop; on touch the column menu has Move earlier / later).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    const root = rootRef.current;
+    if (!root || typeof root.addEventListener !== 'function') return undefined;
+    let dragged = null;
+    let mark = null;
+    let place = null;
+    const colOf = (el) => (el && el.closest ? el.closest('[data-col-section]') : null);
+    const clear = () => { if (mark) mark.style.boxShadow = ''; mark = null; };
+    const onStart = (e) => {
+      const handle = e.target && e.target.closest ? e.target.closest('[data-col-handle]') : null;
+      const col = colOf(handle);
+      if (!col) return;
+      dragged = col;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', col.dataset.colSection);
+      if (e.dataTransfer.setDragImage && handle) e.dataTransfer.setDragImage(handle, 20, 14);
+      col.style.opacity = '0.5';
+    };
+    const onOver = (e) => {
+      if (!dragged) return;
+      const col = colOf(e.target);
+      clear();
+      if (!col || col === dragged) { place = null; return; }
+      e.preventDefault();
+      const rect = col.getBoundingClientRect();
+      const after = e.clientX > rect.left + rect.width / 2;
+      place = { target: col, after };
+      mark = col;
+      col.style.boxShadow = after ? 'inset -3px 0 0 #dc2626' : 'inset 3px 0 0 #dc2626';
+    };
+    const onDropCol = (e) => {
+      if (!dragged || !place) return;
+      e.preventDefault();
+      const others = [...root.querySelectorAll('[data-col-section]')].filter((c) => c !== dragged);
+      others.splice(others.indexOf(place.target) + (place.after ? 1 : 0), 0, dragged);
+      const ids = others.map((c) => Number(c.dataset.colSection));
+      clear();
+      place = null;
+      handlers.current.onReorderColumns?.(ids);
+    };
+    const onEnd = () => { if (dragged) dragged.style.opacity = ''; clear(); dragged = null; place = null; };
+    root.addEventListener('dragstart', onStart);
+    root.addEventListener('dragover', onOver);
+    root.addEventListener('drop', onDropCol);
+    root.addEventListener('dragend', onEnd);
+    return () => {
+      root.removeEventListener('dragstart', onStart);
+      root.removeEventListener('dragover', onOver);
+      root.removeEventListener('drop', onDropCol);
+      root.removeEventListener('dragend', onEnd);
+      onEnd();
+    };
+  }, []);
 
   // Drag and drop (desktop browsers).
   useEffect(() => {
@@ -120,8 +176,12 @@ export default function BoardView({
     <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.board} keyboardShouldPersistTaps="handled">
       <View ref={rootRef} style={styles.boardInner}>
         {columns.map((col) => (
-          <View key={col.key} style={styles.column} dataSet={{ boardCol: String(col.key) }}>
-            <View style={styles.columnHead}>
+          <View key={col.key} style={styles.column} dataSet={col.section && onReorderColumns ? { boardCol: String(col.key), colSection: String(col.section.id) } : { boardCol: String(col.key) }}>
+            <View
+              ref={col.section && onReorderColumns ? makeDraggable : undefined}
+              dataSet={col.section && onReorderColumns ? { colHandle: '1' } : undefined}
+              style={[styles.columnHead, col.section && onReorderColumns && { cursor: 'grab' }]}
+            >
               {!!col.icon && <Ionicons name={col.icon} size={15} color={colors.gray[500]} />}
               <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
               <Text style={styles.columnCount}>{col.items.length}</Text>

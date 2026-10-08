@@ -183,6 +183,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             section_id: (lid ?? null) === (defaults.list_id ?? null) ? defaults.section_id ?? null : null,
             parent_id: defaults.parent_id || undefined,
             business_id: businessId || undefined,
+            business_section_id: businessId ? (defaults.business_section_id || undefined) : undefined,
             assign_to: businessId ? (effectiveBizAssignee || undefined) : undefined,
             requires_approval: businessId && review !== null ? review : undefined,
             labels: [...new Set([...lp.labels, ...extraLabels])],
@@ -213,6 +214,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         section_id: sectionId,
         parent_id: defaults.parent_id || undefined,
         business_id: businessId || undefined,
+            business_section_id: businessId ? (defaults.business_section_id || undefined) : undefined,
         assign_to: businessId
           ? (effectiveBizAssignee || undefined)
           : giveToPerson ? undefined : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),

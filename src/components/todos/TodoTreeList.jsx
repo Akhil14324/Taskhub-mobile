@@ -8,6 +8,7 @@ import { spacing, fontSize } from '../../theme/theme';
 import { SectionHeader } from '../kit';
 import TodoItem from './TodoItem';
 import { AddSectionLine } from './SectionTools';
+import { makeDraggable } from '../../hooks/useWebReorder';
 import { buildTree, subtaskProgress } from '../../utils/todoMeta';
 
 // Rows spring in when they are added, spring away when they leave, and their neighbours glide into the gap.
@@ -78,15 +79,24 @@ function TodoTreeList({
   return (
     <View>
       {sections.map((section) => (
-        <View key={section.key}>
+        <View
+          key={section.key}
+          dataSet={section.reorderable && section.section ? { sectionId: String(section.section.id) } : section.reorderable && section.top ? { sectionTop: '1' } : undefined}
+        >
           {!!section.addAbove && <AddSectionLine onPress={section.addAbove} />}
           {!!section.title && (
-            <SectionHeader
-              title={section.title}
-              count={section.count ?? (section.items.length || undefined)}
-              color={section.color}
-              right={section.right}
-            />
+            <View
+              ref={section.reorderable && section.section ? makeDraggable : undefined}
+              dataSet={section.reorderable && section.section ? { sectionHandle: '1' } : undefined}
+              style={section.reorderable && section.section ? { cursor: 'grab' } : undefined}
+            >
+              <SectionHeader
+                title={section.title}
+                count={section.count ?? (section.items.length || undefined)}
+                color={section.color}
+                right={section.right}
+              />
+            </View>
           )}
           {!!section.description && <Text style={styles.sectionNote}>{section.description}</Text>}
           {buildTree(section.items, todos).map((node) => renderNode(node, 0, section))}

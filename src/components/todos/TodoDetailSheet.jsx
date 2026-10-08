@@ -78,6 +78,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     todos, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
     shareTodos, requestDelete, businesses, moveToBusiness, fetchComments,
   } = useTodos();
+  const [bizSectionOpen, setBizSectionOpen] = useState(false);
   const { people } = useDirectory();
 
   // The window can hop to a parent / sub-task without closing.
@@ -327,6 +328,14 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       ) : (
         <Prop icon="file-tray-outline" label="Where" onPress={editable && !todo.parent_id ? () => setPlaceOpen(true) : undefined}>
           <Text style={styles.propValue}>{placeLabel(todo, lists, sections)}</Text>
+        </Prop>
+      )}
+
+      {business && !todo.parent_id && (sections.some((s) => s.business_id === todo.business_id && !s.archived) || todo.business_section_id) && (
+        <Prop icon="albums-outline" label="Section" onPress={editable || perms.can_assign ? () => setBizSectionOpen(true) : undefined}>
+          <Text style={todo.business_section_id ? styles.propValue : styles.placeholder}>
+            {sections.find((s) => s.id === todo.business_section_id)?.name || 'No section'}
+          </Text>
         </Prop>
       )}
 
@@ -610,6 +619,13 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         title="Repeat"
         options={[{ key: 'none', label: 'Does not repeat', active: !todo.recurrence }, ...Object.entries(RECURRENCE_LABELS).map(([key, label]) => ({ key, label, icon: 'repeat', active: todo.recurrence === key }))]}
         onPick={(key) => save({ recurrence: key === 'none' ? null : key })}
+      />
+      <PickerSheet
+        visible={bizSectionOpen}
+        onClose={() => setBizSectionOpen(false)}
+        title="Section"
+        options={[{ key: 'none', label: 'No section', icon: 'albums-outline', active: !todo.business_section_id }, ...sections.filter((s) => s.business_id === todo.business_id && !s.archived).map((s) => ({ key: s.id, label: s.name, icon: 'albums-outline', active: todo.business_section_id === s.id }))]}
+        onPick={(key) => save({ business_section_id: key === 'none' ? null : key })}
       />
       <PickerSheet visible={placeOpen} onClose={() => setPlaceOpen(false)} title="Move to" options={placeOptions} onPick={onPlace} />
       <PickerSheet
