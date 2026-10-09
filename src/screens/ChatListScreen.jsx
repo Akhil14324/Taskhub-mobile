@@ -13,6 +13,7 @@ import { Screen } from '../components/UI';
 import Modal from '../components/Modal';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { SkeletonList } from '../components/Skeleton';
+import SmartImage from '../components/SmartImage';
 import { FadeInItem } from '../components/StaggeredFadeIn';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import api from '../api/client';
@@ -50,6 +51,9 @@ const ConversationItem = memo(function ConversationItem({ item, userId, colors, 
         return name ? `${name.split(' ')[0]}: ` : '';
       })()
     : '';
+  const otherPerson = !isGroup ? item.participants?.find((p) => String(p.id) !== String(userId)) : null;
+  const unread = item.unread_count > 0;
+  const mine = !!lastMsg && !lastMsg.deleted_at && String(lastMsg.sender_id) === String(userId);
   const preview = lastMsg
     ? lastMsg.deleted_at
       ? t('messageDeleted')
@@ -85,10 +89,14 @@ const ConversationItem = memo(function ConversationItem({ item, userId, colors, 
         style={styles.convItem}
         haptic="light"
         onPress={() => onPress(item.id)}
+        onLongPress={() => onShowOptions(item)}
+        delayLongPress={350}
       >
         <View style={styles.avatar}>
           {isGroup ? (
             <Ionicons name="people" size={22} color={colors.indigo[600]} />
+          ) : otherPerson?.profile_picture ? (
+            <SmartImage source={otherPerson.profile_picture} style={styles.avatarImg} />
           ) : (
             <Text style={styles.avatarText}>{title?.charAt(0)?.toUpperCase() || '?'}</Text>
           )}
@@ -97,30 +105,24 @@ const ConversationItem = memo(function ConversationItem({ item, userId, colors, 
         <View style={styles.convContent}>
           <View style={styles.convHeader}>
             <View style={styles.titleRow}>
-              <Text style={styles.convTitle} numberOfLines={1}>{title}</Text>
-              {item.unread_count > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadText}>
-                    {item.unread_count > 99 ? '99+' : item.unread_count}
-                  </Text>
-                </View>
-              )}
+              <Text style={[styles.convTitle, unread && styles.convTitleUnread]} numberOfLines={1}>{title}</Text>
             </View>
             {lastMsg && (
-              <Text style={styles.convTime} numberOfLines={1}>
+              <Text style={[styles.convTime, unread && styles.convTimeUnread]} numberOfLines={1}>
                 {formatChatTime(lastMsg.created_at, t)}
               </Text>
             )}
           </View>
           <View style={styles.previewRow}>
-            <Text style={styles.convPreview} numberOfLines={1}>{preview}</Text>
-            <AnimatedPressable
-              onPress={(e) => { e.stopPropagation(); onShowOptions(item); }}
-              style={styles.optionsBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="ellipsis-vertical" size={20} color={colors.gray[500]} />
-            </AnimatedPressable>
+            <View style={styles.previewLeft}>
+              {mine && <Ionicons name="checkmark" size={16} color={colors.gray[400]} style={{ marginRight: 3, marginTop: 2 }} />}
+              <Text style={[styles.convPreview, unread && styles.convPreviewUnread]} numberOfLines={1}>{preview}</Text>
+            </View>
+            {unread && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+              </View>
+            )}
           </View>
         </View>
       </AnimatedPressable>
@@ -539,6 +541,11 @@ const createStyles = (colors) => StyleSheet.create({
   convHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.sm },
   convTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
+  convTitleUnread: { fontWeight: '700' },
+  convTimeUnread: { color: colors.brand[600], fontWeight: '600' },
+  convPreviewUnread: { color: colors.gray[800], fontWeight: '600' },
+  previewLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  avatarImg: { width: '100%', height: '100%', borderRadius: 999 },
   convTime: { fontSize: fontSize.xs, color: colors.gray[400], marginLeft: spacing.sm },
   previewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   unreadBadge: {

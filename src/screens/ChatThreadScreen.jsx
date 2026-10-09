@@ -166,10 +166,12 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
   );
 });
 
-const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPress, onReply, onReact, scrollToMessage, isHighlighted }) {
+const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst, isGroup, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPress, onReply, onReact, scrollToMessage, isHighlighted }) {
   const isOwn = item.senderId === user.id;
-  const showAvatar = !prevMsg || prevMsg.senderId !== item.senderId;
-  const isGrouped = nextMsg && nextMsg.senderId === item.senderId && getDayKey(nextMsg.createdAt) === getDayKey(item.createdAt);
+  // A run = consecutive messages from one person on one day. The first one carries the tail and
+  // (in groups) the name; the last one carries the avatar, like WhatsApp.
+  const showAvatar = !prevMsg || prevMsg.senderId !== item.senderId || getDayKey(prevMsg.createdAt) !== getDayKey(item.createdAt);
+  const isGrouped = !!nextMsg && nextMsg.senderId === item.senderId && getDayKey(nextMsg.createdAt) === getDayKey(item.createdAt);
   const isDeleted = item.deleted_at !== null;
   const otherParticipantCount = Math.max(participantCount - 1, 0);
   const allRead = isOwn && item.readBy && otherParticipantCount > 0 &&
@@ -187,36 +189,6 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
 
   const translateX = useSharedValue(0);
   const replyIconOpacity = useSharedValue(0);
-
-  // Entrance animation: fade-in + slide-up on mount
-  const enterOpacity = useSharedValue(0);
-  const enterTranslateY = useSharedValue(8);
-  useEffect(() => {
-    enterOpacity.value = withTiming(1, { duration: 300 });
-    enterTranslateY.value = withSpring(0, { damping: 18, stiffness: 260, mass: 0.6 });
-  }, [enterOpacity, enterTranslateY]);
-  const enterStyle = useAnimatedStyle(() => ({
-    opacity: enterOpacity.value,
-    transform: [{ translateY: enterTranslateY.value }],
-  }));
-
-  // Unread separator pulse
-  const unreadPulse = useSharedValue(0.5);
-  useEffect(() => {
-    if (showUnreadSeparator) {
-      unreadPulse.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 800 }),
-          withTiming(0.5, { duration: 800 }),
-        ),
-        -1,
-        false,
-      );
-    }
-  }, [showUnreadSeparator, unreadPulse]);
-  const unreadLineStyle = useAnimatedStyle(() => ({
-    opacity: unreadPulse.value,
-  }));
 
   const pan = Gesture.Pan()
     .activeOffsetX(10)
@@ -245,7 +217,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
   }));
 
   return (
-    <Animated.View style={enterStyle}>
+    <View>
       {showDateHeader && currentDay && (
         <View style={styles.dateSeparator}>
           <Text {...glass('inset')} style={styles.dateSeparatorText}>{formatDateLabel(item.createdAt, lang, t)}</Text>
@@ -253,9 +225,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
       )}
       {showUnreadSeparator && (
         <View style={styles.unreadSeparator}>
-          <Animated.View style={[styles.unreadLine, unreadLineStyle]} />
-          <Text style={styles.unreadText}>{t('unreadMessages')}</Text>
-          <Animated.View style={[styles.unreadLine, unreadLineStyle]} />
+          <Text {...glass('inset')} style={styles.unreadText}>{t('unreadMessages')}</Text>
         </View>
       )}
       <View style={styles.swipeRowWrapper}>
@@ -268,13 +238,19 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
               delayLongPress={400}
               style={[styles.msgRow, isOwn ? styles.msgRowOwn : styles.msgRowOther, isGrouped && styles.msgRowGrouped]}
             >
-              {!isOwn && showAvatar && profilePic && (
-                <SmartImage source={profilePic} style={styles.msgAvatar} />
+              {isGroup && !isOwn && (
+                isGrouped ? <View style={styles.msgAvatarSpacer} /> : profilePic ? (
+                  <SmartImage source={profilePic} style={styles.msgAvatar} />
+                ) : (
+                  <View style={[styles.msgAvatar, styles.msgAvatarFallback]}>
+                    <Text style={styles.msgAvatarLetter}>{(item.senderName || '?').charAt(0).toUpperCase()}</Text>
+                  </View>
+                )
               )}
               <View style={styles.bubbleWrapper}>
-                <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther, isHighlighted && styles.msgBubbleHighlighted]}>
-                  {showAvatar && !isOwn && (
-                    <Text style={styles.senderName}>{getDynamic(item.senderName)}</Text>
+                <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther, showAvatar && (isOwn ? styles.tailOwn : styles.tailOther), isHighlighted && styles.msgBubbleHighlighted]}>
+                  {isGroup && showAvatar && !isOwn && (
+                    <Text style={[styles.senderName, { color: nameShade(colors, item.senderId) }]} numberOfLines={1}>{getDynamic(item.senderName)}</Text>
                   )}
                   {isDeleted ? (
                     <Text style={styles.deletedMsg}>
@@ -336,7 +312,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                     <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>{formatTime(item.createdAt)}</Text>
                     {item.isEdited && <Text style={[styles.editedLabel, isOwn && styles.msgTimeOwn]}>{t('edited')}</Text>}
                     {isOwn && !isDeleted && (
-                      <Ionicons name={allRead ? 'checkmark-done' : 'checkmark'} size={14} color={allRead ? colors.blue[500] : colors.gray[400]} />
+                      <Ionicons name={allRead ? 'checkmark-done' : 'checkmark'} size={15} color={allRead ? '#fff' : 'rgba(255,255,255,0.6)'} />
                     )}
                   </View>
                 </View>
@@ -361,9 +337,15 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
           <Ionicons name="arrow-undo" size={20} color={colors.brand[600]} />
         </Animated.View>
       </View>
-    </Animated.View>
+    </View>
   );
 });
+
+// Group senders are told apart by a shade of the brand red (the UI has one colour).
+function nameShade(colors, id) {
+  const shades = [500, 600, 700, 800, 400, 900];
+  return colors.brand[shades[Math.abs(Number(id) || 0) % shades.length]] || colors.brand[600];
+}
 
 function getDayKey(dateStr) {
   const d = new Date(dateStr);
@@ -532,7 +514,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
   const flatListRef = useRef(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const conversation = conversations.find((c) => c.id === conversationId);
+  const conversation = conversations.find((c) => String(c.id) === String(conversationId));
   const activeTyping = typingUsers[conversationId] || [];
 
   // Precompute participant map for O(1) lookup per message (avoids find() in every MessageItem)
@@ -885,6 +867,12 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
   };
 
   const recordTimerRef = useRef(null);
+  const recordSecondsRef = useRef(0);
+  const slideCancelRef = useRef(false);
+  const markSlideCancel = useCallback((v) => { slideCancelRef.current = v; }, []);
+  const micPan = useMemo(() => Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .onUpdate((e) => { runOnJS(markSlideCancel)(e.translationX < -80); }), [markSlideCancel]);
   const waveformScrollRef = useRef(null);
   const recordStartTimerRef = useRef(null);
 
@@ -907,12 +895,15 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
         recordingRef.current = true;
         setRecording(true);
         setRecordDuration(0);
+        recordSecondsRef.current = 0;
+        slideCancelRef.current = false;
         setPendingRecordingUri(null);
         waveformRef.current = [];
         setWaveformBars([]);
         recordTimerRef.current = setInterval(() => {
           setRecordDuration((prev) => {
             const next = prev + 1;
+            recordSecondsRef.current = next;
             if (next >= MAX_RECORDING_SECONDS) {
               stopRecording();
             }
@@ -934,9 +925,9 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
       if (recorder.isRecording) {
         await recorder.stop();
         const uri = recorder.uri;
-        if (uri) {
-          setPendingRecordingUri(uri);
-        }
+        // Release sends the voice note straight away (a tap shorter than a second is dropped).
+        if (uri && recordSecondsRef.current >= 1) sendRecordingUri(uri);
+        else { setRecordDuration(0); waveformRef.current = []; setWaveformBars([]); }
       }
     } catch {
       // ignore - recorder may have been released
@@ -970,6 +961,26 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
     } catch {
       // ignore
     }
+  };
+
+  const sendRecordingUri = async (uri) => {
+    setUploading(true);
+    try {
+      const uploadResult = await uploadFile(uri, 'audio/m4a', `voice_${Date.now()}.m4a`);
+      await sendMessage(conversationId, null, uploadResult.url, 'audio/m4a');
+    } catch {
+      showToast(t('somethingWentWrong'));
+    } finally {
+      setUploading(false);
+      setRecordDuration(0);
+      waveformRef.current = [];
+      setWaveformBars([]);
+    }
+  };
+
+  const onMicRelease = () => {
+    if (slideCancelRef.current) { slideCancelRef.current = false; cancelRecording(); return; }
+    stopRecording();
   };
 
   const sendPendingRecording = async () => {
@@ -1029,6 +1040,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
       prevMsg={messages[index - 1]}
       nextMsg={messages[index + 1]}
       isFirst={index === 0}
+      isGroup={conversation?.type === 'group'}
       user={user}
       participantMap={participantMap}
       participantCount={participantCount}
@@ -1045,7 +1057,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
       scrollToMessage={scrollToMessage}
       isHighlighted={highlightedMessageId === item.id}
     />
-  ), [messages, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPressMessage, handleReply, reactToMessage, scrollToMessage, highlightedMessageId]);
+  ), [messages, user, conversation?.type, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPressMessage, handleReply, reactToMessage, scrollToMessage, highlightedMessageId]);
 
   const typingText = activeTyping.length > 0
     ? activeTyping.length === 1
@@ -1063,7 +1075,19 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
             <Ionicons name="arrow-back" size={24} color={colors.gray[700]} />
           </AnimatedPressable>
         )}
-        <View style={styles.headerInfo}>
+        <View style={styles.headerAvatar}>
+          {conversation?.type === 'group' ? (
+            <Ionicons name="people" size={20} color={colors.brand[700]} />
+          ) : otherParticipant?.profile_picture ? (
+            <SmartImage source={otherParticipant.profile_picture} style={styles.headerAvatarImg} />
+          ) : (
+            <Text style={styles.headerAvatarLetter}>{(conversationTitle || '?').charAt(0).toUpperCase()}</Text>
+          )}
+        </View>
+        <Pressable
+          style={styles.headerInfo}
+          onPress={() => { if (conversation?.type === 'group') navigation.navigate('GroupInfo', { conversationId }); }}
+        >
           <View style={styles.headerTitleRow}>
             {conversation?.type !== 'group' && isOtherOnline && <View style={styles.headerOnlineDot} />}
             <Text style={styles.headerTitle} numberOfLines={1}>{conversationTitle}</Text>
@@ -1073,7 +1097,7 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
               ? `${conversation?.participants?.length || 0} ${t('members')}`
               : isOtherOnline ? t('online') : formatLastSeen(otherParticipant?.last_seen)}
           </Text>
-        </View>
+        </Pressable>
         {conversation?.type === 'group' && (
           <AnimatedPressable onPress={() => navigation.navigate('GroupInfo', { conversationId })} style={styles.headerBtn} haptic="light">
             <Ionicons name="information-circle-outline" size={24} color={colors.gray[600]} />
@@ -1198,49 +1222,27 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
       )}
 
       <Animated.View style={[styles.inputBar, { paddingBottom: spacing.sm + insets.bottom }, keyboardBarStyle]}>
-        {editingMessage ? (
-          <AnimatedPressable onPress={() => { setEditingMessage(null); setText(''); }} style={styles.attachBtn} haptic="light">
-            <Ionicons name="close" size={24} color={colors.red[500]} />
-          </AnimatedPressable>
-        ) : recording ? (
-          <AnimatedPressable onPress={cancelRecording} style={styles.attachBtn} haptic="light">
-            <Ionicons name="close" size={24} color={colors.red[500]} />
-          </AnimatedPressable>
-        ) : pendingRecordingUri ? (
-          <AnimatedPressable onPress={discardPendingRecording} style={styles.attachBtn} haptic="light">
-            <Ionicons name="close" size={24} color={colors.red[500]} />
-          </AnimatedPressable>
-        ) : (
-          <AnimatedPressable onPress={() => setShowAttachSheet(true)} disabled={uploading} style={styles.attachBtn} haptic="light">
-            {uploading ? (
-              <ActivityIndicator size="small" color={colors.gray[400]} />
-            ) : (
-              <Ionicons name="add" size={28} color={colors.gray[500]} />
-            )}
-          </AnimatedPressable>
-        )}
-        {recording ? (
-          <View style={styles.recordingWaveformContainer}>
-            <Animated.View style={[styles.recordingDot, recordDotStyle]} />
-            <Text style={styles.recordingTimer}>{Math.floor(recordDuration / 60)}:{String(recordDuration % 60).padStart(2, '0')}</Text>
-            <ScrollView horizontal ref={waveformScrollRef} style={styles.waveformScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.waveformContent}>
-              {waveformBars.map((bar, i) => (
-                <View key={i} style={[styles.waveformBar, { height: Math.max(3, bar * 28) }]} />
-              ))}
-            </ScrollView>
-          </View>
-        ) : pendingRecordingUri ? (
-          <View style={styles.pendingRecordingContainer}>
-            <Ionicons name="mic" size={20} color={colors.brand[600]} />
-            <Text style={styles.pendingRecordingTimer}>{Math.floor(recordDuration / 60)}:{String(recordDuration % 60).padStart(2, '0')}</Text>
-            <View style={styles.pendingWaveform}>
-              {waveformBars.map((bar, i) => (
-                <View key={i} style={[styles.waveformBar, { height: Math.max(3, bar * 28) }]} />
-              ))}
+        <View {...glass('capsule')} style={styles.inputPill}>
+          {editingMessage ? (
+            <AnimatedPressable onPress={() => { setEditingMessage(null); setText(''); }} style={styles.pillBtn} haptic="light" accessibilityLabel="Cancel edit">
+              <Ionicons name="close" size={22} color={colors.gray[600]} />
+            </AnimatedPressable>
+          ) : recording ? (
+            <AnimatedPressable onPress={cancelRecording} style={styles.pillBtn} haptic="light" accessibilityLabel="Cancel recording">
+              <Ionicons name="trash-outline" size={22} color={colors.gray[600]} />
+            </AnimatedPressable>
+          ) : (
+            <AnimatedPressable onPress={() => setShowAttachSheet(true)} disabled={uploading} style={styles.pillBtn} haptic="light" accessibilityLabel="Attach">
+              {uploading ? <ActivityIndicator size="small" color={colors.gray[400]} /> : <Ionicons name="attach" size={24} color={colors.gray[500]} />}
+            </AnimatedPressable>
+          )}
+          {recording ? (
+            <View style={styles.recordingWaveformContainer}>
+              <Animated.View style={[styles.recordingDot, recordDotStyle]} />
+              <Text style={styles.recordingTimer}>{Math.floor(recordDuration / 60)}:{String(recordDuration % 60).padStart(2, '0')}</Text>
+              <Text style={styles.slideHint} numberOfLines={1}>{'< Slide to cancel'}</Text>
             </View>
-          </View>
-        ) : (
-          <Animated.View style={[{ flex: 1 }, recordInputStyle]}>
+          ) : (
             <TextInput
               style={styles.textInput}
               value={text}
@@ -1258,34 +1260,34 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
                 }
               }}
             />
-          </Animated.View>
-        )}
-        {recording ? (
-          <Pressable onPressOut={stopRecording} style={styles.recordingMicBtn}>
-            <Animated.View style={[styles.recordingMicCircle, recordDotStyle]}>
-              <Ionicons name="mic" size={24} color={colors.white} />
-            </Animated.View>
-          </Pressable>
-        ) : pendingRecordingUri ? (
-          <AnimatedPressable onPress={sendPendingRecording} disabled={uploading} style={styles.sendBtn} haptic="light">
-            {uploading ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="send" size={20} color={colors.white} />}
-          </AnimatedPressable>
-        ) : editingMessage ? (
-          <AnimatedPressable onPress={handleSaveEdit} disabled={!text.trim()} style={styles.sendBtn} haptic="light">
-            <Ionicons name="checkmark" size={20} color={text.trim() ? colors.white : colors.gray[400]} />
+          )}
+          {!recording && !editingMessage && !text.trim() && (
+            <AnimatedPressable onPress={handleTakePhoto} disabled={uploading} style={styles.pillBtn} haptic="light" accessibilityLabel="Camera">
+              <Ionicons name="camera-outline" size={24} color={colors.gray[500]} />
+            </AnimatedPressable>
+          )}
+        </View>
+        {editingMessage ? (
+          <AnimatedPressable onPress={handleSaveEdit} disabled={!text.trim()} style={[styles.sendBtn, !text.trim() && { opacity: 0.5 }]} haptic="light">
+            <Ionicons name="checkmark" size={22} color="#fff" />
           </AnimatedPressable>
         ) : text.trim() ? (
-          <AnimatedPressable onPress={handleSend} style={styles.sendBtn} haptic="light">
-            <Ionicons name="send" size={20} color={colors.white} />
+          <AnimatedPressable onPress={handleSend} style={styles.sendBtn} haptic="light" accessibilityLabel="Send">
+            <Ionicons name="send" size={20} color="#fff" />
           </AnimatedPressable>
         ) : (
-          <Pressable
-            onPressIn={startRecording}
-            onPressOut={stopRecording}
-            style={({ pressed }) => [styles.micBtn, pressed && styles.micBtnPressed]}
-          >
-            <Ionicons name="mic" size={22} color={colors.gray[500]} />
-          </Pressable>
+          <GestureDetector gesture={micPan}>
+            <View>
+              <Pressable
+                onPressIn={startRecording}
+                onPressOut={onMicRelease}
+                accessibilityLabel="Hold to record"
+                style={[styles.sendBtn, recording && styles.micRecording]}
+              >
+                <Ionicons name="mic" size={22} color="#fff" />
+              </Pressable>
+            </View>
+          </GestureDetector>
         )}
       </Animated.View>
 
@@ -1467,7 +1469,10 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm, marginRight: spacing.xs },
-  headerInfo: { flex: 1 },
+  headerInfo: { flex: 1, minWidth: 0 },
+  headerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brand[100], alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, overflow: 'hidden' },
+  headerAvatarImg: { width: 40, height: 40, borderRadius: 20 },
+  headerAvatarLetter: { fontSize: fontSize.md, fontWeight: '700', color: colors.brand[700] },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.gray[900], flexShrink: 1 },
   headerOnlineDot: {
@@ -1535,34 +1540,40 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.gray[600],
   },
-  msgRow: { flexDirection: 'row', marginBottom: spacing.md },
-  msgRowGrouped: { marginBottom: spacing.sm },
+  // The row must fill the width: a percentage max-width on the bubble resolves against it, otherwise
+  // long text grows past the screen edge instead of wrapping.
+  msgRow: { flexDirection: 'row', flex: 1, minWidth: 0, marginBottom: spacing.md },
+  msgRowGrouped: { marginBottom: 2 },
   msgRowOwn: { justifyContent: 'flex-end' },
   msgRowOther: { justifyContent: 'flex-start' },
   msgBubble: {
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    minWidth: 80,
+    borderRadius: 14,
+    paddingHorizontal: spacing.md,
+    paddingTop: 6,
+    paddingBottom: 4,
+    minWidth: 72,
   },
   bubbleWrapper: {
     position: 'relative',
-    maxWidth: '78%',
+    maxWidth: '82%',
+    flexShrink: 1,
   },
-  msgBubbleOwn: { backgroundColor: colors.brand[600], borderBottomRightRadius: 4 },
-  msgBubbleOther: { backgroundColor: colors.gray[100], borderBottomLeftRadius: 4 },
+  msgBubbleOwn: { backgroundColor: colors.brand[600] },
+  msgBubbleOther: { backgroundColor: colors.gray[100] },
+  tailOwn: { borderTopRightRadius: 4 },
+  tailOther: { borderTopLeftRadius: 4 },
   msgBubbleHighlighted: {
     borderWidth: 2,
     borderColor: colors.brand[400],
   },
-  senderName: { fontSize: fontSize.xs, color: colors.gray[500], marginBottom: 2 },
-  msgText: { fontSize: fontSize.base, lineHeight: fontSize.base * 1.4, color: colors.gray[900] },
+  senderName: { fontSize: fontSize.xs, fontWeight: '600', color: colors.gray[500], marginBottom: 2 },
+  msgText: { fontSize: fontSize.base, lineHeight: fontSize.base * 1.4, color: colors.gray[900], flexShrink: 1, ...(Platform.OS === 'web' ? { overflowWrap: 'anywhere', wordBreak: 'break-word' } : null) },
   msgTextOwn: { color: colors.white },
   deletedMsg: { fontSize: fontSize.sm, fontStyle: 'italic', color: colors.gray[400] },
   msgImage: { width: MAX_IMAGE_SIZE, height: MAX_IMAGE_SIZE, maxWidth: '100%', borderRadius: radius.md, marginTop: spacing.xs, overflow: 'hidden' },
   msgMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs, flexShrink: 0, flexWrap: 'nowrap', alignSelf: 'flex-end' },
   msgTime: { fontSize: 10, color: colors.gray[400] },
-  msgTimeOwn: { color: colors.white },
+  msgTimeOwn: { color: 'rgba(255,255,255,0.75)' },
   typingContainer: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   typingText: { fontSize: fontSize.xs, color: colors.gray[400], fontStyle: 'italic' },
   typingBar: {
@@ -1573,30 +1584,39 @@ const createStyles = (colors) => StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[200],
-    backgroundColor: colors.white,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
   },
+  inputPill: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: 24,
+    minHeight: 48,
+    paddingHorizontal: 2,
+  },
+  pillBtn: { width: 40, height: 48, alignItems: 'center', justifyContent: 'center' },
+  slideHint: { flex: 1, textAlign: 'right', paddingRight: spacing.md, fontSize: fontSize.sm, color: colors.gray[500] },
+  micRecording: { transform: [{ scale: 1.2 }] },
   attachBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   textInput: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minWidth: 0,
+    minHeight: 48,
+    maxHeight: 120,
+    paddingHorizontal: spacing.xs,
+    paddingTop: 13,
+    paddingBottom: 12,
     fontSize: fontSize.base,
     color: colors.gray[900],
-    marginHorizontal: spacing.xs,
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none', backgroundColor: 'transparent' } : null),
   },
   sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.brand[600],
     alignItems: 'center',
     justifyContent: 'center',
@@ -1854,9 +1874,14 @@ const createStyles = (colors) => StyleSheet.create({
   msgRowAnimated: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'stretch',
+    width: '100%',
   },
   swipeRowWrapper: {
     position: 'relative',
+    alignSelf: 'stretch',
+    width: '100%',
+    overflow: 'hidden',
   },
   swipeReplyIcon: {
     position: 'absolute',
@@ -1877,7 +1902,11 @@ const createStyles = (colors) => StyleSheet.create({
     height: 28,
     borderRadius: 14,
     marginRight: spacing.xs,
+    alignSelf: 'flex-end',
   },
+  msgAvatarSpacer: { width: 28, marginRight: spacing.xs },
+  msgAvatarFallback: { backgroundColor: colors.brand[100], alignItems: 'center', justifyContent: 'center' },
+  msgAvatarLetter: { fontSize: 12, fontWeight: '700', color: colors.brand[700] },
   audioBubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1922,9 +1951,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   unreadSeparator: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
   },
   unreadLine: {
     flex: 1,
@@ -1934,8 +1962,11 @@ const createStyles = (colors) => StyleSheet.create({
   unreadText: {
     fontSize: fontSize.xs,
     fontWeight: '600',
-    color: colors.brand[600],
-    paddingHorizontal: spacing.sm,
+    color: colors.brand[700],
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
   },
   scrollToBottomBtn: {
     position: 'absolute',

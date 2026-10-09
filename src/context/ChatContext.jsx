@@ -360,8 +360,10 @@ export function ChatProvider({ children }) {
           reactions: m.reactions ?? {},
           readBy: m.readBy || [],
         }));
+      // The person may have opened another chat while this request was in flight: drop the answer.
+      if (Number(activeConversationIdRef.current) !== Number(conversationId)) return false;
       if (before) {
-        setMessages((prev) => [...normalized.reverse(), ...prev]);
+        setMessages((prev) => [...normalized.reverse(), ...prev.filter((m) => m.conversationId === Number(conversationId))]);
       } else {
         setMessages(normalized);
       }
@@ -582,6 +584,7 @@ export function ChatProvider({ children }) {
   }, []);
 
   const setActiveConversation = useCallback((conversationId) => {
+    activeConversationIdRef.current = conversationId; // immediately, so late responses for the old chat are ignored
     setActiveConversationId(conversationId);
     setMessages([]);
     setTypingUsers({});
