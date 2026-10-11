@@ -1,4 +1,5 @@
 import { createNavigationContainerRef } from '@react-navigation/native';
+import { emit } from '../utils/events';
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -34,6 +35,10 @@ export function openNotificationTarget(data = {}) {
   // Old notifications may still carry a taskId; the migration rewrote them to todoId, but be safe.
   const todoId = Number(data.todoId) || Number(data.taskId);
   if (conversationId) return navigateWhenReady('ChatThread', { conversationId });
+  // Tapping the push of a bell press opens the app into the full-screen alert (delayed so a cold start has mounted it).
+  if (data.type === 'todo_nudge' && !data.noAlert) {
+    setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, overdue: data.overdue === '1' }), 1200);
+  }
   if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('Progress', { tab: 'today' });
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });

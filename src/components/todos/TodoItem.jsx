@@ -24,6 +24,7 @@ import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
+import { nudgeTodo } from '../../utils/nudge';
 
 const ACTION_W = 84;          // a swipe opens this far and rests on its glass action button
 const COMMIT_PROJECTED = 230; // a flick that would carry past this commits the action outright
@@ -297,6 +298,11 @@ function TodoItem({
               </View>
             )}
           </Pressable>
+          {todo.permissions?.can_nudge && !selectMode && (
+            <Pressable onPress={() => nudgeTodo(todo)} hitSlop={10} style={styles.chevron} accessibilityLabel="Remind the assignee">
+              <Ionicons name="notifications-outline" size={18} color={colors.brand[600]} />
+            </Pressable>
+          )}
           {(hasChildren || hasSubtasks) && onToggleCollapse && !selectMode && (
             <Pressable onPress={() => onToggleCollapse(todo)} hitSlop={10} style={styles.chevron}>
               <Ionicons name={collapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={colors.gray[400]} />

@@ -8,6 +8,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import PromptSheet from './PromptSheet';
 import { timeAgo } from '../../utils/dates';
 import { showToast } from '../../utils/events';
+import { nudgeTodo } from '../../utils/nudge';
 import { glass } from '../../theme/glass';
 
 /**
@@ -140,6 +141,13 @@ export default function GovernancePanel({ todo }) {
             <Text style={styles.sub}>A deletion request is waiting for approval.</Text>
           </View>
         </View>
+      )}
+
+      {p.can_nudge && (
+        <AnimatedPressable style={styles.warn} onPress={() => nudgeTodo(todo)}>
+          <Ionicons name="notifications-outline" size={16} color={colors.brand[600]} />
+          <Text style={[styles.warnText, { color: colors.brand[600] }]}>Remind {first(todo.assignee_name)} now</Text>
+        </AnimatedPressable>
       )}
 
       {p.can_warn && (

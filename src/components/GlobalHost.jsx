@@ -5,6 +5,8 @@ import QuickAddSheet from './todos/QuickAddSheet';
 import TemplatesSheet from './todos/TemplatesSheet';
 import CommandPalette from './CommandPalette';
 import Celebration from './engage/Celebration';
+import AttentionAlert from './AttentionAlert';
+import WaterReminder from './WaterReminder';
 import { configureFeedback } from '../utils/feedback';
 import { on, openPalette, showToast } from '../utils/events';
 import { takeSharedText } from '../utils/shareTarget';
@@ -48,6 +50,8 @@ export default function GlobalHost() {
       <TemplatesSheet visible={!!templates} onClose={() => setTemplates(null)} defaults={templates || {}} />
       <CommandPalette visible={palette} onClose={() => setPalette(false)} />
       <Celebration />
+      <WaterReminder />
+      <AttentionAlert />
     </>
   );
 }

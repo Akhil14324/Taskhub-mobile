@@ -77,6 +77,8 @@ self.addEventListener('push', (event) => {
       if (!mustAlwaysShow) return;
     }
 
+    // Reminders and the bell on a task stay on screen until dismissed and buzz longer.
+    const loud = msg.data.type === 'todo_reminder' || msg.data.type === 'todo_nudge';
     const tag = msg.data.tag || (msg.data.type ? `${msg.data.type}-${msg.data.taskId || msg.data.todoId || msg.data.conversationId || ''}` : undefined);
     await self.registration.showNotification(msg.title, {
       body: msg.body,
@@ -86,8 +88,8 @@ self.addEventListener('push', (event) => {
       renotify: !!tag,
       data: msg.data,
       // A reminder buzzes longer and stays on screen until it is dismissed, so it is not missed.
-      vibrate: msg.data.type === 'todo_reminder' ? [250, 120, 250, 120, 500] : [80, 40, 80],
-      requireInteraction: msg.data.type === 'todo_reminder',
+      vibrate: loud ? [250, 120, 250, 120, 500, 120, 500] : [80, 40, 80],
+      requireInteraction: loud,
     });
   })());
 });

@@ -3,7 +3,7 @@ import { AppState, Platform } from 'react-native';
 import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
-import { showToast } from '../utils/events';
+import { showToast, emit } from '../utils/events';
 import { playReminder } from '../utils/feedback';
 import { openNotificationTarget, getCurrentRoute } from '../navigation/navigationRef';
 import {
@@ -30,6 +30,7 @@ const TYPE_ICONS = {
   overdue: 'alarm',
   todo_shared: 'list',
   todo_reminder: 'alarm',
+  todo_nudge: 'notifications',
   todo_deadline: 'alert-circle',
   todo_done: 'checkmark-circle',
   todo_comment: 'chatbubble-ellipses',
@@ -113,6 +114,10 @@ export function NotificationProvider({ children }) {
     return subscribe('notification:new', (n) => {
       setUnreadCount((c) => c + 1);
       if (n.type === 'todo_reminder') playReminder();
+      if (n.type === 'todo_nudge') {
+        emit('alert:show', { todoId: n.data?.todoId, title: n.title, message: n.message, overdue: n.data?.overdue === '1' });
+        return;
+      }
       if (APPROVAL_TYPES.has(n.type)) refreshCounts();
       const data = n.data || {};
       const route = getCurrentRoute();
