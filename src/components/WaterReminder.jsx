@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import useIsDesktop from '../hooks/useBreakpoint';
@@ -77,6 +78,7 @@ export default function WaterReminder() {
   const colors = useColors();
   const { user } = useAuth();
   const desktop = useIsDesktop();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const enabled = user?.preferences?.waterReminder !== false;
   const userId = user?.id;
@@ -128,34 +130,41 @@ export default function WaterReminder() {
     setAsking(false);
     update({ next: Date.now() + SNOOZE_MS });
   };
+  // Closing the pop-up without a photo asks again in 5 minutes instead of nagging every 30 seconds.
+  const closePopup = () => {
+    setAsking(false);
+    if (state.next <= Date.now()) update({ next: Date.now() + 5 * 60 * 1000 });
+  };
   const done = state.count >= GOAL;
-  const place = desktop ? { right: 20, bottom: 20 } : { left: 12, bottom: 112 };
+  // Phones: in the header, between the page title and the search icon. Desktop: bottom right.
+  const place = desktop ? { right: 20, bottom: 20 } : { right: 112, top: insets.top + 27 };
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {asking && (
-        <View pointerEvents="box-none" style={styles.cardWrap}>
+        <View style={styles.cardWrap}>
+          <Pressable style={styles.scrim} onPress={closePopup} accessibilityLabel="Close" />
           <View {...glass('sheet')} style={styles.card}>
             <Ionicons name="water" size={34} color={colors.brand[600]} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Time to drink water</Text>
+              <Text style={styles.title}>{done ? 'Goal reached' : 'Time to drink water'}</Text>
               <Text style={styles.sub}>{state.count} of {GOAL} glasses today ({(GOAL * GLASS_ML) / 1000} L is the goal)</Text>
               {(state.photos || []).length > 0 && (
                 <View style={styles.thumbs}>
                   {state.photos.map((src, i) => <Image key={i} source={{ uri: src }} style={styles.thumb} />)}
                 </View>
               )}
-              <Text style={styles.sub}>Add a photo of your water bottle or glass to count it.</Text>
+              {!done && <Text style={styles.sub}>Add a photo of your water bottle or glass to count it.</Text>}
               <View style={styles.buttons}>
-                <Pressable onPress={snooze} style={[styles.btn, styles.ghost]}><Text style={styles.ghostText}>Snooze 15 min</Text></Pressable>
-                <Pressable onPress={drank} style={[styles.btn, styles.solid]}><Ionicons name="camera" size={14} color="#fff" /><Text style={styles.solidText}>Photo of your glass</Text></Pressable>
+                <Pressable onPress={done ? closePopup : snooze} style={[styles.btn, styles.ghost]}><Text style={styles.ghostText}>{done ? 'Close' : 'Snooze 15 min'}</Text></Pressable>
+                {!done && <Pressable onPress={drank} style={[styles.btn, styles.solid]}><Ionicons name="camera" size={14} color="#fff" /><Text style={styles.solidText}>Photo of your glass</Text></Pressable>}
               </View>
             </View>
           </View>
         </View>
       )}
       <Pressable
-        onPress={() => (done ? null : setAsking((v) => !v))}
+        onPress={() => setAsking((v) => !v)}
         style={[styles.chip, place]}
         accessibilityLabel={`Water: ${state.count} of ${GOAL} glasses today`}
       >
@@ -172,7 +181,8 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 999, backgroundColor: colors.brand[50], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.brand[200],
   },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.brand[700] },
-  cardWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'flex-end', padding: spacing.lg, paddingBottom: 140 },
+  cardWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.xl, maxWidth: 420, width: '100%' },
   title: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900] },
   sub: { fontSize: fontSize.sm, color: colors.gray[600], marginTop: 2 },
