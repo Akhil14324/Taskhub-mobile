@@ -119,19 +119,6 @@ export default function PreferencesCard() {
       </View>
 
       <View style={[styles.row, styles.switchRow]}>
-        <Ionicons name="water-outline" size={18} color={colors.gray[500]} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Water reminder</Text>
-          <Text style={styles.hint}>A drop on every screen and a nudge each hour to drink 8 glasses (2 L) a day; add a photo of your glass to count it</Text>
-        </View>
-        <Switch
-          value={prefs.waterReminder !== false}
-          onValueChange={(v) => updatePreferences({ waterReminder: v })}
-          trackColor={{ true: colors.brand[600], false: colors.gray[300] }}
-        />
-      </View>
-
-      <View style={[styles.row, styles.switchRow]}>
         <Ionicons name="phone-portrait-outline" size={18} color={colors.gray[500]} />
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Haptics</Text>

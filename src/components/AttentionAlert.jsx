@@ -19,14 +19,14 @@ const FLASH_MS = 15000; // flashes for this long, then stays solid until dismiss
 export default function AttentionAlert() {
   const colors = useColors();
   const [alert, setAlert] = useState(null);
-  const flash = useSharedValue(1);
+  const flash = useSharedValue(1); // 1 = bright red, 0 = dark red
 
   useEffect(() => on('alert:show', (a) => { setAlert(a); playReminder(); }), []);
 
   useEffect(() => {
     if (!alert) return undefined;
     if (motionReduced()) { flash.value = 1; return undefined; }
-    flash.value = withRepeat(withSequence(withTiming(0.25, { duration: 450 }), withTiming(1, { duration: 450 })), -1);
+    flash.value = withRepeat(withSequence(withTiming(0, { duration: 450 }), withTiming(1, { duration: 450 })), -1);
     const stop = setTimeout(() => { cancelAnimation(flash); flash.value = withTiming(1, { duration: 200 }); }, FLASH_MS);
     return () => { clearTimeout(stop); cancelAnimation(flash); };
   }, [alert, flash]);
@@ -40,7 +40,8 @@ export default function AttentionAlert() {
   return (
     <Modal transparent visible animationType="none" onRequestClose={close}>
       <View style={styles.root}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand[700] }, bg]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#450a0a' }]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#dc2626' }, bg]} />
         <View style={styles.center}>
           <Ionicons name={alert.overdue ? 'alarm' : 'notifications'} size={72} color="#fff" />
           <Text style={styles.title}>{alert.title || 'Attention'}</Text>

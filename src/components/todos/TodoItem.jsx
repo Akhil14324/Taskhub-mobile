@@ -25,6 +25,7 @@ import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
 import { nudgeTodo } from '../../utils/nudge';
+import { featureOn } from '../../utils/features';
 
 const ACTION_W = 84;          // a swipe opens this far and rests on its glass action button
 const COMMIT_PROJECTED = 230; // a flick that would carry past this commits the action outright
@@ -54,6 +55,8 @@ function TodoItem({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: me } = useAuth();
   const { waitingIds } = useEngage();
+  const showDeadline = featureOn(me?.preferences, 'deadlines');
+  const showLabels = featureOn(me?.preferences, 'labels');
   const simple = me?.preferences?.viewMode === 'simple'; // Simple view: only title, date, owner and progress
   const translateX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -224,7 +227,7 @@ function TodoItem({
             {!!doneLine && <Text style={styles.doneLine}>{doneLine}</Text>}
             <View style={styles.metaRow}>
               <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
-              {!!todo.deadline_date && (
+              {showDeadline && !!todo.deadline_date && (
                 <View style={styles.metaItem}>
                   <Ionicons name="alert-circle-outline" size={12} color={deadlineColor} />
                   <Text style={[styles.metaText, { color: deadlineColor, fontWeight: near ? '800' : '600' }]} numberOfLines={1}>
@@ -289,7 +292,7 @@ function TodoItem({
               )}
               {!todo.business_id && others.length > 0 && <AvatarStack people={others} size={18} />}
             </View>
-            {!simple && labels.length > 0 && (
+            {!simple && showLabels && labels.length > 0 && (
               <View style={styles.labelRow}>
                 {labels.slice(0, 4).map((l) => (
                   <Text key={l} style={styles.label}>+{l}</Text>

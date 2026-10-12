@@ -7,6 +7,9 @@ import CommandPalette from './CommandPalette';
 import Celebration from './engage/Celebration';
 import AttentionAlert from './AttentionAlert';
 import WaterReminder from './WaterReminder';
+import StretchBreak from './StretchBreak';
+import FocusMode from './FocusMode';
+import RoulettePicker from './RoulettePicker';
 import { configureFeedback } from '../utils/feedback';
 import { on, openPalette, showToast } from '../utils/events';
 import { takeSharedText } from '../utils/shareTarget';
@@ -51,6 +54,9 @@ export default function GlobalHost() {
       <CommandPalette visible={palette} onClose={() => setPalette(false)} />
       <Celebration />
       <WaterReminder />
+      <StretchBreak />
+      <RoulettePicker />
+      <FocusMode />
       <AttentionAlert />
     </>
   );

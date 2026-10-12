@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/kit';
 import PreferencesCard from '../components/PreferencesCard';
+import FeaturesCard from '../components/FeaturesCard';
 import { invalidateDirectory } from '../hooks/useDirectory';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -403,6 +404,7 @@ export default function Profile() {
         </View>
       </Card>
       <PreferencesCard />
+      <FeaturesCard />
 
       {/* Account Details */}
       <Card style={styles.sectionCard}>

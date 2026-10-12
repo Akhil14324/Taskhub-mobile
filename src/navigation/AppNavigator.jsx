@@ -27,6 +27,7 @@ import GlobalHost from '../components/GlobalHost';
 import '../utils/shareTarget';
 import useIsDesktop from '../hooks/useBreakpoint';
 import { MoreMenu } from '../components/UI';
+import { featureOn } from '../utils/features';
 import { addNotificationResponseListener } from '../services/notifications';
 import { openNotificationTarget } from './navigationRef';
 import { todayYmd } from '../utils/dates';
@@ -267,7 +268,7 @@ function MainTabs() {
     { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
-    { label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' },
+    ...(featureOn(user?.preferences, 'leaderboard') ? [{ label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(user?.permissions?.manage_access ? [{ label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
     ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
     { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },

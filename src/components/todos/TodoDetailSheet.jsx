@@ -31,7 +31,8 @@ import useBackClose from '../../hooks/useBackClose';
 import { RECURRENCE_LABELS, timeAgo, formatDue, formatTime } from '../../utils/dates';
 import { DURATION_PRESETS, REMINDER_CHOICES, formatDuration, cleanLabel, subtaskProgress } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
-import { showToast } from '../../utils/events';
+import { showToast, openFocus } from '../../utils/events';
+import useFeature from '../../hooks/useFeature';
 import { printTodo } from '../../utils/printTodo';
 
 const REPEATS = [
@@ -42,8 +43,9 @@ const REPEATS = [
 ];
 
 /** One line in the right-hand column: a small label above the value. */
-function Prop({ icon, label, children, onPress, last }) {
+function Prop({ icon, label, children, onPress, last, hidden }) {
   const colors = useColors();
+  if (hidden) return null;
   const Wrapper = onPress ? AnimatedPressable : View;
   return (
     <Wrapper onPress={onPress} style={{ paddingVertical: 10, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] }}>
@@ -74,6 +76,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
+  const { on } = useFeature();
   const {
     todos, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
     shareTodos, requestDelete, businesses, moveToBusiness, fetchComments,
@@ -299,6 +302,13 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         </AnimatedPressable>
       )}
 
+      {on('focus') && !todo.is_done && (
+        <AnimatedPressable style={[styles.doneBtn, styles.doneBtnOff]} onPress={() => openFocus({ todo })}>
+          <Ionicons name="timer-outline" size={18} color={colors.gray[700]} />
+          <Text style={[styles.doneBtnText, { color: colors.gray[700] }]}>Focus on this</Text>
+        </AnimatedPressable>
+      )}
+
       <GovernancePanel todo={todo} />
       <ClaudePanel todo={todo} />
 
@@ -369,7 +379,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         </Prop>
       )}
 
-      <Prop icon="alert-circle-outline" label="Deadline" onPress={editable ? () => setDeadlineOpen(true) : undefined}>
+      <Prop hidden={!on('deadlines')} icon="alert-circle-outline" label="Deadline" onPress={editable ? () => setDeadlineOpen(true) : undefined}>
         <View style={styles.valueRow}>
           <View style={{ flex: 1 }}>
             {todo.deadline_date
@@ -392,7 +402,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         </View>
       </Prop>
 
-      <Prop icon="pricetag-outline" label="Labels">
+      <Prop hidden={!on('labels')} icon="pricetag-outline" label="Labels">
         <View style={styles.chipRow}>
           {todoLabels.map((l) => (
             <Chip key={l} small icon="pricetag" label={l} active onRemove={editable ? () => save({ labels: todoLabels.filter((x) => x !== l) }) : undefined} />
@@ -423,7 +433,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       </Prop>
 
       {/* Reminders: a date and time of their own, repeating if wanted, and "before it is due". */}
-      <Prop icon="alarm-outline" label="Reminder" onPress={editable ? () => setRemindOpen(true) : undefined}>
+      <Prop hidden={!on('reminders')} icon="alarm-outline" label="Reminder" onPress={editable ? () => setRemindOpen(true) : undefined}>
         <View style={styles.valueRow}>
           <View style={{ flex: 1 }}>
             <Text style={reminderText ? styles.propValue : styles.placeholder}>{reminderText || 'No reminder'}</Text>
@@ -450,7 +460,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         )}
       </Prop>
 
-      <Prop icon="time-outline" label="Time needed">
+      <Prop hidden={!on('estimates')} icon="time-outline" label="Time needed">
         <View style={styles.chipRow}>
           {DURATION_PRESETS.map((m) => (
             <Chip key={m} small label={formatDuration(m)} active={todo.duration_minutes === m} onPress={editable ? () => save({ duration_minutes: todo.duration_minutes === m ? null : m }) : undefined} />

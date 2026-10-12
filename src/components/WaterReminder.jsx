@@ -8,6 +8,8 @@ import useIsDesktop from '../hooks/useBreakpoint';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
 import { haptic } from '../utils/feedback';
+import { featureOn } from '../utils/features';
+import { isFocusActive, anyPopup, setPopup } from '../utils/focus';
 import { todayYmd } from '../utils/dates';
 
 // 8 glasses of 250 ml = 2 litres: the usual "at least" for a healthy adult (food supplies the rest).
@@ -80,7 +82,7 @@ export default function WaterReminder() {
   const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const enabled = user?.preferences?.waterReminder !== false;
+  const enabled = featureOn(user?.preferences, 'water') && user?.preferences?.waterReminder !== false;
   const userId = user?.id;
   const [state, setState] = useState(() => load(userId));
   const [asking, setAsking] = useState(false);
@@ -106,7 +108,8 @@ export default function WaterReminder() {
       });
       const hour = new Date().getHours();
       setState((prev) => {
-        if (prev.count < GOAL && hour >= FROM_HOUR && hour < TO_HOUR && Date.now() >= prev.next) setAsking(true);
+        const due = prev.count < GOAL && hour >= FROM_HOUR && hour < TO_HOUR && Date.now() >= prev.next;
+        if (due && !isFocusActive() && !anyPopup()) setAsking(true);
         return prev;
       });
     };
@@ -114,6 +117,11 @@ export default function WaterReminder() {
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
   }, [enabled, userId]);
+
+  useEffect(() => {
+    setPopup('water', asking);
+    return () => setPopup('water', false);
+  }, [asking]);
 
   if (!enabled || !userId) return null;
 
@@ -137,7 +145,7 @@ export default function WaterReminder() {
   };
   const done = state.count >= GOAL;
   // Phones: in the header, between the page title and the search icon. Desktop: bottom right.
-  const place = desktop ? { right: 20, bottom: 20 } : { right: 112, top: insets.top + 27 };
+  const place = desktop ? { right: 24, bottom: 104 } : { right: 152, top: insets.top + 29 };
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -165,6 +173,7 @@ export default function WaterReminder() {
       )}
       <Pressable
         onPress={() => setAsking((v) => !v)}
+        {...glass('capsule')}
         style={[styles.chip, place]}
         accessibilityLabel={`Water: ${state.count} of ${GOAL} glasses today`}
       >
@@ -177,8 +186,8 @@ export default function WaterReminder() {
 
 const createStyles = (colors) => StyleSheet.create({
   chip: {
-    position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 999, backgroundColor: colors.brand[50], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.brand[200],
+    position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.brand[200],
   },
   chipText: { fontSize: 12, fontWeight: '700', color: colors.brand[700] },
   cardWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },

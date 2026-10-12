@@ -64,3 +64,13 @@ export function openShortcuts() {
 export function openPalette() {
   emit('palette:open');
 }
+
+/** Open focus mode from anywhere: { todo? } (a to-do to work on). */
+export function openFocus(payload = {}) {
+  emit('focus:open', payload);
+}
+
+/** Open "pick for me": { candidates } (the open to-dos it may choose from). */
+export function openRoulette(payload = {}) {
+  emit('roulette:open', payload);
+}

@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast, emit } from '../utils/events';
 import { playReminder } from '../utils/feedback';
+import { isFocusActive } from '../utils/focus';
 import { openNotificationTarget, getCurrentRoute } from '../navigation/navigationRef';
 import {
   getPushState,
@@ -31,6 +32,7 @@ const TYPE_ICONS = {
   todo_shared: 'list',
   todo_reminder: 'alarm',
   todo_nudge: 'notifications',
+  todo_roast: 'flame',
   todo_deadline: 'alert-circle',
   todo_done: 'checkmark-circle',
   todo_comment: 'chatbubble-ellipses',
@@ -121,6 +123,7 @@ export function NotificationProvider({ children }) {
       if (APPROVAL_TYPES.has(n.type)) refreshCounts();
       const data = n.data || {};
       const route = getCurrentRoute();
+      if (isFocusActive()) return; // focus mode holds banners until the timer ends
       const viewingSame = route?.name === 'Main' && data.todoId && Number(route.params?.highlightId) === Number(data.todoId);
       if (viewingSame) return;
       showToast({

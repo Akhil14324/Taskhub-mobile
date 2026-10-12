@@ -33,6 +33,8 @@ import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
 import { useNowTick } from '../components/todos/TimeHealth';
 import { PickerSheet, NameSheet } from '../components/todos/Pickers';
+import useFeature from '../hooks/useFeature';
+import { openRoulette } from '../utils/events';
 import { Chip, IconButton, EmptyHero, ProgressRing, ListGlyph, LIST_ICONS, PRIORITY } from '../components/kit';
 import useWebReorder, { makeDraggable } from '../hooks/useWebReorder';
 import useShortcuts from '../hooks/useShortcuts';
@@ -76,6 +78,7 @@ export default function TodosScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { on: feature } = useFeature();
   const { approvalCount } = useNotifications();
   const desktop = useIsDesktop();
   const wide = useIsWide();
@@ -246,9 +249,9 @@ export default function TodosScreen() {
   const labelName = view.startsWith('label:') ? view.slice(6) : null;
 
   // Layouts a view can be shown in.
-  const canBoard = view !== 'done';
-  const canCalendar = view !== 'done' && !simpleView;
-  const canTimeline = !simpleView && (!!business || view === 'today' || view === 'upcoming' || !!currentList);
+  const canBoard = view !== 'done' && feature('board');
+  const canCalendar = view !== 'done' && !simpleView && feature('calendar');
+  const canTimeline = feature('timeline') && !simpleView && (!!business || view === 'today' || view === 'upcoming' || !!currentList);
   const effectiveLayout = layout === 'board' && canBoard ? 'board'
     : layout === 'calendar' && canCalendar ? 'calendar'
       : layout === 'timeline' && canTimeline ? 'timeline' : 'list';
@@ -870,7 +873,7 @@ export default function TodosScreen() {
 
   // Links to the screens for the leaderboard, access control and the everything view (the last two only for people who may use them).
   const sidebarLinks = [
-    { key: 'leaderboard', icon: 'trophy-outline', label: 'Leaderboard', onPress: () => navigation.navigate('Leaderboard') },
+    feature('leaderboard') && { key: 'leaderboard', icon: 'trophy-outline', label: 'Leaderboard', onPress: () => navigation.navigate('Leaderboard') },
     user?.permissions?.manage_access && { key: 'access', icon: 'key-outline', label: 'Who can do what', onPress: () => navigation.navigate('Access') },
     (user?.permissions?.view_all_todos || user?.permissions?.chat_audit) && { key: 'everything', icon: 'eye-outline', label: 'Everything', onPress: () => navigation.navigate('Everything') },
   ].filter(Boolean);
@@ -886,6 +889,10 @@ export default function TodosScreen() {
       showToast({ message: err.response?.data?.error || 'Could not add the sections', tone: 'error' });
     }
   };
+
+  const rouletteButton = feature('roulette') && view !== 'done' ? (
+    <IconButton icon="dice-outline" onPress={() => { const ids = new Set(visibleIds); openRoulette({ candidates: todos.filter((t) => ids.has(t.id)) }); }} accessibilityLabel="Pick a task for me" />
+  ) : null;
 
   const layoutSwitch = (canBoard || canCalendar || canTimeline) ? (
     <SlidingSegment
@@ -933,6 +940,7 @@ export default function TodosScreen() {
             </AnimatedPressable>
           )}
           {desktop && layoutSwitch}
+          {desktop && rouletteButton}
           <IconButton icon={searching ? 'close' : 'search'} onPress={() => { setSearching((s) => !s); setSearch(''); }} accessibilityLabel="Search" />
           <IconButton icon="ellipsis-horizontal" onPress={() => setMenuOpen(true)} accessibilityLabel="More options" />
         </>
@@ -1012,7 +1020,13 @@ export default function TodosScreen() {
         )}
         </SlideGroup>
       </ScrollView>
-      {!desktop && layoutSwitch && <View style={styles.mobileLayout}>{layoutSwitch}</View>}
+      {!desktop && (layoutSwitch || rouletteButton) && (
+        <View style={styles.mobileLayout}>
+          {layoutSwitch}
+          <View style={{ flex: 1 }} />
+          {rouletteButton}
+        </View>
+      )}
     </View>
   ) : null;
 
@@ -1597,7 +1611,7 @@ const createStyles = (colors) => StyleSheet.create({
   layoutSwitch: {
     flexDirection: 'row', alignItems: 'center', gap: 2, padding: 3, borderRadius: radius.md, backgroundColor: colors.gray[100], marginRight: spacing.sm,
   },
-  mobileLayout: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, alignItems: 'flex-start' },
+  mobileLayout: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, flexDirection: 'row', alignItems: 'center' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

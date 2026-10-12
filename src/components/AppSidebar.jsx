@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { featureOn } from '../utils/features';
 import { useChat } from '../context/ChatContext';
 import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -152,7 +153,7 @@ export default function AppSidebar({ routeName }) {
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
-        <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />
+        {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
         {user?.permissions?.manage_access && (
           <Entry p={p} icon="key-outline" activeIcon="key" label="Who can do what" active={section === 'access'} onPress={() => go('Access')} />
         )}
