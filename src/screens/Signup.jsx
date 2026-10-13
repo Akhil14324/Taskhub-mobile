@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import BrandMark from '../components/BrandMark';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -108,7 +109,7 @@ export default function Signup() {
         </View>
         <Animated.View style={[logoStyle]}>
           <View style={styles.logo}>
-            <Ionicons name="checkmark-done-circle" size={48} color={colors.brand[600]} />
+            <BrandMark size={64} />
             <Text style={styles.appName}>{t('appName')}</Text>
           </View>
         </Animated.View>

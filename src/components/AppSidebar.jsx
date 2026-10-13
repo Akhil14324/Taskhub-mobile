@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import BrandMark from './BrandMark';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { featureOn } from '../utils/features';
@@ -138,7 +139,7 @@ export default function AppSidebar({ routeName }) {
     <View {...glass('bar')} style={styles.wrap}>
     <View style={styles.inner}>
       <View style={styles.brand}>
-        <View style={styles.logo}><Ionicons name="checkmark" size={18} color="#fff" /></View>
+        <BrandMark size={30} />
         <Animated.Text style={[styles.brandText, fadeStyle]} numberOfLines={1}>TaskHub</Animated.Text>
       </View>
 

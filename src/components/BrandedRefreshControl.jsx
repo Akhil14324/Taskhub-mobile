@@ -9,6 +9,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import BrandMark from './BrandMark';
 import { useColors } from '../context/ThemeContext';
 
 const SPIN_DURATION = 800;
@@ -87,7 +88,7 @@ export const RefreshIndicator = memo(function RefreshIndicator({ refreshing }) {
   return (
     <View style={styles.container}>
       <Animated.View style={spinStyle}>
-        <Ionicons name="checkmark-done-circle" size={28} color={colors.brand[600]} />
+        <BrandMark size={28} />
       </Animated.View>
     </View>
   );
