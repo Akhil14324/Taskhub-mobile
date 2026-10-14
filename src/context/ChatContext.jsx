@@ -18,6 +18,33 @@ function previewFromMeta(meta) {
   return count === 1 ? `To-do: ${meta.items[0].title}` : `Shared ${count} to-dos${meta.title ? ` · ${meta.title}` : ''}`;
 }
 
+/**
+ * One shape for a message, whatever sent it: the socket pushes camelCase, the REST history sends
+ * snake_case. Every path (socket, history, resume, send acknowledgement) must go through here, or a
+ * message arrives half-formed (no sender, no time) and the bubble draws on the wrong side.
+ */
+export function normalizeMessage(m) {
+  return {
+    ...m,
+    id: Number(m.id),
+    conversationId: Number(m.conversationId ?? m.conversation_id),
+    senderId: Number(m.senderId ?? m.sender_id),
+    senderName: m.senderName ?? m.sender_name ?? 'Unknown',
+    attachmentUrl: m.attachmentUrl ?? m.attachment_url ?? null,
+    attachmentType: m.attachmentType ?? m.attachment_type ?? null,
+    createdAt: m.createdAt ?? m.created_at,
+    editedAt: m.editedAt ?? m.edited_at ?? null,
+    isEdited: m.isEdited ?? m.is_edited ?? false,
+    deleted_at: m.deleted_at ?? m.deletedAt ?? null,
+    deleted_by: m.deleted_by ?? m.deletedBy ?? null,
+    replyToId: m.replyToId ?? m.reply_to_id ?? null,
+    replyTo: m.replyTo ?? null,
+    reactions: m.reactions ?? {},
+    readBy: m.readBy || [],
+    meta: m.meta ?? null,
+  };
+}
+
 export function ChatProvider({ children }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
@@ -112,18 +139,7 @@ export function ChatProvider({ children }) {
       }, 3000);
 
       socket.on('message:new', (msg) => {
-        const normalized = {
-          ...msg,
-          id: Number(msg.id),
-          conversationId: Number(msg.conversationId),
-          senderId: Number(msg.senderId),
-          readBy: msg.readBy || [],
-          deleted_at: msg.deleted_at ?? msg.deletedAt ?? null,
-          replyToId: msg.replyToId ?? msg.reply_to_id ?? null,
-          replyTo: msg.replyTo ?? null,
-          reactions: msg.reactions ?? {},
-          isEdited: msg.isEdited ?? msg.is_edited ?? false,
-        };
+        const normalized = normalizeMessage(msg);
         const isActive = normalized.conversationId === Number(activeConversationIdRef.current);
         seenMessageIdsRef.current.add(normalized.id);
 
@@ -320,7 +336,8 @@ export function ChatProvider({ children }) {
           setMessages((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));
             const newMsgs = res.data.messages
-              .filter((m) => !existingIds.has(m.id) && !deletedMessageIdsRef.current.has(Number(m.id)));
+              .map(normalizeMessage)
+              .filter((m) => m.conversationId === Number(activeConversationId) && !existingIds.has(m.id) && !deletedMessageIdsRef.current.has(m.id));
             return [...prev, ...newMsgs];
           });
         }).catch(() => {});
@@ -340,26 +357,8 @@ export function ChatProvider({ children }) {
       if (before) params.before = before;
       const res = await api.get(`/chat/conversations/${conversationId}/messages`, { params });
       const normalized = (res.data.messages || [])
-        .filter((m) => !deletedMessageIdsRef.current.has(Number(m.id)))
-        .map((m) => ({
-          ...m,
-          id: Number(m.id),
-          conversationId: Number(m.conversation_id ?? m.conversationId),
-          senderId: Number(m.sender_id ?? m.senderId),
-          senderName: m.sender_name ?? m.senderName ?? 'Unknown',
-          body: m.body,
-          attachmentUrl: m.attachment_url ?? m.attachmentUrl,
-          attachmentType: m.attachment_type ?? m.attachmentType,
-          createdAt: m.created_at ?? m.createdAt,
-          editedAt: m.edited_at ?? m.editedAt,
-          isEdited: m.is_edited ?? m.isEdited ?? false,
-          deleted_at: m.deleted_at ?? m.deletedAt ?? null,
-          deleted_by: m.deleted_by ?? m.deletedBy ?? null,
-          replyToId: m.replyToId ?? m.reply_to_id ?? null,
-          replyTo: m.replyTo ?? null,
-          reactions: m.reactions ?? {},
-          readBy: m.readBy || [],
-        }));
+        .map(normalizeMessage)
+        .filter((m) => !deletedMessageIdsRef.current.has(m.id));
       // The person may have opened another chat while this request was in flight: drop the answer.
       if (Number(activeConversationIdRef.current) !== Number(conversationId)) return false;
       if (before) {
@@ -373,26 +372,39 @@ export function ChatProvider({ children }) {
     }
   }, []);
 
+  // The server also broadcasts to the room, but the sender's socket may not have joined it yet (a
+  // brand-new chat) or may be on the REST fallback, so add the confirmed message here too (deduped by id).
+  const addSent = useCallback((response) => {
+    if (!response?.message) return response;
+    const msg = normalizeMessage(response.message);
+    seenMessageIdsRef.current.add(msg.id);
+    if (msg.conversationId === Number(activeConversationIdRef.current)) {
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    }
+    return response;
+  }, []);
+
   const sendMessage = useCallback(async (conversationId, body, attachmentUrl, attachmentType, replyToId) => {
     const clientTempId = `temp_${Date.now()}_${Math.random()}`;
     if (socketRef.current && socketRef.current.connected) {
       return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Send timeout')), 10000);
         socketRef.current.emit(
           'send_message',
           { conversationId, body, attachmentUrl, attachmentType, clientTempId, replyToId },
           (response) => {
+            clearTimeout(timer);
             if (response?.error) reject(new Error(response.error));
-            else resolve(response);
+            else resolve(addSent(response));
           }
         );
-        setTimeout(() => reject(new Error('Send timeout')), 10000);
       });
     }
     const res = await api.post(`/chat/conversations/${conversationId}/messages`, {
       body, attachmentUrl, attachmentType, clientTempId, replyToId,
     });
-    return res.data;
-  }, []);
+    return addSent(res.data);
+  }, [addSent]);
 
   const markRead = useCallback((conversationId, messageId) => {
     if (socketRef.current && socketRef.current.connected) {
@@ -556,7 +568,9 @@ export function ChatProvider({ children }) {
     });
     setMessages((prev) => {
       const existingIds = new Set(prev.map((m) => m.id));
-      const newMsgs = res.data.messages.filter((m) => !existingIds.has(m.id));
+      const newMsgs = res.data.messages
+        .map(normalizeMessage)
+        .filter((m) => m.conversationId === Number(conversationId) && !existingIds.has(m.id));
       return [...prev, ...newMsgs];
     });
   }, []);

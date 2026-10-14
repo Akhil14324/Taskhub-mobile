@@ -210,14 +210,17 @@ export default function TodosScreen() {
   const mine = useMemo(() => todos.filter((t) => !t.business_id || (t.assignee_id === meId && t.review_state === 'accepted')), [todos, meId]);
   const open = useMemo(() => mine.filter((t) => !t.is_done), [mine]);
   const openPersonal = useMemo(() => personal.filter((t) => !t.is_done), [personal]);
+  // Business tasks given to me also land in my Inbox (and Assigned), not only in the business view.
+  const bizToMe = useMemo(() => todos.filter((t) => t.business_id && t.assignee_id === meId && t.review_state === 'accepted'), [todos, meId]);
+  const openBizToMe = useMemo(() => bizToMe.filter((t) => !t.is_done), [bizToMe]);
 
   const counts = useMemo(() => ({
     today: open.filter((t) => t.due_date && t.due_date <= today).length,
-    inbox: openPersonal.filter((t) => !t.list_id && !t.parent_id).length,
+    inbox: [...openPersonal, ...openBizToMe].filter((t) => !t.list_id && !t.parent_id).length,
     shared: openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id).length,
-    assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length,
+    assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length + openBizToMe.filter((t) => !t.parent_id && t.created_by !== meId).length,
     lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
-  }), [open, openPersonal, lists, today, meId]);
+  }), [open, openPersonal, openBizToMe, lists, today, meId]);
 
   const bizCounts = useMemo(() => {
     const out = {};
@@ -409,7 +412,7 @@ export default function TodosScreen() {
       if (later.length) sectionsOut.push({ key: 'later', title: 'Later', items: later });
     } else if (view === 'inbox') {
       manualOrder = true;
-      const inInbox = openPersonal.filter((t) => !t.list_id && match(t));
+      const inInbox = [...openPersonal, ...openBizToMe].filter((t) => !t.list_id && match(t));
       const archivedIds = new Set(archivedSections.map((s) => s.id));
       const inboxOpen = inInbox.filter((t) => !archivedIds.has(t.section_id));
       if (inboxSections.length === 0) {
@@ -425,7 +428,7 @@ export default function TodosScreen() {
           sectionsOut.push({ key: `sec:${sec.id}`, title: `${sec.name} (archived)`, description: sec.description, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
         });
       }
-      done = personal.filter((t) => t.is_done && !t.list_id);
+      done = [...personal, ...bizToMe].filter((t) => t.is_done && !t.list_id);
     } else if (view === 'shared') {
       const shared = openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id && match(t));
       const fromOthers = shared.filter((t) => t.created_by !== meId);
@@ -435,7 +438,7 @@ export default function TodosScreen() {
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
       done = personal.filter((t) => t.is_done && isSharedTodo(t));
     } else if (view === 'assigned') {
-      const assignedAll = openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id && match(t));
+      const assignedAll = [...openPersonal.filter((t) => isAssignedTodo(t)), ...openBizToMe.filter((t) => t.created_by !== meId)].filter((t) => !t.parent_id && match(t));
       const toMe = assignedAll.filter((t) => t.assignee_id === meId);
       const byMe = assignedAll.filter((t) => t.assignee_id !== meId);
       const group = (list, label, nameOf) => {
@@ -450,7 +453,7 @@ export default function TodosScreen() {
       group(toMe, 'From', (t) => t.created_by_name);
       group(byMe, 'Assigned to', (t) => t.assignee_name);
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
-      done = personal.filter((t) => t.is_done && isAssignedTodo(t));
+      done = [...personal.filter((t) => t.is_done && isAssignedTodo(t)), ...bizToMe.filter((t) => t.is_done && t.created_by !== meId)];
     } else if (currentList) {
       manualOrder = true;
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
@@ -478,7 +481,7 @@ export default function TodosScreen() {
     }
     const ids = sectionsOut.flatMap((s) => s.items.filter((t) => !t.parent_id || !s.items.some((p) => p.id === t.parent_id)).map((t) => t.id));
     return { sections: sectionsOut, doneItems: done, visibleIds: ids, manual: manualOrder && !q };
-  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, business, bizId, bizTodos, bizSections, bizArchived, listGroup]);
+  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, bizToMe, openBizToMe, business, bizId, bizTodos, bizSections, bizArchived, listGroup]);
 
   const todayItems = useMemo(() => mine.filter((t) => t.due_date === today), [mine, today]);
   const todayDone = todayItems.filter((t) => t.is_done).length;
@@ -647,7 +650,7 @@ export default function TodosScreen() {
     }
     if (!business) {
       // Today, Upcoming, filters and labels: the same work laid out by where it stands.
-      const pool = (view === 'assigned' ? openPersonal.filter(isAssignedTodo)
+      const pool = (view === 'assigned' ? [...openPersonal.filter(isAssignedTodo), ...openBizToMe.filter((t) => t.created_by !== meId)]
         : view === 'shared' ? openPersonal.filter(isSharedTodo)
         : activeFilter ? applyFilter(open, activeFilter.config, { userId: meId, today })
           : labelName ? open.filter((t) => (t.labels || []).includes(labelName))
@@ -660,7 +663,7 @@ export default function TodosScreen() {
       const doneRecent = view === 'today' ? doneAll.filter((t) => !t.due_date || t.due_date <= today || (t.done_at && toYmd(new Date(t.done_at)) === today))
         : labelName ? doneAll.filter((t) => (t.labels || []).includes(labelName))
           : view === 'shared' ? doneAll.filter(isSharedTodo)
-            : view === 'assigned' ? doneAll.filter(isAssignedTodo)
+            : view === 'assigned' ? doneAll.filter((t) => isAssignedTodo(t) || (t.business_id && t.assignee_id === meId && t.created_by !== meId))
               : doneAll;
       return ['todo', 'in_progress', 'blocked', 'done'].map((st) => ({
         key: st,
@@ -699,7 +702,7 @@ export default function TodosScreen() {
         ? t.is_done && (!t.done_at || toYmd(new Date(t.done_at)) >= recentDone)
         : !t.is_done && t.status === s))),
     }));
-  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today, bizTodos, bizSections]);
+  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, openBizToMe, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today, bizTodos, bizSections]);
 
   // ---- calendar ------------------------------------------------------------
   const calendarItems = useMemo(() => {
@@ -707,13 +710,13 @@ export default function TodosScreen() {
     if (business) return bizTodos.filter((t) => !t.parent_id && t.review_state === 'accepted');
     const notNested = (t) => !t.parent_id;
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
-    if (view === 'inbox') return personal.filter((t) => !t.list_id && notNested(t));
+    if (view === 'inbox') return [...personal, ...bizToMe].filter((t) => !t.list_id && notNested(t));
     if (view === 'shared') return personal.filter((t) => isSharedTodo(t) && notNested(t));
-    if (view === 'assigned') return personal.filter((t) => isAssignedTodo(t) && notNested(t));
+    if (view === 'assigned') return [...personal.filter(isAssignedTodo), ...bizToMe.filter((t) => t.created_by !== meId)].filter(notNested);
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
     if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
     return mine.filter(notNested);
-  }, [onCalendar, business, bizId, bizTodos, todos, personal, mine, open, currentList, view, activeFilter, labelName, meId, today]);
+  }, [onCalendar, business, bizId, bizTodos, todos, personal, bizToMe, mine, open, currentList, view, activeFilter, labelName, meId, today]);
 
   const colByKey = useMemo(() => new Map(boardColumns.map((c) => [String(c.key), c])), [boardColumns]);
 

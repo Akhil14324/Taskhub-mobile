@@ -168,6 +168,10 @@ const AudioMessage = memo(function AudioMessage({ uri, isOwn, colors, styles, t 
 
 const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst, isGroup, user, participantMap, participantCount, lastReadId, colors, styles, t, lang, getDynamic, formatTime, onLongPress, onReply, onReact, scrollToMessage, isHighlighted }) {
   const isOwn = item.senderId === user.id;
+  // A shared to-do/task card looks the same for the person who sent it and the person who gets it
+  // (neutral bubble, same card), so colours follow `tone`, while the side still follows `isOwn`.
+  const hasCard = item.meta?.kind === 'todos' || item.meta?.kind === 'task';
+  const tone = isOwn && !hasCard;
   // A run = consecutive messages from one person on one day. The first one carries the tail and
   // (in groups) the name; the last one carries the avatar, like WhatsApp.
   const showAvatar = !prevMsg || prevMsg.senderId !== item.senderId || getDayKey(prevMsg.createdAt) !== getDayKey(item.createdAt);
@@ -248,7 +252,7 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                 )
               )}
               <View style={styles.bubbleWrapper}>
-                <View style={[styles.msgBubble, isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther, showAvatar && (isOwn ? styles.tailOwn : styles.tailOther), isHighlighted && styles.msgBubbleHighlighted]}>
+                <View style={[styles.msgBubble, tone ? styles.msgBubbleOwn : styles.msgBubbleOther, hasCard && styles.msgBubbleCard, showAvatar && (isOwn ? styles.tailOwn : styles.tailOther), isHighlighted && styles.msgBubbleHighlighted]}>
                   {isGroup && showAvatar && !isOwn && (
                     <Text style={[styles.senderName, { color: nameShade(colors, item.senderId) }]} numberOfLines={1}>{getDynamic(item.senderName)}</Text>
                   )}
@@ -263,14 +267,14 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                       {item.replyTo && (
                         <Pressable
                           onPress={() => scrollToMessage?.(item.replyTo.id)}
-                          style={[styles.replyPreview, isOwn && styles.replyPreviewOwn]}
+                          style={[styles.replyPreview, tone && styles.replyPreviewOwn]}
                         >
                           <View style={styles.replyBar} />
                           <View style={styles.replyContent}>
-                            <Text style={[styles.replyName, isOwn && styles.replyNameOwn]}>
+                            <Text style={[styles.replyName, tone && styles.replyNameOwn]}>
                               {getDynamic(item.replyTo.senderName)}
                             </Text>
-                            <Text style={[styles.replyText, isOwn && styles.replyTextOwn]} numberOfLines={1}>
+                            <Text style={[styles.replyText, tone && styles.replyTextOwn]} numberOfLines={1}>
                               {item.replyTo.body || (item.replyTo.attachmentUrl ? t('attachment') : '')}
                             </Text>
                           </View>
@@ -279,14 +283,14 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                       {item.meta?.kind === 'todos' && <SharedTodosCard meta={item.meta} isOwn={isOwn} />}
                       {item.meta?.kind === 'task' && <SharedTaskCard meta={item.meta} isOwn={isOwn} />}
                       {!!item.meta?.kind && !['todos', 'task'].includes(item.meta.kind) && !item.body && (
-                        <Text style={[styles.msgText, isOwn && styles.msgTextOwn]}>Shared item. Refresh the app to see it.</Text>
+                        <Text style={[styles.msgText, tone && styles.msgTextOwn]}>Shared item. Refresh the app to see it.</Text>
                       )}
-                      {item.body && <Text style={[styles.msgText, isOwn && styles.msgTextOwn]} selectable>{getDynamic(item.body)}</Text>}
+                      {item.body && <Text style={[styles.msgText, tone && styles.msgTextOwn]} selectable>{getDynamic(item.body)}</Text>}
                       {item.attachmentUrl && item.attachmentType?.startsWith('image/') && (
                         <HeroImage source={item.attachmentUrl} thumbStyle={styles.msgImage} />
                       )}
                       {item.attachmentUrl && item.attachmentType?.startsWith('audio/') && (
-                        <AudioMessage uri={item.attachmentUrl} isOwn={isOwn} colors={colors} styles={styles} t={t} />
+                        <AudioMessage uri={item.attachmentUrl} isOwn={tone} colors={colors} styles={styles} t={t} />
                       )}
                       {item.attachmentUrl && !item.attachmentType?.startsWith('image/') && !item.attachmentType?.startsWith('audio/') && (
                         <AnimatedPressable onPress={async () => {
@@ -303,16 +307,16 @@ const MessageItem = memo(function MessageItem({ item, prevMsg, nextMsg, isFirst,
                             }
                           }
                         }} haptic="light">
-                          <Text style={[styles.attachmentLink, isOwn && styles.attachmentLinkOwn]}>{t('viewAttachment')}</Text>
+                          <Text style={[styles.attachmentLink, tone && styles.attachmentLinkOwn]}>{t('viewAttachment')}</Text>
                         </AnimatedPressable>
                       )}
                     </>
                   )}
                   <View style={styles.msgMeta}>
-                    <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>{formatTime(item.createdAt)}</Text>
-                    {item.isEdited && <Text style={[styles.editedLabel, isOwn && styles.msgTimeOwn]}>{t('edited')}</Text>}
+                    <Text style={[styles.msgTime, tone && styles.msgTimeOwn]}>{formatTime(item.createdAt)}</Text>
+                    {item.isEdited && <Text style={[styles.editedLabel, tone && styles.msgTimeOwn]}>{t('edited')}</Text>}
                     {isOwn && !isDeleted && (
-                      <Ionicons name={allRead ? 'checkmark-done' : 'checkmark'} size={15} color={allRead ? '#fff' : 'rgba(255,255,255,0.6)'} />
+                      <Ionicons name={allRead ? 'checkmark-done' : 'checkmark'} size={15} color={tone ? (allRead ? '#fff' : 'rgba(255,255,255,0.6)') : (allRead ? colors.brand[600] : colors.gray[400])} />
                     )}
                   </View>
                 </View>
@@ -369,7 +373,7 @@ function formatDateLabel(dateStr, lang, t) {
 export default function ChatThreadScreen({ conversationId: openId, embedded = false, leading = null } = {}) {
   const { user } = useAuth();
   const {
-    conversations, messages, typingUsers, onlineUsers, connected,
+    conversations, messages: allMessages, typingUsers, onlineUsers, connected,
     loadMessages, sendMessage, markRead, sendTypingStart, sendTypingStop,
     uploadFile, setActiveConversation, fetchConversations, deleteMessage, reactToMessage,
     editMessage, forwardMessage, pinMessage, fetchPinnedMessage, updateLastSeen, muteConversation,
@@ -381,6 +385,12 @@ export default function ChatThreadScreen({ conversationId: openId, embedded = fa
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const conversationId = openId ?? route.params?.conversationId;
+  // The shared message list can still hold the previous chat for a frame when another one opens;
+  // only ever show, and mark as read, what belongs to this conversation.
+  const messages = useMemo(
+    () => allMessages.filter((m) => String(m.conversationId) === String(conversationId)),
+    [allMessages, conversationId]
+  );
 
   const [text, setText] = useState('');
   const [hasMore, setHasMore] = useState(false);
@@ -1559,6 +1569,8 @@ const createStyles = (colors) => StyleSheet.create({
     flexShrink: 1,
   },
   msgBubbleOwn: { backgroundColor: colors.brand[600] },
+  // Shared to-do / task cards: a wider bubble that hugs the card, the same for sender and reader.
+  msgBubbleCard: { paddingHorizontal: 6, paddingTop: 6, minWidth: 260 },
   msgBubbleOther: { backgroundColor: colors.gray[100] },
   tailOwn: { borderTopRightRadius: 4 },
   tailOther: { borderTopLeftRadius: 4 },

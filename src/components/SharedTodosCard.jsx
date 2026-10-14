@@ -117,6 +117,7 @@ function SharedTodosCard({ meta, isOwn: mine }) {
 
 const createStyles = (colors, isOwn) => StyleSheet.create({
   card: {
+    alignSelf: 'stretch',
     minWidth: 240,
     maxWidth: 320,
     marginTop: 2,

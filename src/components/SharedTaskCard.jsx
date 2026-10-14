@@ -14,7 +14,9 @@ import { formatDue } from '../utils/dates';
  * when the task was shared; "Open task" loads the live task, and the server decides whether
  * the reader may see it.
  */
-function SharedTaskCard({ meta, isOwn }) {
+function SharedTaskCard({ meta }) {
+  // Same look for the person who shared it and the person who receives it.
+  const isOwn = false;
   const colors = useColors();
   const navigation = useNavigation();
   const styles = useMemo(() => createStyles(colors, isOwn), [colors, isOwn]);
@@ -68,6 +70,7 @@ function SharedTaskCard({ meta, isOwn }) {
 
 const createStyles = (colors, isOwn) => StyleSheet.create({
   card: {
+    alignSelf: 'stretch',
     minWidth: 240,
     maxWidth: 320,
     marginTop: 2,

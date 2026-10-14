@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
+import { useChat } from '../context/ChatContext';
 import useFeature from '../hooks/useFeature';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
@@ -46,7 +47,8 @@ const mmss = (ms) => {
 export default function FocusMode() {
   const colors = useColors();
   const { user } = useAuth();
-  const { todos, toggleTodo } = useTodos();
+  const { todos, toggleTodo, fetchComments } = useTodos();
+  const { subscribe } = useChat();
   const { on } = useFeature();
   const { width, height } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -60,6 +62,8 @@ export default function FocusMode() {
   const [away, setAway] = useState(0);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [totals, setTotals] = useState({ minutes: 0, sessions: 0 });
+  const [comments, setComments] = useState([]);
+  const [seen, setSeen] = useState(0); // comments that were there when the session began
   const onRef = useRef(on);
   onRef.current = on;
 
@@ -82,6 +86,24 @@ export default function FocusMode() {
     setStage(run.end > Date.now() ? 'run' : 'done');
     if (run.end > Date.now()) setFocusActive(true);
   }, [userId]);
+
+  // Comments on the task you are focusing on show up while you work: loaded at the start, refreshed when
+  // the task changes anywhere and every 30 s.
+  const targetId = target?.id;
+  useEffect(() => {
+    if (stage !== 'run' || !targetId) { setComments([]); return undefined; }
+    let live = true;
+    let first = true;
+    const load = () => fetchComments(targetId).then((list) => {
+      if (!live) return;
+      setComments(list);
+      if (first) { setSeen(list.length); first = false; }
+    }).catch(() => {});
+    load();
+    const unsub = subscribe('todo:changed', load);
+    const id = setInterval(load, 30000);
+    return () => { live = false; clearInterval(id); unsub(); };
+  }, [stage, targetId, fetchComments, subscribe]);
 
   const finish = useCallback((run) => {
     setFocusActive(false);
@@ -193,8 +215,25 @@ export default function FocusMode() {
           <>
             <Text style={styles.small}>{target ? 'Working on' : 'Focus'}</Text>
             {!!target && <Text style={styles.task} numberOfLines={2}>{target.title}</Text>}
+            {!!todo?.notes && (
+              <ScrollView style={styles.notesBox}><Text style={styles.notes}>{todo.notes}</Text></ScrollView>
+            )}
             <Text style={styles.clock}>{mmss(left)}</Text>
             <View style={styles.track}><View style={[styles.fill, { width: `${progress * 100}%` }]} /></View>
+            {comments.length > 0 && (
+              <View style={styles.commentsBox}>
+                <Text style={styles.commentsHead}>
+                  Comments{comments.length > seen ? ' · ' + (comments.length - seen) + ' new' : ''}
+                </Text>
+                <ScrollView>
+                  {comments.slice(-4).map((c, i, arr) => (
+                    <Text key={c.id} style={[styles.comment, comments.length - arr.length + i >= seen && styles.commentNew]} numberOfLines={3}>
+                      <Text style={styles.commentWho}>{c.user_name || 'Someone'}: </Text>{c.body}
+                    </Text>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <Text style={styles.small}>Stay on this one thing. {away > 0 ? `You have left the app ${away} time${away === 1 ? '' : 's'}.` : ''}</Text>
             <View style={styles.endRow}>
               {confirmEnd ? (
@@ -249,16 +288,23 @@ const createStyles = (colors) => StyleSheet.create({
   solidText: { fontWeight: '700', color: '#fff' },
   full: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000, backgroundColor: '#140606' },
   screen: { backgroundColor: '#140606', alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
-  clock: { color: '#fff', fontSize: 120, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: 2 },
+  notesBox: { maxHeight: 90, maxWidth: 640, alignSelf: 'center' },
+  notes: { color: 'rgba(255,255,255,0.75)', fontSize: fontSize.base, textAlign: 'center', lineHeight: 22 },
+  commentsBox: { width: '70%', maxWidth: 640, maxHeight: 130, padding: spacing.sm, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.08)' },
+  commentsHead: { color: 'rgba(255,255,255,0.6)', fontSize: fontSize.xs, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
+  comment: { color: 'rgba(255,255,255,0.8)', fontSize: fontSize.sm, marginBottom: 4 },
+  commentNew: { color: '#fff', fontWeight: '600' },
+  commentWho: { fontWeight: '800' },
+  clock: { color: '#fff', fontSize: 96, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: 2 },
   task: { color: '#fff', fontSize: fontSize.xxl, fontWeight: '700', textAlign: 'center', maxWidth: 640 },
   small: { color: 'rgba(255,255,255,0.7)', fontSize: fontSize.base, textAlign: 'center', maxWidth: 560 },
   doneTitle: { color: '#fff', fontSize: 40, fontWeight: '800' },
   track: { width: '70%', maxWidth: 640, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
   fill: { height: 6, backgroundColor: '#ef4444' },
-  endRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
+  endRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', gap: spacing.md, marginTop: spacing.lg },
   endLink: { color: 'rgba(255,255,255,0.55)', fontSize: fontSize.sm, textDecorationLine: 'underline' },
-  solidLight: { backgroundColor: '#fff', flex: 0 },
-  solidLightText: { color: '#991b1b', fontWeight: '800' },
-  ghostLight: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', flex: 0 },
-  ghostLightText: { color: '#fff', fontWeight: '700' },
+  solidLight: { backgroundColor: '#fff', flex: 0, flexShrink: 0 },
+  solidLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#991b1b', fontWeight: '800' },
+  ghostLight: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', flex: 0, flexShrink: 0 },
+  ghostLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#fff', fontWeight: '700' },
 });
