@@ -10,6 +10,7 @@ import { useTodos } from '../../context/TodoContext';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import { parseQuickAdd } from '../../utils/quickAdd';
 import { showToast } from '../../utils/events';
+import { holdKeyboardOverlay } from '../../utils/keyboardMode';
 
 /**
  * With onExpand, touching the capsule does not type in place: it hands over to the full Quick add dialog,
@@ -100,6 +101,9 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
         onSubmitEditing={submit}
         onFocus={() => {
           if (onExpand) {
+            // Before the keyboard starts: let it cover the page instead of resizing it (the dialog takes over the hold).
+            const release = holdKeyboardOverlay();
+            setTimeout(release, 4000);
             if (hidden || Date.now() - shownAt.current < 1500) { inputRef.current?.blur(); return; }
             expand();
             return;

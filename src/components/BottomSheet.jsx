@@ -18,6 +18,7 @@ import { SPRING, apple, project } from '../theme/motion';
 import useKeyboardInset from '../hooks/useKeyboardInset';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useBackClose from '../hooks/useBackClose';
+import { holdKeyboardOverlay, overlayActive, expectedKeyboard } from '../utils/keyboardMode';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Open with a slightly lively spring; close with a critically damped one (nothing to overshoot while leaving).
@@ -69,6 +70,10 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   const trackRef = useRef(null);
+  const releaseOverlayRef = useRef(null);  // keeps the keyboard in overlay mode while a morphing dialog is up
+  const predictRef = useRef(0);             // the keyboard's height before it has shown, so the dialog already rests above it
+  const liftRef = useRef(0);
+  liftRef.current = liftBy;
   const [shouldRender, setShouldRender] = useState(false);
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
@@ -100,7 +105,9 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const kb = useSharedValue(0);                 // space left for the keyboard under a centred dialog (animated)
   const expectKb = useRef(false);               // the keyboard is about to come up: do not recentre in the gap
 
+  const releaseOverlay = () => { if (releaseOverlayRef.current) { releaseOverlayRef.current(); releaseOverlayRef.current = null; } };
   const finishClose = () => {
+    releaseOverlay();
     clearInterval(trackRef.current);
     clearTimeout(closeTimerRef.current);
     if (!shouldRenderRef.current) return;
@@ -129,8 +136,15 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         if (origin) {
           translateY.value = 0; // a morphing sheet is never parked below the screen (that is for the plain slide-in)
           expectKb.current = true;
-          kb.value = liftBy;
-          setTimeout(() => { expectKb.current = false; }, 1600);
+          releaseOverlay();
+          releaseOverlayRef.current = avoidKeyboard ? holdKeyboardOverlay() : null;
+          predictRef.current = avoidKeyboard && liftBy === 0 && overlayActive() ? expectedKeyboard(windowHeight) : 0;
+          kb.value = liftBy || predictRef.current;
+          setTimeout(() => {
+            expectKb.current = false;
+            predictRef.current = 0;
+            if (liftRef.current === 0 && shouldRenderRef.current) kb.value = withSpring(0, SPRING.smooth); // the keyboard never came
+          }, 1600);
           ox.value = origin.x; oy.value = origin.y; ow.value = origin.width; oh.value = origin.height; orad.value = origin.radius ?? origin.height / 2;
           m.value = 0;
           setPhase('measure');
@@ -195,13 +209,14 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const contentRef = useRef(null);
   // The resting rectangle for a given content height.
   const restFor = (contentH) => {
-    const pad = spacing.sm + (floating ? spacing.sm : 28) + (floating || liftBy > 0 ? spacing.md : Math.max(insets.bottom, spacing.md));
+    const lift = liftBy > 0 ? liftBy : predictRef.current;
+    const pad = spacing.sm + (floating ? spacing.sm : 28) + (floating || lift > 0 ? spacing.md : Math.max(insets.bottom, spacing.md));
     const width = desktop ? Math.min(620, windowWidth - 48) : centered ? Math.min(620, windowWidth - 24) : windowWidth;
     const height = Math.min(contentH + pad, maxHeight);
     const x = (windowWidth - width) / 2;
-    const y = centered ? windowHeight - liftBy - 8 - (liftBy > 0 ? 0 : insets.bottom) - height
+    const y = centered ? windowHeight - lift - 8 - (lift > 0 ? 0 : insets.bottom) - height
       : desktop ? (windowHeight - height) / 2
-      : windowHeight - height - liftBy;
+      : windowHeight - height - lift;
     return { x, y, w: width, h: height };
   };
   const restForRef = useRef(restFor);
@@ -260,7 +275,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  useEffect(() => () => { clearTimeout(closeTimerRef.current); clearTimeout(openTimerRef.current); }, []);
+  useEffect(() => () => { clearTimeout(closeTimerRef.current); clearTimeout(openTimerRef.current); clearInterval(trackRef.current); if (releaseOverlayRef.current) releaseOverlayRef.current(); }, []);
 
   useBackClose(visible, onClose);
 
