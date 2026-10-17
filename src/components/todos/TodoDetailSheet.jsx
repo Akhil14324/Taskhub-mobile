@@ -15,6 +15,7 @@ import DueDatePicker from '../DueDatePicker';
 import MentionSuggestions from '../MentionSuggestions';
 import ShareToChatSheet from '../ShareToChatSheet';
 import { MoreMenu } from '../UI';
+import { nudgeTodo } from '../../utils/nudge';
 import KudosSheet from '../engage/KudosSheet';
 import { SaveTemplateSheet } from './TemplatesSheet';
 import SubtaskTree from './SubtaskTree';
@@ -563,6 +564,11 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
           ))}
           <Text style={styles.crumbHere} numberOfLines={1}>{business ? todo.business_name : placeLabel(todo, lists, sections)}</Text>
         </View>
+        {todo.permissions?.can_nudge && (
+          <AnimatedPressable onPress={() => nudgeTodo(todo)} hitSlop={8} accessibilityLabel="Remind" style={styles.headBtn}>
+            <Ionicons name="notifications-outline" size={21} color={colors.brand[600]} />
+          </AnimatedPressable>
+        )}
         <AnimatedPressable onPress={() => setInfoOpen((v) => !v)} hitSlop={8} accessibilityLabel="Info" style={styles.headBtn}>
           <Ionicons name={infoOpen ? 'information-circle' : 'information-circle-outline'} size={21} color={infoOpen ? colors.brand[600] : colors.gray[500]} />
         </AnimatedPressable>

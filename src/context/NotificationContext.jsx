@@ -6,6 +6,7 @@ import { useChat } from './ChatContext';
 import { showToast, emit } from '../utils/events';
 import { playReminder } from '../utils/feedback';
 import { isFocusActive } from '../utils/focus';
+import { featureOn } from '../utils/features';
 import { openNotificationTarget, getCurrentRoute } from '../navigation/navigationRef';
 import {
   getPushState,
@@ -115,6 +116,11 @@ export function NotificationProvider({ children }) {
     if (!user) return undefined;
     return subscribe('notification:new', (n) => {
       setUnreadCount((c) => c + 1);
+      // With the alarm on, a reminder or deadline takes over the screen and rings until dismissed (unless Focus mode is running).
+      if ((n.type === 'todo_reminder' || n.type === 'todo_deadline') && featureOn(user.preferences, 'alarm')) {
+        if (!isFocusActive()) emit('alert:show', { todoId: n.data?.todoId, title: n.title, message: n.message, alarm: true });
+        return;
+      }
       if (n.type === 'todo_reminder') playReminder();
       if (n.type === 'todo_nudge') {
         emit('alert:show', { todoId: n.data?.todoId, title: n.title, message: n.message, overdue: n.data?.overdue === '1' });

@@ -39,6 +39,9 @@ export function openNotificationTarget(data = {}) {
   if (data.type === 'todo_nudge' && !data.noAlert) {
     setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, overdue: data.overdue === '1' }), 1200);
   }
+  if ((data.type === 'todo_reminder' || data.type === 'todo_deadline') && !data.noAlert && data.alarm !== '0') {
+    setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, alarm: true }), 1200);
+  }
   if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('Progress', { tab: 'today' });
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });

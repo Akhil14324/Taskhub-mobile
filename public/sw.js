@@ -78,7 +78,7 @@ self.addEventListener('push', (event) => {
     }
 
     // Reminders and the bell on a task stay on screen until dismissed and buzz longer.
-    const loud = msg.data.type === 'todo_reminder' || msg.data.type === 'todo_nudge';
+    const loud = ['todo_reminder', 'todo_nudge', 'todo_deadline'].includes(msg.data.type);
     const tag = msg.data.tag || (msg.data.type ? `${msg.data.type}-${msg.data.taskId || msg.data.todoId || msg.data.conversationId || ''}` : undefined);
     await self.registration.showNotification(msg.title, {
       body: msg.body,
