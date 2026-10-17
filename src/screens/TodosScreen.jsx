@@ -1362,6 +1362,7 @@ export default function TodosScreen() {
         visible={!!addOpen}
         onClose={() => setAddOpen(false)}
         origin={addOrigin}
+        getOrigin={addOrigin ? (cb) => inlineAddRef.current?.measure?.(cb) : undefined}
         initialText={addText}
         onMorphStart={() => setCapsuleHidden(true)}
         onClosed={() => { setCapsuleHidden(false); setAddOrigin(null); setAddText(''); }}

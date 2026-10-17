@@ -28,7 +28,12 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
   const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
-  useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus(), blur: () => inputRef.current?.blur() }), []);
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    blur: () => inputRef.current?.blur(),
+    // Where the capsule is right now, so the dialog closing into it lands on it even if the keyboard moved it.
+    measure: (cb) => { const n = wrapRef.current; if (n?.measureInWindow) n.measureInWindow((x, y, width, height) => cb({ x, y, width, height })); },
+  }), []);
   const focus = useSharedValue(0);
   const ready = useSharedValue(0);
   const hasText = text.trim().length > 0;
@@ -95,7 +100,7 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
         onSubmitEditing={submit}
         onFocus={() => {
           if (onExpand) {
-            if (hidden || Date.now() - shownAt.current < 900) { inputRef.current?.blur(); return; }
+            if (hidden || Date.now() - shownAt.current < 1500) { inputRef.current?.blur(); return; }
             expand();
             return;
           }

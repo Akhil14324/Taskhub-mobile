@@ -40,7 +40,7 @@ const CLOSE_DURATION = 300; // how long the exit spring is given before the Moda
  *   position and size are one spring, and the content fades in once there is room for it.
  * - onOpened / onClosed: after the arrival spring settles / after the sheet has fully left.
  */
-export default function BottomSheet({ visible, onClose, children, maxHeight: requestedMaxHeight = SCREEN_HEIGHT * 0.6, avoidKeyboard = false, origin = null, onMorphStart, onOpened, onClosed }) {
+export default function BottomSheet({ visible, onClose, children, maxHeight: requestedMaxHeight = SCREEN_HEIGHT * 0.6, avoidKeyboard = false, origin = null, getOrigin, onMorphStart, onOpened, onClosed }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, insets), [colors, insets]);
@@ -62,6 +62,13 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const hiddenY = desktop ? 14 : maxHeight;
 
   // Internal render gate: stays true during close animation so Modal doesn't unmount early
+  // The keyboard moving changes maxHeight / hiddenY while a sheet is opening or closing. Those must never restart the
+  // animation in flight (that was the sheet dropping, then jumping back up, and the stutter), so effects read them from here.
+  const sizeRef = useRef({ maxHeight, hiddenY });
+  sizeRef.current = { maxHeight, hiddenY };
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const trackRef = useRef(null);
   const [shouldRender, setShouldRender] = useState(false);
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
@@ -94,6 +101,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
   const expectKb = useRef(false);               // the keyboard is about to come up: do not recentre in the gap
 
   const finishClose = () => {
+    clearInterval(trackRef.current);
     clearTimeout(closeTimerRef.current);
     if (!shouldRenderRef.current) return;
     shouldRenderRef.current = false;
@@ -139,6 +147,8 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
     } else if (shouldRenderRef.current) {
       clearTimeout(openTimerRef.current);
       overlayOpacity.value = withTiming(0, { duration: 260 });
+      // Let go of the field now so the keyboard starts leaving with the dialog (and nothing re-focuses a hidden input later).
+      if (typeof document !== 'undefined' && document.activeElement && document.activeElement.blur && document.activeElement.tagName !== 'BODY') document.activeElement.blur();
       if (phaseRef.current !== 'plain') {
         const r = restRef.current;
         if (!r || phaseRef.current === 'measure') { finishClose(); return; }
@@ -150,8 +160,16 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         setPhase('morph');
         m.value = withSpring(0, CLOSE_MORPH, (done) => { if (done) runOnJS(finishClose)(); });
         closeTimerRef.current = setTimeout(finishClose, 1100);
+        // The control it returns to may have moved since the dialog opened (the keyboard leaving lowers it): follow it live.
+        if (getOrigin) {
+          clearInterval(trackRef.current);
+          trackRef.current = setInterval(() => getOrigin((rect) => {
+            if (!rect || visibleRef.current) return;
+            ox.value = rect.x; oy.value = rect.y; ow.value = rect.width; oh.value = rect.height;
+          }), 50);
+        }
       } else {
-        translateY.value = withSpring(hiddenY, CLOSE_SPRING);
+        translateY.value = withSpring(sizeRef.current.hiddenY, CLOSE_SPRING);
         materialize.value = withSpring(0, CLOSE_SPRING);
         closeTimerRef.current = setTimeout(() => {
           shouldRenderRef.current = false;
@@ -161,14 +179,14 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, maxHeight, hiddenY, translateY, overlayOpacity, materialize]);
+  }, [visible]);
 
   // Where the sheet rests, worked out from its content's measured height (the sheet itself is an animated
   // view, and those do not report layout reliably on web): a dialog is centred, a phone sheet sits on the
   // bottom edge above the keyboard.
   // Under a centred dialog the keyboard space follows the real keyboard, as a spring (not a re-layout per event).
   useEffect(() => {
-    if (!centered || !shouldRenderRef.current) return;
+    if (!centered || !shouldRenderRef.current || !visibleRef.current) return; // leaving: the keyboard's exit must not pull the overlay
     if (liftBy > 0) { expectKb.current = false; kb.value = withSpring(liftBy, SPRING.smooth); }
     else if (!expectKb.current) kb.value = withSpring(0, SPRING.smooth);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,7 +401,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       <Animated.View {...glass('scrim')} style={[styles.overlay, desktop && { justifyContent: 'center', padding: 24 }, centered && { justifyContent: 'flex-end', paddingTop: insets.top + 12, paddingHorizontal: 12 }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
-          dataSet={{ glass: 'sheet', ...(centered && (phase === 'measure' || phase === 'morph') ? { morphing: '1' } : null) }}
+          dataSet={{ glass: 'sheet', ...(origin && (phase === 'measure' || phase === 'morph') ? { morphing: '1' } : null) }}
           style={[
             styles.sheet, floating && styles.dialog,
             { maxHeight, marginBottom: centered ? 0 : liftBy }, (liftBy > 0 || centered) && { paddingBottom: spacing.md },

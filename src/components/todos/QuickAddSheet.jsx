@@ -35,7 +35,7 @@ const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
  * by someone who manages it, otherwise sent as a proposal for review.
  * `defaults` may carry due_date, list_id, section_id, parent_id (a sub-task), business_id, assign_to.
  */
-export default function QuickAddSheet({ visible, onClose, defaults = {}, initialText = '', origin = null, onMorphStart, onClosed }) {
+export default function QuickAddSheet({ visible, onClose, defaults = {}, initialText = '', origin = null, getOrigin, onMorphStart, onClosed }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
@@ -306,6 +306,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       maxHeight={640}
       avoidKeyboard
       origin={origin}
+      getOrigin={getOrigin}
       onMorphStart={onMorphStart}
       onClosed={onClosed}
       onOpened={() => inputRef.current?.focus()}

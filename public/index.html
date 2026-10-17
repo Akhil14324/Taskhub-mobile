@@ -224,14 +224,16 @@
          gets it back once it has landed. */
       @media (pointer: coarse), (max-width: 1023px) {
         [data-glass='card'], [data-glass='button'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
-        [data-glass='sheet'][data-morphing] {
-          -webkit-backdrop-filter: none; backdrop-filter: none;
-          background-color: rgb(var(--g-panel) / 0.95) !important;
-        }
       }
-      @media (pointer: coarse), (max-width: 1023px) {
-        [data-glass='scrim'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
+      /* Every width: a dialog in flight repaints its whole blurred backdrop each frame, which is what made the
+         capsule-to-dialog move (and back) stutter on desktop. It lands, then the blur returns. */
+      [data-glass='sheet'][data-morphing] {
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+        background-color: rgb(var(--g-panel) / 0.95) !important;
+        will-change: left, top, width, height;
       }
+      /* The scrim fades while the dialog moves; a blurred full-screen layer re-blurred every frame is the heaviest thing on screen. */
+      [data-glass='scrim'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
       /* Typography: SF-like tracking (large text tightens in JS; this is the body default). */
       #root { letter-spacing: -0.011em; font-synthesis: none; text-rendering: optimizeLegibility; }
       @media (prefers-reduced-transparency: reduce) {
