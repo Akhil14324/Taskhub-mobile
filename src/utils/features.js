@@ -18,6 +18,7 @@ export const FEATURES = [
   { group: 'Layouts and pages', key: 'calendar', icon: 'calendar-outline', label: 'Calendar layout', hint: 'The month calendar view', default: true },
   { group: 'Layouts and pages', key: 'timeline', icon: 'analytics-outline', label: 'Timeline layout', hint: 'The Gantt-style timeline view', default: true },
   { group: 'Layouts and pages', key: 'leaderboard', icon: 'trophy-outline', label: 'Leaderboard', hint: 'The leaderboard link in the menus', default: true },
+  { group: 'Getting things done', key: 'automation', icon: 'flash-outline', label: 'Automations', hint: 'Rules that do things for you: at a time, when a to-do changes, when a message arrives. Find them in the menu', default: true },
 ];
 
 const DEFAULTS = Object.fromEntries(FEATURES.map((f) => [f.key, f.default]));

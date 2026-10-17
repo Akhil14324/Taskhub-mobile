@@ -47,6 +47,7 @@ import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
+import AutomationScreen from '../screens/AutomationScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
@@ -96,6 +97,7 @@ const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
+const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedAccess = framed(AccessScreen, 1100);
 const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
@@ -114,6 +116,7 @@ const PushApprovals = T(FramedApprovals);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
 const PushLeaderboard = T(FramedLeaderboard);
+const PushAutomation = T(FramedAutomation);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
 const PushPersonMonitor = T(FramedPersonMonitor);
@@ -270,6 +273,7 @@ function MainTabs() {
     { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
+    ...(featureOn(user?.preferences, 'automation') ? [{ label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
     ...(user?.permissions?.manage_access ? [{ label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
     ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
     { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
@@ -513,6 +517,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
+            <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />
             <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />

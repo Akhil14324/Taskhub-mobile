@@ -51,6 +51,7 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'new', group: 'Actions', icon: 'add-circle-outline', label: 'New to-do', hint: hint('todo.quickAdd'), run: () => openQuickAdd() },
     { id: 'template', group: 'Actions', icon: 'copy-outline', label: 'New from template', run: () => openTemplates() },
     { id: 'theme', group: 'Actions', icon: theme === 'dark' ? 'sunny-outline' : 'moon-outline', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', run: toggleTheme },
+    { id: 'automations', group: 'Go to', icon: 'flash-outline', label: 'Automations: rules that do things for you', run: () => go('Automations') },
     { id: 'progress', group: 'Go to', icon: 'sunny-outline', label: 'Progress: today, stand-up, wins, goals', hint: hint('nav.progress'), run: () => go('Progress') },
     { id: 'recap', group: 'Go to', icon: 'stats-chart-outline', label: 'Week in review', run: () => go('Recap') },
     { id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') },

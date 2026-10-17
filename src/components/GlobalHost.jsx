@@ -11,6 +11,7 @@ import StretchBreak from './StretchBreak';
 import FocusMode from './FocusMode';
 import RoulettePicker from './RoulettePicker';
 import CatBuddy from './buddy/CatBuddy';
+import AutomationHost from './automation/AutomationHost';
 import { configureFeedback } from '../utils/feedback';
 import { on, openPalette, showToast } from '../utils/events';
 import { takeSharedText } from '../utils/shareTarget';
@@ -58,6 +59,7 @@ export default function GlobalHost() {
       <RoulettePicker />
       <FocusMode />
       <AttentionAlert />
+      <AutomationHost />
       <CatBuddy />
     </>
   );

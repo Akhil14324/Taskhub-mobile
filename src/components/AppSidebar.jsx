@@ -36,6 +36,7 @@ const SECTION_OF = {
   TeamMonitor: 'monitor',
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
+  Automations: 'automations',
   Access: 'access',
   Everything: 'everything',
   Notifications: 'notifications',
@@ -155,6 +156,7 @@ export default function AppSidebar({ routeName }) {
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
         {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
+        {featureOn(user?.preferences, 'automation') && <Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />}
         {user?.permissions?.manage_access && (
           <Entry p={p} icon="key-outline" activeIcon="key" label="Who can do what" active={section === 'access'} onPress={() => go('Access')} />
         )}
