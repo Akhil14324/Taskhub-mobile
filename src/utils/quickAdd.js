@@ -155,9 +155,15 @@ export function parseQuickAdd(input, lists = []) {
 
   if (result.recurrence && !result.due_date) result.due_date = todayYmd();
 
+  // @me: the person adding it is on it too (with @people only, it goes to them and not to me). It is an
+  // instruction, so it leaves the title.
+  result.me = /(^|\s)@me(?=[\s,.!?]|$)/i.test(text);
+  if (result.me) text = text.replace(/(^|\s)@me(?=[\s,.!?]|$)/gi, ' ');
+
   // @mentions stay in the title (they read naturally) but are collected.
   for (const m of text.matchAll(/(^|\s)@([A-Za-z0-9._-]{2,30})/g)) {
-    result.mentions.push(m[2].replace(/[.-]+$/, ''));
+    const name = m[2].replace(/[.-]+$/, '');
+    if (!result.mentions.some((x) => x.toLowerCase() === name.toLowerCase())) result.mentions.push(name);
   }
 
   result.title = text

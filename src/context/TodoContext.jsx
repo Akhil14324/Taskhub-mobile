@@ -3,9 +3,11 @@ import api from '../api/client';
 import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
-import { showToast } from '../utils/events';
+import { showToast, emit } from '../utils/events';
 import { formatDue } from '../utils/dates';
-import { labelsFrom, descendantsOf } from '../utils/todoMeta';
+import {
+  labelsFrom, descendantsOf, doneSectionOf, activeSectionOf, placeSectionsOf,
+} from '../utils/todoMeta';
 
 const TodoContext = createContext(null);
 const DELETE_UNDO_MS = 4000;
@@ -37,6 +39,11 @@ export function TodoProvider({ children }) {
   const [insights, setInsights] = useState(null);
   const pendingDeletes = useRef(new Map());
   const refetchTimer = useRef(null);
+  // Read inside callbacks without making them change on every fetch.
+  const listsRef = useRef(lists);
+  listsRef.current = lists;
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
 
   const fetchTodos = useCallback(async () => {
     try {
@@ -99,22 +106,31 @@ export function TodoProvider({ children }) {
 
   const createTodo = useCallback(async (payload, { silent = false } = {}) => {
     const res = await api.post('/todos', payload);
-    // An assigned to-do goes to the other person's list, so there is nothing to add to mine.
+    // An assigned to-do goes to the other people's lists, so there is nothing to add to mine.
     if (!res.data.todo) {
-      if (!silent) showToast({ message: `Assigned to ${res.data.assigned_to?.name?.split(' ')[0] || 'them'}`, tone: 'success', icon: 'person-add' });
+      if (!silent) {
+        const names = (res.data.assigned_names || [res.data.assigned_to?.name || 'them']).map((n) => n.split(' ')[0]);
+        const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+        showToast({ message: `Sent to ${who} · not on your list`, tone: 'success', icon: 'person-add' });
+      }
+      emit('buddy', { type: 'added' });
       return null;
     }
     upsert(res.data.todo);
     // A new sub-task changes its parent's counts.
     if (res.data.todo.parent_id) fetchTodos();
     if (!silent) {
-      const due = res.data.todo.due_date ? ` · ${formatDue(res.data.todo.due_date)}` : '';
       const t = res.data.todo;
-      const where = t.review_state === 'proposed' ? ' · sent for review'
+      // Say where it went: a dated to-do is on that day, an undated personal one waits in the Inbox (or its list).
+      const listName = t.list_id ? listsRef.current.find((l) => l.id === t.list_id)?.name : null;
+      const where = t.review_state === 'proposed' ? ` · sent to ${t.business_name} for review`
         : t.business_id ? ` · ${t.business_name}`
-          : (t.members || []).length > 1 ? ' · shared' : '';
-      showToast({ message: `Added${due}${where}`, tone: 'success', icon: 'checkmark-circle' });
+          : t.parent_id ? ''
+            : ` · ${listName || 'Inbox'}${(t.members || []).length > 1 ? ', shared' : ''}`;
+      const due = t.due_date ? ` · ${formatDue(t.due_date)}` : '';
+      showToast({ message: `Added${where}${due}`, tone: 'success', icon: t.business_id ? 'briefcase' : t.due_date ? 'calendar' : 'file-tray' });
     }
+    if (!res.data.todo.parent_id) emit('buddy', { type: 'added' });
     return res.data.todo;
   }, [upsert, fetchTodos]);
 
@@ -132,7 +148,27 @@ export function TodoProvider({ children }) {
     }
   }, [upsert, fetchTodos]);
 
-  const toggleTodo = useCallback(async (todo, { silent = false } = {}) => {
+  /**
+   * Sections follow the tick: a finished to-do moves into its place's "Completed" / "Done" section, and one
+   * reopened from there goes back to "Ongoing" / "In progress" / "To do" (or "No section"). Only top-level
+   * items move (sub-tasks stay with their parent); places without such a section are left alone.
+   */
+  const followSection = useCallback((updated) => {
+    if (!updated || updated.parent_id) return;
+    const secs = placeSectionsOf(updated, sectionsRef.current);
+    const doneSec = doneSectionOf(secs);
+    if (!doneSec) return;
+    const field = updated.business_id ? 'business_section_id' : 'section_id';
+    const current = updated[field] || null;
+    let target;
+    if (updated.is_done && current !== doneSec.id) target = doneSec.id;
+    else if (!updated.is_done && current === doneSec.id) target = activeSectionOf(secs)?.id ?? null;
+    else return;
+    if (updated.business_id && !(updated.permissions?.can_edit || updated.permissions?.can_assign)) return;
+    updateTodo(updated.id, { [field]: target }).catch(() => {});
+  }, [updateTodo]);
+
+  const toggleTodo = useCallback(async (todo, { silent = false, keepSection = false } = {}) => {
     // Optimistic: flip immediately so the check animation feels instant. Ticking a parent
     // ticks its sub-tasks; reopening a sub-task reopens a finished parent.
     const completing = !todo.is_done && todo.status !== 'in_review';
@@ -154,12 +190,18 @@ export function TodoProvider({ children }) {
         });
       });
     }
-    if (completing && !needsReview) feedback.complete();
+    if (completing && !needsReview) {
+      feedback.complete();
+      emit('buddy', { type: 'complete', todo });
+    }
     try {
       const res = await api.post(`/todos/${todo.id}/toggle`);
       const updated = res.data.todo;
-      // Let the strike-through play before the item re-sorts.
-      setTimeout(() => upsert(updated), 450);
+      // Let the strike-through play before the item re-sorts (and, for sections, moves).
+      setTimeout(() => {
+        upsert(updated);
+        if (!keepSection && !res.data.rolled_to) followSection(updated);
+      }, 450);
       fetchInsights();
       if (!silent && (completing || updated.status === 'in_review')) {
         showToast({
@@ -177,7 +219,7 @@ export function TodoProvider({ children }) {
       showToast({ message: err.response?.data?.error || 'Could not update the to-do', tone: 'error' });
       return null;
     }
-  }, [upsert, fetchInsights, fetchTodos]);
+  }, [upsert, fetchInsights, fetchTodos, followSection]);
   const toggleTodoRef = useRef(toggleTodo);
   useEffect(() => { toggleTodoRef.current = toggleTodo; }, [toggleTodo]);
 

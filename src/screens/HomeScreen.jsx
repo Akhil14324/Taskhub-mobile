@@ -314,7 +314,7 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{ due_date: today }} />
+      <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{}} />
       <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />
     </View>
   );

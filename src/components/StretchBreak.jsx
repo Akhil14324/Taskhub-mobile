@@ -8,6 +8,8 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
 import { haptic } from '../utils/feedback';
 import { todayYmd } from '../utils/dates';
+import { on as onEvent, emit } from '../utils/events';
+import { grabAttention } from '../utils/attention';
 import { isFocusActive, anyPopup, setPopup } from '../utils/focus';
 
 const EVERY_MS = 2 * 60 * 60 * 1000;
@@ -26,6 +28,14 @@ const STRETCHES = [
 ];
 
 const key = (userId) => `th.stretch.${userId}`;
+
+/** For the cat buddy: stretches today and how long one has been overdue (ms; 0 outside 09:00-19:00). */
+export function readStretch(userId) {
+  const s = load(userId);
+  const hour = new Date().getHours();
+  const inHours = hour >= FROM_HOUR && hour < TO_HOUR;
+  return { count: s.count, due: inHours && Date.now() >= s.next, overdue: inHours ? Math.max(0, Date.now() - s.next) : 0, snoozes: s.snoozes || 0 };
+}
 
 function load(userId) {
   // A new day starts quietly: the first stretch is about 40 minutes after the app opens.
@@ -91,6 +101,22 @@ export default function StretchBreak() {
     return () => setPopup('stretch', false);
   }, [asking]);
 
+  // The cat can bring the stretch up any time ("stretch with me").
+  useEffect(() => onEvent('stretch:open', () => { if (enabled) setAsking(true); }), [enabled]);
+
+  const dueNow = asking && Date.now() >= state.next;
+  useEffect(() => {
+    if (!dueNow) return;
+    grabAttention({ title: 'Stretch break', body: 'One minute. Your back will thank you, and so will the cat.', tag: 'stretch' });
+    emit('buddy', { type: 'stretch-due' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueNow]);
+
+  // While the minute runs, the cat stretches along.
+  useEffect(() => {
+    if (left === SECONDS) emit('buddy', { type: 'stretch-start' });
+  }, [left]);
+
   useEffect(() => {
     if (left === null || left <= 0) return undefined;
     const id = setTimeout(() => setLeft((n) => n - 1), 1000);
@@ -107,12 +133,16 @@ export default function StretchBreak() {
     haptic('light');
     setAsking(false);
     setLeft(null);
-    update({ count: state.count + 1, next: Date.now() + EVERY_MS });
+    update({ count: state.count + 1, next: Date.now() + EVERY_MS, snoozes: 0 });
+    emit('buddy', { type: 'stretch-done', count: state.count + 1 });
   };
   const snooze = () => {
     setAsking(false);
     setLeft(null);
-    update({ next: Date.now() + SNOOZE_MS });
+    // Opened early by the cat and put away: nothing was due, so nothing is snoozed.
+    if (Date.now() < state.next) return;
+    update({ next: Date.now() + SNOOZE_MS, snoozes: (state.snoozes || 0) + 1 });
+    emit('buddy', { type: 'stretch-skipped', snoozes: (state.snoozes || 0) + 1 });
   };
 
   return (

@@ -122,6 +122,27 @@ export function isSharedTodo(todo) {
   return !todo?.business_id && (todo?.members || []).length > 1 && !isAssignedTodo(todo);
 }
 
+// Sections people name for finished work and for work under way. Ticking a to-do moves it into the first,
+// reopening one that sits there moves it back to the second (or out of any section).
+const DONE_SECTION = /^\s*(completed?|done|finished|closed|archive[d]?)\b/i;
+const ACTIVE_SECTION = /^\s*(on\s?-?going|in\s?progress|doing|working|active|current|to\s?-?do|open|pending|started)\b/i;
+
+/** The section of a place that holds finished work ("Completed", "Done", ...), or null. */
+export function doneSectionOf(sections = []) {
+  return sections.find((s) => !s.archived && DONE_SECTION.test(s.name || '')) || null;
+}
+
+/** Where reopened work goes back to ("Ongoing", "In progress", "To do", ...), or null for "No section". */
+export function activeSectionOf(sections = []) {
+  return sections.find((s) => !s.archived && ACTIVE_SECTION.test(s.name || '')) || null;
+}
+
+/** The sections of the place a to-do sits in: its business's, its list's, or the Inbox's. */
+export function placeSectionsOf(todo, sections = []) {
+  if (todo.business_id) return sections.filter((s) => s.business_id === todo.business_id);
+  return sections.filter((s) => !s.business_id && (s.list_id || null) === (todo.list_id || null));
+}
+
 /** The business a to-do belongs to, or null for a personal one. */
 export function isBusinessTodo(todo) {
   return !!todo?.business_id;

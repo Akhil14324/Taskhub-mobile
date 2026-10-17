@@ -20,7 +20,7 @@ import { spacing, fontSize, radius } from '../../theme/theme';
 import { glass } from '../../theme/glass';
 import { SPRING, project, rubberband } from '../../theme/motion';
 import { haptic as webHaptic } from '../../utils/feedback';
-import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph } from '../kit';
+import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph, MentionText } from '../kit';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { deadlineState } from '../../utils/todoMeta';
 import { STATUS } from '../../utils/timeline';
@@ -219,7 +219,7 @@ function TodoItem({
               style={[styles.title, depth > 0 && styles.titleSub, todo.is_done && styles.titleDone]}
               numberOfLines={3}
             >
-              {todo.title}
+              <MentionText text={todo.title} />
             </Text>
             {!simple && !!todo.notes && !todo.is_done && (
               <Text style={styles.notes} numberOfLines={1}>{todo.notes}</Text>
@@ -279,9 +279,9 @@ function TodoItem({
               )}
               <View style={{ flex: 1 }} />
               {showBusiness && !!todo.business_name && (
-                <View style={styles.metaItem}>
-                  <Ionicons name="briefcase-outline" size={11} color={colors.gray[500]} />
-                  <Text style={styles.metaText} numberOfLines={1}>{todo.business_name}</Text>
+                <View style={styles.bizBadge} accessibilityLabel={`Business task, ${todo.business_name}`}>
+                  <Ionicons name="briefcase" size={10} color="#fff" />
+                  <Text style={styles.bizBadgeText} numberOfLines={1}>{todo.business_name}</Text>
                 </View>
               )}
               {showList && list && (
@@ -357,6 +357,12 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 6, backgroundColor: colors.brand[100],
   },
   tagText: { fontSize: 11, fontWeight: '600', color: colors.brand[700] },
+  // Business work is marked with a solid red badge so it never reads as a personal to-do.
+  bizBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 2,
+    borderRadius: 999, backgroundColor: colors.brand[600], maxWidth: 170,
+  },
+  bizBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
   labelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 3 },
   label: { fontSize: 11, fontWeight: '600', color: colors.brand[600] },
   chevron: { paddingLeft: spacing.sm, paddingTop: 2 },

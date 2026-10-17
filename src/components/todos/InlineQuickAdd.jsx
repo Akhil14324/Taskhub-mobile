@@ -72,11 +72,16 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
     });
   };
 
-  useEffect(() => { if (!hidden) inputRef.current?.blur(); }, [hidden]);
+  // When the dialog closes, the browser's modal hands focus back to this input; that must not open the
+  // dialog again, so focus arriving right after the capsule reappears is ignored.
+  const shownAt = useRef(0);
+  useEffect(() => {
+    if (!hidden) { shownAt.current = Date.now(); inputRef.current?.blur(); }
+  }, [hidden]);
 
   return (
     // A plain View carries the ref: it is the one that can report its window rect (an animated one cannot on web).
-    <View ref={wrapRef} collapsable={false} style={styles.slot}>
+    <View ref={wrapRef} collapsable={false} style={styles.slot} dataSet={hidden ? undefined : { buddyFloor: '1' }}>
     <Animated.View
       {...glass('capsule')}
       pointerEvents={hidden ? 'none' : 'auto'}
@@ -88,7 +93,14 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
         value={text}
         onChangeText={setText}
         onSubmitEditing={submit}
-        onFocus={() => { if (onExpand) { expand(); return; } focus.value = withSpring(1, SPRING.smooth); }}
+        onFocus={() => {
+          if (onExpand) {
+            if (hidden || Date.now() - shownAt.current < 900) { inputRef.current?.blur(); return; }
+            expand();
+            return;
+          }
+          focus.value = withSpring(1, SPRING.smooth);
+        }}
         onBlur={() => { focus.value = withSpring(0, SPRING.smooth); }}
         blurOnSubmit={false}
         placeholder={placeholder || 'New to-do. Try "Call supplier tomorrow 4pm p1"'}

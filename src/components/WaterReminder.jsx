@@ -11,6 +11,8 @@ import { haptic } from '../utils/feedback';
 import { featureOn } from '../utils/features';
 import { isFocusActive, anyPopup, setPopup } from '../utils/focus';
 import { todayYmd } from '../utils/dates';
+import { on as onEvent, emit } from '../utils/events';
+import { grabAttention } from '../utils/attention';
 
 // 8 glasses of 250 ml = 2 litres: the usual "at least" for a healthy adult (food supplies the rest).
 const GOAL = 8;
@@ -57,6 +59,18 @@ function pickPhoto() {
 }
 
 const key = (userId) => `th.water.${userId}`;
+
+/**
+ * For the cat buddy: today's glasses, the goal, and how long a glass has been overdue (ms, 0 when not due
+ * or outside 08:00-21:00). Reads what this component stores, so it survives a reload.
+ */
+export function readWater(userId) {
+  const s = load(userId);
+  const hour = new Date().getHours();
+  const inHours = hour >= FROM_HOUR && hour < TO_HOUR;
+  const overdue = s.count < GOAL && inHours ? Math.max(0, Date.now() - s.next) : 0;
+  return { count: s.count, goal: GOAL, due: s.count < GOAL && inHours && Date.now() >= s.next, overdue, snoozes: s.snoozes || 0 };
+}
 
 function load(userId) {
   const fresh = { day: todayYmd(), count: 0, next: Date.now(), photos: [] };
@@ -123,6 +137,18 @@ export default function WaterReminder() {
     return () => setPopup('water', false);
   }, [asking]);
 
+  // The cat (or anything else) can bring the card up.
+  useEffect(() => onEvent('water:open', () => { if (enabled) setAsking(true); }), [enabled]);
+
+  // When the card comes up by itself (it is due), make sure it is noticed.
+  const dueNow = asking && state.count < GOAL && Date.now() >= state.next;
+  useEffect(() => {
+    if (!dueNow) return;
+    grabAttention({ title: 'Drink water', body: `${state.count} of ${GOAL} glasses so far today. Your cat is thirsty too.`, tag: 'water' });
+    emit('buddy', { type: 'water-due' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueNow]);
+
   if (!enabled || !userId) return null;
 
   // A glass only counts (and the reminder only stops) once a photo of the bottle or glass is added. It is
@@ -132,16 +158,22 @@ export default function WaterReminder() {
     if (!photo) return;
     haptic('light');
     setAsking(false);
-    update({ count: Math.min(GOAL, state.count + 1), next: Date.now() + EVERY_MS, photos: [...(state.photos || []), photo].slice(-GOAL) });
+    const count = Math.min(GOAL, state.count + 1);
+    update({ count, next: Date.now() + EVERY_MS, photos: [...(state.photos || []), photo].slice(-GOAL), snoozes: 0 });
+    emit('buddy', { type: 'water-drank', count, goal: GOAL });
   };
   const snooze = () => {
     setAsking(false);
-    update({ next: Date.now() + SNOOZE_MS });
+    update({ next: Date.now() + SNOOZE_MS, snoozes: (state.snoozes || 0) + 1 });
+    emit('buddy', { type: 'water-skipped', snoozes: (state.snoozes || 0) + 1 });
   };
   // Closing the pop-up without a photo asks again in 5 minutes instead of nagging every 30 seconds.
   const closePopup = () => {
     setAsking(false);
-    if (state.next <= Date.now()) update({ next: Date.now() + 5 * 60 * 1000 });
+    if (state.next <= Date.now() && state.count < GOAL) {
+      update({ next: Date.now() + 5 * 60 * 1000, snoozes: (state.snoozes || 0) + 1 });
+      emit('buddy', { type: 'water-skipped', snoozes: (state.snoozes || 0) + 1 });
+    }
   };
   const done = state.count >= GOAL;
   // Phones: in the header, between the page title and the search icon. Desktop: bottom right.

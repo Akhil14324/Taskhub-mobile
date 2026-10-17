@@ -10,10 +10,10 @@ import WaterReminder from './WaterReminder';
 import StretchBreak from './StretchBreak';
 import FocusMode from './FocusMode';
 import RoulettePicker from './RoulettePicker';
+import CatBuddy from './buddy/CatBuddy';
 import { configureFeedback } from '../utils/feedback';
 import { on, openPalette, showToast } from '../utils/events';
 import { takeSharedText } from '../utils/shareTarget';
-import { todayYmd } from '../utils/dates';
 
 /**
  * Sheets that can be opened from anywhere (a chat message, the command palette, the phone's share
@@ -30,7 +30,7 @@ export default function GlobalHost() {
 
   useEffect(() => {
     const offs = [
-      on('quickadd:open', (p) => setQuick({ text: p?.text || '', defaults: p?.defaults || { due_date: todayYmd() } })),
+      on('quickadd:open', (p) => setQuick({ text: p?.text || '', defaults: p?.defaults || {} })),
       on('templates:open', (p) => setTemplates(p || {})),
       on('palette:open', () => setPalette(true)),
     ];
@@ -58,6 +58,7 @@ export default function GlobalHost() {
       <RoulettePicker />
       <FocusMode />
       <AttentionAlert />
+      <CatBuddy />
     </>
   );
 }

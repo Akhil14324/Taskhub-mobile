@@ -17,7 +17,7 @@ const CHOICES = [
     options: [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']] },
   { key: 'startPage', icon: 'home-outline', label: 'Open the app on', hint: 'The first page you see', fallback: 'home',
     options: [['home', 'Home'], ['todos', 'To-do'], ['chat', 'Chat']] },
-  { key: 'defaultView', icon: 'checkbox-outline', label: 'To-do opens on', hint: 'The list you land on in To-do', fallback: 'today',
+  { key: 'defaultView', icon: 'checkbox-outline', label: 'To-do opens on', hint: 'The list you land on in To-do', fallback: 'inbox',
     options: [['today', 'Today'], ['upcoming', 'Upcoming'], ['inbox', 'Inbox']] },
 ];
 

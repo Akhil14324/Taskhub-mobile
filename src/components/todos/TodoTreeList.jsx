@@ -92,6 +92,7 @@ function TodoTreeList({
             >
               <SectionHeader
                 title={section.title}
+                icon={section.icon}
                 count={section.count ?? (section.items.length || undefined)}
                 color={section.color}
                 right={section.right}

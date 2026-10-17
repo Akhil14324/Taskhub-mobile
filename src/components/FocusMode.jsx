@@ -8,7 +8,7 @@ import { useChat } from '../context/ChatContext';
 import useFeature from '../hooks/useFeature';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
-import { on as onEvent } from '../utils/events';
+import { on as onEvent, emit } from '../utils/events';
 import { playReminder } from '../utils/feedback';
 import { todayYmd } from '../utils/dates';
 import { setFocusActive, focusToday, addFocus } from '../utils/focus';
@@ -85,6 +85,11 @@ export default function FocusMode() {
     setAway(run.away || 0);
     setStage(run.end > Date.now() ? 'run' : 'done');
     if (run.end > Date.now()) setFocusActive(true);
+    else {
+      // It ended while the app was closed: count it once, then forget the run.
+      setTotals(addFocus(userId, todayYmd(), run.minutes));
+      writeRun(userId, null);
+    }
   }, [userId]);
 
   // Comments on the task you are focusing on show up while you work: loaded at the start, refreshed when
@@ -111,6 +116,7 @@ export default function FocusMode() {
     setTotals(addFocus(userId, todayYmd(), run.minutes));
     playReminder();
     try { window.screen.orientation.unlock(); } catch { /* ignore */ }
+    emit('buddy', { type: 'focus-done', minutes: run.minutes });
     setStage('done');
   }, [userId]);
 
@@ -202,10 +208,14 @@ export default function FocusMode() {
     );
   }
 
-  // Run and done fill the screen. A phone held upright is turned on its side in CSS when the browser cannot lock landscape.
-  const box = portrait
+  // Run and done fill the screen. While it runs, a phone held upright is turned on its side in CSS when the
+  // browser cannot lock landscape; the end screen is shown the way the phone is held, so its buttons have room.
+  const rotate = portrait && stage === 'run';
+  const box = rotate
     ? { position: 'absolute', top: 0, left: 0, width: height, height: width, transform: `translateX(${width}px) rotate(90deg)`, transformOrigin: 'top left' }
     : { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 };
+  // Narrow screens stack the end buttons, one full-width button per row.
+  const narrow = (rotate ? height : width) < 560;
   const progress = stage === 'run' ? Math.min(1, Math.max(0, 1 - left / (minutes * 60000))) : 1;
 
   return (
@@ -238,9 +248,9 @@ export default function FocusMode() {
             <View style={styles.endRow}>
               {confirmEnd ? (
                 <>
-                  <Text style={styles.small}>End the session now?</Text>
-                  <Pressable onPress={() => setConfirmEnd(false)} style={[styles.btn, styles.solidLight]}><Text style={styles.solidLightText}>Keep going</Text></Pressable>
-                  <Pressable onPress={endEarly} style={[styles.btn, styles.ghostLight]}><Text style={styles.ghostLightText}>End</Text></Pressable>
+                  <Text style={[styles.small, styles.confirmText]}>End the session now?</Text>
+                  <Pressable onPress={() => setConfirmEnd(false)} style={[styles.pill, styles.solidLight]}><Text style={styles.solidLightText}>Keep going</Text></Pressable>
+                  <Pressable onPress={endEarly} style={[styles.pill, styles.ghostLight]}><Text style={styles.ghostLightText}>End</Text></Pressable>
                 </>
               ) : (
                 <Pressable onPress={() => setConfirmEnd(true)} hitSlop={10}><Text style={styles.endLink}>End early</Text></Pressable>
@@ -255,12 +265,12 @@ export default function FocusMode() {
             <Text style={styles.small}>
               {away > 0 ? `You left the app ${away} time${away === 1 ? '' : 's'}.` : 'No interruptions.'} Today: {today.minutes} min in {today.sessions} session{today.sessions === 1 ? '' : 's'}.
             </Text>
-            <View style={styles.endRow}>
+            <View style={[styles.endRow, narrow && styles.endColumn]}>
               {!!todo && !todo.is_done && todo.permissions?.can_change_status !== false && (
-                <Pressable onPress={async () => { await toggleTodo(todo); close(); }} style={[styles.btn, styles.solidLight]}><Text style={styles.solidLightText}>Mark task done</Text></Pressable>
+                <Pressable onPress={async () => { await toggleTodo(todo); close(); }} style={[styles.pill, narrow && styles.pillWide, styles.solidLight]}><Text style={styles.solidLightText}>Mark task done</Text></Pressable>
               )}
-              <Pressable onPress={() => setStage('setup')} style={[styles.btn, styles.ghostLight]}><Text style={styles.ghostLightText}>Another round</Text></Pressable>
-              <Pressable onPress={close} style={[styles.btn, styles.ghostLight]}><Text style={styles.ghostLightText}>Close</Text></Pressable>
+              <Pressable onPress={() => { leaveLandscape(); setStage('setup'); }} style={[styles.pill, narrow && styles.pillWide, styles.ghostLight]}><Text style={styles.ghostLightText}>Another round</Text></Pressable>
+              <Pressable onPress={close} style={[styles.pill, narrow && styles.pillWide, styles.ghostLight]}><Text style={styles.ghostLightText}>Close</Text></Pressable>
             </View>
           </>
         )}
@@ -302,9 +312,18 @@ const createStyles = (colors) => StyleSheet.create({
   track: { width: '70%', maxWidth: 640, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
   fill: { height: 6, backgroundColor: '#ef4444' },
   endRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', gap: spacing.md, marginTop: spacing.lg },
+  endColumn: { flexDirection: 'column', alignItems: 'stretch', alignSelf: 'center', width: '100%', maxWidth: 320 },
+  confirmText: { width: '100%' },
   endLink: { color: 'rgba(255,255,255,0.55)', fontSize: fontSize.sm, textDecorationLine: 'underline' },
-  solidLight: { backgroundColor: '#fff', flex: 0, flexShrink: 0 },
-  solidLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#991b1b', fontWeight: '800' },
-  ghostLight: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', flex: 0, flexShrink: 0 },
-  ghostLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#fff', fontWeight: '700' },
+  // Each end button keeps its natural width (never "flex: 1" here: overridden to 0 it left a 0% basis and the
+  // three buttons collapsed onto each other).
+  pill: {
+    flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minWidth: 150, minHeight: 48,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 22, borderRadius: 999,
+  },
+  pillWide: { minWidth: 0, width: '100%' },
+  solidLight: { backgroundColor: '#fff' },
+  solidLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#991b1b', fontWeight: '800', fontSize: fontSize.base },
+  ghostLight: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)' },
+  ghostLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#fff', fontWeight: '700', fontSize: fontSize.base },
 });

@@ -319,7 +319,7 @@ export default function MyDayScreen({ embedded = false }) {
       <AnimatedPressable style={[styles.fab, { bottom: 24 + (desktop ? 0 : insets.bottom) }]} onPress={() => setAddOpen(true)} haptic="medium" accessibilityLabel="Add a to-do">
         <Ionicons name="add" size={26} color="#fff" />
       </AnimatedPressable>
-      <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{ due_date: today }} />
+      <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{}} />
       <TodoDetailSheet todoId={openId} onClose={() => setOpenId(null)} />
       <KudosSheet visible={kudosOpen} onClose={() => { setKudosOpen(false); loadReceived(); }} />
     </View>

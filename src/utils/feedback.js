@@ -79,6 +79,65 @@ export function playReminder() {
   } catch (e) { /* no audio available */ }
 }
 
+/**
+ * The cat buddy's voice, synthesised like everything else. A meow is a buzzy tone through a vowel-like
+ * filter whose pitch rises then falls ("mi-aow"); a purr is a low rumble pulsing about 25 times a second.
+ * `attention` meows (water, stretch) follow the reminder-sound setting; the rest follow "sounds".
+ */
+export function playMeow({ attention = false, pitch = 1, length = 0.5 } = {}) {
+  if (attention ? !settings.reminderSound : !settings.sounds) return;
+  try {
+    const c = audio();
+    if (!c) return;
+    const t0 = c.currentTime + 0.01;
+    const osc = c.createOscillator();
+    const filter = c.createBiquadFilter();
+    const gain = c.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(520 * pitch, t0);
+    osc.frequency.linearRampToValueAtTime(820 * pitch, t0 + length * 0.35);
+    osc.frequency.linearRampToValueAtTime(470 * pitch, t0 + length);
+    filter.type = 'bandpass';
+    filter.Q.value = 3;
+    filter.frequency.setValueAtTime(900, t0);
+    filter.frequency.linearRampToValueAtTime(1700, t0 + length * 0.4);
+    filter.frequency.linearRampToValueAtTime(800, t0 + length);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(attention ? 0.22 : 0.12, t0 + 0.05);
+    gain.gain.setValueAtTime(attention ? 0.22 : 0.12, t0 + length * 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
+    osc.connect(filter); filter.connect(gain); gain.connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + length + 0.05);
+  } catch (e) { /* no audio available */ }
+}
+
+export function playPurr(seconds = 1.2) {
+  if (!settings.sounds) return;
+  try {
+    const c = audio();
+    if (!c) return;
+    const t0 = c.currentTime + 0.01;
+    const osc = c.createOscillator();
+    const lfo = c.createOscillator();
+    const lfoGain = c.createGain();
+    const gain = c.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = 70;
+    lfo.type = 'sine';
+    lfo.frequency.value = 25;
+    lfoGain.gain.value = 0.05;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.15);
+    gain.gain.setValueAtTime(0.06, t0 + seconds - 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + seconds);
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    osc.connect(gain); gain.connect(c.destination);
+    osc.start(t0); lfo.start(t0);
+    osc.stop(t0 + seconds + 0.05); lfo.stop(t0 + seconds + 0.05);
+  } catch (e) { /* no audio available */ }
+}
+
 /** Only the main moments vibrate (a finished to-do, a finished day, a badge); button taps ('light'/'medium') stay silent. */
 export function haptic(kind = 'light') {
   if (kind !== 'success' && kind !== 'heavy') return;

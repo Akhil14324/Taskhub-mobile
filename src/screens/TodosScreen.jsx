@@ -43,6 +43,7 @@ import useIsDesktop, { useIsWide } from '../hooks/useBreakpoint';
 import { todayYmd, addDays, formatDayHeader, WEEKDAYS, MONTHS_SHORT, toYmd, formatTime } from '../utils/dates';
 import {
   BUILTIN_FILTERS, applyFilter, describeFilter, subtaskProgress, manualSort, descendantsOf, isAssignedTodo, isSharedTodo, labelsFrom, FILTER_DEFAULT,
+  doneSectionOf,
 } from '../utils/todoMeta';
 import { STATUS } from '../utils/timeline';
 import { showToast, confirmDialog } from '../utils/events';
@@ -91,7 +92,7 @@ export default function TodosScreen() {
   } = useTodos();
 
   // today | upcoming | inbox | shared | done | list:<id> | filter:<id> | label:<name> | biz:<id>
-  const [view, setView] = useState(() => (route.params?.business_id ? `biz:${route.params.business_id}` : (user?.preferences?.defaultView || 'today')));
+  const [view, setView] = useState(() => (route.params?.business_id ? `biz:${route.params.business_id}` : (user?.preferences?.defaultView || 'inbox')));
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [openTodoId, setOpenTodoId] = useState(null);
@@ -412,15 +413,21 @@ export default function TodosScreen() {
       if (later.length) sectionsOut.push({ key: 'later', title: 'Later', items: later });
     } else if (view === 'inbox') {
       manualOrder = true;
-      const inInbox = [...openPersonal, ...openBizToMe].filter((t) => !t.list_id && match(t));
+      // Personal to-dos and business work given to me are kept apart: personal first (with the Inbox's
+      // sections), then one group per business.
+      const inInbox = openPersonal.filter((t) => !t.list_id && match(t));
       const archivedIds = new Set(archivedSections.map((s) => s.id));
       const inboxOpen = inInbox.filter((t) => !archivedIds.has(t.section_id));
+      // A "Completed" / "Done" section also keeps what was finished in it (struck out), so ticking moves it there.
+      const doneSec = doneSectionOf(inboxSections);
+      const doneHere = doneSec ? personal.filter((t) => t.is_done && !t.list_id && t.section_id === doneSec.id && match(t)) : [];
       if (inboxSections.length === 0) {
-        sectionsOut.push({ key: 'inbox', title: null, items: manualSort(inboxOpen) });
+        sectionsOut.push({ key: 'inbox', title: openBizToMe.length ? 'Personal' : null, icon: openBizToMe.length ? 'person-outline' : undefined, items: manualSort(inboxOpen) });
       } else {
         sectionsOut.push({ key: 'nosec', title: 'No section', top: true, reorderable: true, items: manualSort(inboxOpen.filter((t) => !t.section_id)) });
         inboxSections.forEach((sec, i) => {
-          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, description: sec.description, section: sec, reorderable: true, addAbove: () => setSectionEditor({ list_id: null, name: '', position: i }), items: manualSort(inboxOpen.filter((t) => t.section_id === sec.id)) });
+          const open = manualSort(inboxOpen.filter((t) => t.section_id === sec.id));
+          sectionsOut.push({ key: `sec:${sec.id}`, title: sec.name, description: sec.description, section: sec, reorderable: true, addAbove: () => setSectionEditor({ list_id: null, name: '', position: i }), items: sec === doneSec ? [...open, ...doneHere] : open, count: open.length + (sec === doneSec ? doneHere.length : 0) || undefined });
         });
       }
       if (showArchived) {
@@ -428,7 +435,13 @@ export default function TodosScreen() {
           sectionsOut.push({ key: `sec:${sec.id}`, title: `${sec.name} (archived)`, description: sec.description, section: sec, items: manualSort(inInbox.filter((t) => t.section_id === sec.id)) });
         });
       }
-      done = [...personal, ...bizToMe].filter((t) => t.is_done && !t.list_id);
+      const bizInInbox = openBizToMe.filter((t) => match(t));
+      [...new Set(bizInInbox.map((t) => t.business_id))].forEach((id) => {
+        const items = bizInInbox.filter((t) => t.business_id === id);
+        sectionsOut.push({ key: `bizin:${id}`, title: `${items[0].business_name || 'Business'} · business`, icon: 'briefcase', items: manualSort(items) });
+      });
+      const shownDone = new Set(doneHere.map((t) => t.id));
+      done = [...personal, ...bizToMe].filter((t) => t.is_done && !t.list_id && !shownDone.has(t.id));
     } else if (view === 'shared') {
       const shared = openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id && match(t));
       const fromOthers = shared.filter((t) => t.created_by !== meId);
@@ -459,12 +472,15 @@ export default function TodosScreen() {
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
       const archivedIds = new Set(archivedSections.map((s) => s.id));
       const listOpen = inList.filter((t) => !archivedIds.has(t.section_id));
+      const doneSec = doneSectionOf(listSections);
+      const doneHere = doneSec ? personal.filter((t) => t.is_done && t.list_id === currentList.id && t.section_id === doneSec.id && match(t)) : [];
       if (listSections.length === 0) {
         sectionsOut.push({ key: 'list', title: null, items: manualSort(listOpen) });
       } else {
         sectionsOut.push({ key: 'nosec', title: 'No section', top: true, reorderable: true, items: manualSort(listOpen.filter((t) => !t.section_id)) });
         listSections.forEach((s, i) => {
-          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, description: s.description, section: s, reorderable: true, addAbove: () => setSectionEditor({ list_id: currentList.id, name: '', position: i }), items: manualSort(listOpen.filter((t) => t.section_id === s.id)) });
+          const open = manualSort(listOpen.filter((t) => t.section_id === s.id));
+          sectionsOut.push({ key: `sec:${s.id}`, title: s.name, description: s.description, section: s, reorderable: true, addAbove: () => setSectionEditor({ list_id: currentList.id, name: '', position: i }), items: s === doneSec ? [...open, ...doneHere] : open, count: open.length + (s === doneSec ? doneHere.length : 0) || undefined });
         });
       }
       if (showArchived) {
@@ -472,7 +488,8 @@ export default function TodosScreen() {
           sectionsOut.push({ key: `sec:${s.id}`, title: `${s.name} (archived)`, description: s.description, section: s, items: manualSort(inList.filter((t) => t.section_id === s.id)) });
         });
       }
-      done = personal.filter((t) => t.is_done && t.list_id === currentList.id);
+      const shownDone = new Set(doneHere.map((t) => t.id));
+      done = personal.filter((t) => t.is_done && t.list_id === currentList.id && !shownDone.has(t.id));
     } else if (activeFilter) {
       sectionsOut.push({ key: 'filter', title: null, items: applyFilter(open.filter(match), activeFilter.config, { userId: meId, today }) });
     } else if (labelName) {
@@ -725,10 +742,21 @@ export default function TodosScreen() {
     const t = todos.find((x) => x.id === todoId);
     if (!t) return;
     try {
+      // Section boards: the "Completed" / "Done" column means finished. Dropping a card there ticks it, taking one
+      // out of it reopens it.
+      const toSection = colKey === 'none' ? null : Number(String(colKey).slice(1));
+      const syncDone = async (secs) => {
+        const doneSec = doneSectionOf(secs);
+        if (!doneSec || t.parent_id) return;
+        const intoDone = toSection === doneSec.id;
+        if (intoDone !== !!t.is_done) await toggleTodo({ ...t, is_done: !!t.is_done }, { silent: intoDone ? false : true, keepSection: true });
+      };
       if (sectioned) {
-        await updateTodo(t.id, { section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
+        await updateTodo(t.id, { section_id: toSection });
+        await syncDone(placeSections);
       } else if (business && boardGroup === 'section') {
-        await updateTodo(t.id, { business_section_id: colKey === 'none' ? null : Number(String(colKey).slice(1)) });
+        await updateTodo(t.id, { business_section_id: toSection });
+        await syncDone(bizSections);
       } else if (business && boardGroup === 'assignee') {
         if (colKey === 'open') await updateTodo(t.id, { assigned_user_id: null });
         else await assignTodoTo(t.id, Number(String(colKey).slice(1)));
@@ -748,7 +776,7 @@ export default function TodosScreen() {
       showToast({ message: err.response?.data?.error || 'You cannot move that', tone: 'error' });
       fetchTodos();
     }
-  }, [todos, sectioned, business, boardGroup, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos]);
+  }, [todos, sectioned, business, boardGroup, updateTodo, assignTodoTo, toggleTodo, setTodoStatus, fetchTodos, placeSections, bizSections]);
 
   const onBoardDrop = useCallback(async (todoId, colKey, ids) => {
     await applyBoardMove(todoId, colKey);
@@ -884,7 +912,7 @@ export default function TodosScreen() {
   /** Three ready-made sections to start from. They are ordinary sections: rename, move or delete them. */
   const addStarterSections = async (listId) => {
     try {
-      for (const name of ['To do', 'In progress', 'Waiting']) {
+      for (const name of ['To do', 'Ongoing', 'Completed']) {
         // eslint-disable-next-line no-await-in-loop
         await createSection(listId, name);
       }
@@ -1055,7 +1083,7 @@ export default function TodosScreen() {
           )}
           {listGroup === 'section' && business.can_manage && bizSections.length === 0 && (
             <Chip small icon="sparkles-outline" label="Start with 3 sections" onPress={async () => {
-              try { for (const n of ['To do', 'In progress', 'Waiting']) await createSection(null, n, { businessId: bizId }); } catch (err) { showToast({ message: err.response?.data?.error || 'Could not add the sections', tone: 'error' }); }
+              try { for (const n of ['To do', 'Ongoing', 'Completed']) await createSection(null, n, { businessId: bizId }); } catch (err) { showToast({ message: err.response?.data?.error || 'Could not add the sections', tone: 'error' }); }
             }} />
           )}
           {bizArchived.length > 0 && <Chip small icon="archive-outline" label={`Archived · ${bizArchived.length}`} active={showArchived} onPress={() => setShowArchived((v) => !v)} />}
@@ -1222,7 +1250,7 @@ export default function TodosScreen() {
           {sectioned && !search && placeSections.length === 0 && (
             <AnimatedPressable style={styles.addSection} onPress={() => addStarterSections(currentList?.id || null)}>
               <Ionicons name="sparkles-outline" size={18} color={colors.brand[600]} />
-              <Text style={styles.addSectionText}>Start with 3 sections: To do, In progress, Waiting</Text>
+              <Text style={styles.addSectionText}>Start with 3 sections: To do, Ongoing, Completed (ticked work moves there)</Text>
             </AnimatedPressable>
           )}
           {sectioned && !search && archivedSections.length > 0 && (

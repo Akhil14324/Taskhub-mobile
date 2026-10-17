@@ -11,14 +11,14 @@ import { SlideGroup, SlideItem } from '../SlideGroup';
 import useIsDesktop from '../../hooks/useBreakpoint';
 import DueDatePicker from '../DueDatePicker';
 import MentionSuggestions from '../MentionSuggestions';
-import { Chip, PRIORITY, Avatar } from '../kit';
+import { Chip, PRIORITY, Avatar, splitMentions } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import {
   parseQuickAdd, detectDelegate, activeMentionQuery, completeMention, activeLabelQuery, completeLabel, removeLabelToken,
 } from '../../utils/quickAdd';
 import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
 import { DURATION_PRESETS, formatDuration } from '../../utils/todoMeta';
-import { showToast } from '../../utils/events';
+import { showToast, emit } from '../../utils/events';
 import useVoiceInput from '../../hooks/useVoiceInput';
 import VoiceLive from '../VoiceLive';
 import autoGrow, { virtualKeyboardUp } from '../../utils/autoGrow';
@@ -134,22 +134,52 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
 
   const mentionQuery = activeMentionQuery(text);
   const canSend = multi ? lineList.length > 0 : !!parsed.title;
+  // "@me" is offered first: with it, the to-do stays on my list as well as going to the people tagged.
+  const meEntry = useMemo(() => (user ? { id: user.id, name: `Me (${user.name || user.username})`, username: 'me', profile_picture: user.profile_picture, display_title: 'Keep it on your list too' } : null), [user]);
   const suggestions = mentionQuery !== null && !businessId
-    ? filterPeople(people, mentionQuery, { excludeIds: [user?.id], limit: 6 })
+    ? [
+      ...(meEntry && 'me'.startsWith(mentionQuery.toLowerCase()) && !parsed.me ? [meEntry] : []),
+      ...filterPeople(people, mentionQuery, { excludeIds: [user?.id], limit: 6 }),
+    ]
     : [];
   const labelQuery = activeLabelQuery(text);
   const labelSuggestions = labelQuery !== null
     ? knownLabels.filter((l) => !allLabels.includes(l.name) && l.name.includes(labelQuery)).slice(0, 6)
     : [];
-  const typedMentions = businessId ? [] : parsed.mentions
+  const resolvePeople = (names) => names
     .map((u) => people.find((p) => p.username?.toLowerCase() === u.toLowerCase()))
-    .filter(Boolean);
+    .filter((p) => p && p.id !== user?.id);
+  // Tagging my own username is the same as @me.
+  const tagsMe = (lp) => lp.me || lp.mentions.some((u) => u.toLowerCase() === user?.username?.toLowerCase());
+  const typedMentions = businessId ? [] : resolvePeople(parsed.mentions);
   const delegateHere = delegate && !businessId ? people.find((p) => p.id === delegate.person.id) : null;
   const mentionedPeople = delegateHere && !typedMentions.some((p) => p.id === delegateHere.id)
     ? [...typedMentions, delegateHere]
     : typedMentions;
-  // Whoever is @mentioned is ASSIGNED by default (they are accountable); tapping the chip makes it just shared (-1).
-  const effectiveAssignId = assignId === null ? (mentionedPeople[0]?.id ?? null) : assignId === -1 ? null : assignId;
+  const meTagged = !businessId && tagsMe(parsed);
+  // Tagged people without @me: the to-do goes to them and not to my list. With @me it is on everyone's.
+  const forOthersOnly = !businessId && !isSubtask && !giveTo && mentionedPeople.length > 0 && !meTagged;
+  // With @me and one other person, that person is ASSIGNED by default (accountable); with several it is just
+  // shared. Tapping a chip switches (-1 = shared on purpose).
+  const effectiveAssignId = assignId === null ? (mentionedPeople.length === 1 ? mentionedPeople[0].id : null) : assignId === -1 ? null : assignId;
+
+  /** Who a personal to-do goes to, as request fields. */
+  const peopleFields = (ments, me, assignPick) => {
+    if (businessId) return {};
+    if (giveToPerson) return { mention_ids: [], delegate_to: giveToPerson.id };
+    if (!ments.length) return { mention_ids: [] };
+    if (isSubtask) return { mention_ids: ments.map((p) => p.id) };
+    if (!me) return ments.length === 1 ? { mention_ids: [], delegate_to: ments[0].id } : { mention_ids: [], delegate_ids: ments.map((p) => p.id) };
+    return { mention_ids: ments.map((p) => p.id), assign_to: ments.some((p) => p.id === assignPick) ? assignPick : undefined };
+  };
+
+  // Highlight behind every @name that is a real person (or @me) while typing.
+  const knownTag = (tag) => {
+    const name = tag.slice(1).replace(/[.-]+$/, '').toLowerCase();
+    return name === 'me' || people.some((p) => p.username?.toLowerCase() === name);
+  };
+  const tagRuns = useMemo(() => splitMentions(text), [text]);
+  const hasTags = tagRuns.some((r) => r.mention && knownTag(r.text));
   const effectiveBizAssignee = bizAssignee || (delegate && businessId ? delegate.person.id : null);
   const assignee = bizPeople.find((p) => p.id === effectiveBizAssignee) || null;
   const assignable = useMemo(() => people.filter((p) => p.id !== user?.id), [people, user]);
@@ -170,7 +200,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           if (!lp.title) continue;
           const due = pickFor(lp, 'due_date', defaults.due_date);
           const lid = businessId || giveTo ? null : (override.list_id !== undefined ? override.list_id : (lp.list?.id ?? defaults.list_id ?? null));
-          const ments = businessId ? [] : lp.mentions.map((u) => people.find((pp) => pp.username?.toLowerCase() === u.toLowerCase())).filter(Boolean);
+          const ments = businessId ? [] : resolvePeople(lp.mentions);
           // eslint-disable-next-line no-await-in-loop
           await createTodo({
             title: lp.title.charAt(0).toUpperCase() + lp.title.slice(1),
@@ -189,9 +219,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             labels: [...new Set([...lp.labels, ...extraLabels])],
             deadline_date: pickFor(lp, 'deadline_date'),
             duration_minutes: pickFor(lp, 'duration_minutes'),
-            mention_ids: giveToPerson ? [] : ments.map((pp) => pp.id),
-            delegate_to: giveToPerson && !businessId ? giveToPerson.id : undefined,
-          });
+            ...peopleFields(ments, tagsMe(lp), ments.length === 1 ? ments[0].id : undefined),
+          }, { silent: true });
           added += 1;
         }
         showToast({ message: added + ' to-dos added' });
@@ -215,15 +244,12 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         parent_id: defaults.parent_id || undefined,
         business_id: businessId || undefined,
             business_section_id: businessId ? (defaults.business_section_id || undefined) : undefined,
-        assign_to: businessId
-          ? (effectiveBizAssignee || undefined)
-          : giveToPerson ? undefined : (mentionedPeople.some((p) => p.id === effectiveAssignId) ? effectiveAssignId : undefined),
+        assign_to: businessId ? (effectiveBizAssignee || undefined) : undefined,
         requires_approval: businessId && review !== null ? review : undefined,
         labels: allLabels,
         deadline_date: deadline,
         duration_minutes: duration,
-        mention_ids: giveToPerson ? [] : mentionedPeople.map((p) => p.id),
-        delegate_to: giveToPerson && !businessId ? giveToPerson.id : undefined,
+        ...peopleFields(mentionedPeople, meTagged, effectiveAssignId),
       });
       setGiveTo(null);
       setAssignId(null);
@@ -271,7 +297,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const hasBusinesses = businesses.length > 0 && !isSubtask;
   const placeholder = isSubtask
     ? 'Sub-task, e.g. Collect invoices tomorrow'
-    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1, or: ask Ravi to send the invoice friday';
+    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1, or: @ravi @priya send the quote (add @me to keep it on yours)';
 
   return (
     <BottomSheet
@@ -284,7 +310,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       onClosed={onClosed}
       onOpened={() => inputRef.current?.focus()}
     >
-      <View style={styles.wrap}>
+      <View style={styles.wrap} dataSet={{ buddyPerch: 'quickadd' }}>
         {hasBusinesses && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeRow} keyboardShouldPersistTaps="always">
             <Chip small icon="person-outline" label="Personal" active={!businessId} onPress={() => setOverride((o) => ({ ...o, business_id: null }))} />
@@ -313,17 +339,29 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           {multi && <Text style={styles.note}>{lineList.length > 1 ? lineList.length + ' to-dos, one per line' : 'One to-do per line'}</Text>}
         </View>
         {listening && <VoiceLive levels={levels} live={live} onStop={voice.stop} />}
+        <View style={styles.inputWrap}>
+        {/* The same text drawn underneath in clear ink, with a red tint behind each real @person: the
+            textarea above is transparent, so the tags show through exactly where they are typed. */}
+        {hasTags && (
+          <Text style={[styles.input, styles.inputShadow]} aria-hidden pointerEvents="none">
+            {tagRuns.map((r, i) => (r.mention && knownTag(r.text)
+              ? <Text key={i} style={styles.tagMark}>{r.text}</Text>
+              : <Text key={i}>{r.text}</Text>))}
+            {'​'}
+          </Text>
+        )}
         <TextInput
           ref={inputRef}
           value={text}
           onChangeText={(v) => {
+            emit('buddy', { type: 'typing' });
             // Some touch keyboards do not report Enter as a key: catch the newline it types.
             if (!multi && v.length === text.length + 1 && v.endsWith('\n') && virtualKeyboardUp()) { submitNext.current = true; setText(v.replace(/\n+$/, '')); return; }
             setText(v);
           }}
           placeholder={multi ? 'One to-do per line, e.g.\nCall supplier tomorrow\nSend the quote friday p1' : placeholder}
           placeholderTextColor={colors.gray[400]}
-          style={styles.input}
+          style={[styles.input, styles.inputTop]}
           multiline
           numberOfLines={1}
           scrollEnabled={false}
@@ -338,6 +376,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             submit();
           }}
         />
+        </View>
         {menu === 'notes' && (
           <TextInput
             value={notes}
@@ -380,7 +419,21 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           {!!giveToPerson && !businessId && (
             <Chip small active icon="person-add" label={`Assigned to ${giveToPerson.name.split(' ')[0]} · not on your list`} onRemove={() => setGiveTo(null)} />
           )}
-          {!giveToPerson && mentionedPeople.map((p) => (
+          {forOthersOnly && mentionedPeople.map((p) => (
+            <Chip key={p.id} small active icon="paper-plane" label={`For ${p.name.split(' ')[0]}`} />
+          ))}
+          {forOthersOnly && (
+            <Chip
+              small
+              icon="add"
+              label="Not on your list · add @me"
+              onPress={() => { setText((t) => `${t.replace(/\s+$/, '')} @me `); inputRef.current?.focus(); }}
+            />
+          )}
+          {!giveToPerson && !forOthersOnly && meTagged && mentionedPeople.length > 0 && (
+            <Chip small active icon="person-circle" label="You" />
+          )}
+          {!giveToPerson && !forOthersOnly && mentionedPeople.map((p) => (
             <Chip
               key={p.id}
               small
@@ -616,13 +669,22 @@ const createStyles = (colors) => StyleSheet.create({
   liveText: { fontSize: fontSize.base, color: colors.brand[700] },
   note: { fontSize: fontSize.sm, color: colors.gray[500], paddingBottom: spacing.xs },
   suggestions: { marginBottom: spacing.sm },
+  inputWrap: { position: 'relative' },
+  inputTop: { position: 'relative', zIndex: 1 },
   input: {
     fontSize: fontSize.lg,
     fontWeight: '600',
+    lineHeight: 26,
+    letterSpacing: 0,
     color: colors.gray[900],
     paddingVertical: spacing.sm,
+    paddingHorizontal: 0,
     outlineStyle: 'none',
+    backgroundColor: 'transparent',
   },
+  // Mirrors the input exactly (same font, size, line height and padding) so the tag tints line up.
+  inputShadow: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 0, color: 'transparent', whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none' },
+  tagMark: { backgroundColor: colors.brand[100], color: 'transparent', borderRadius: 5, boxShadow: `0 0 0 2px ${colors.brand[100]}` },
   notes: {
     fontSize: fontSize.base,
     color: colors.gray[700],

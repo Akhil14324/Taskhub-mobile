@@ -240,7 +240,7 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
   }));
 
   return (
-    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.9}>
+    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.9} accessibilityRole="checkbox" accessibilityState={{ checked: !!checked }} accessibilityLabel={checked ? 'Mark as not done' : 'Mark as done'}>
       <Animated.View style={[{
         width: size,
         height: size,
@@ -339,11 +339,43 @@ export function IconButton({ icon, onPress, color, size = 22, badge, style, acce
   );
 }
 
-export function SectionHeader({ title, count, right, color, style }) {
+/**
+ * Splits text into plain runs and @mentions: [{ text, mention }]. A mention starts the text or follows a
+ * space (so an e-mail address is not one). No lookbehind: older iPhone Safari cannot parse it.
+ */
+export function splitMentions(text) {
+  const parts = String(text || '').split(/(@[A-Za-z0-9._-]{2,30})/g);
+  const out = [];
+  parts.forEach((part, i) => {
+    if (!part) return;
+    const prev = parts[i - 1];
+    const mention = i % 2 === 1 && (i === 1 ? parts[0] === '' || /\s$/.test(parts[0]) : /\s$/.test(prev || ''));
+    const last = out[out.length - 1];
+    if (!mention && last && !last.mention) last.text += part;
+    else out.push({ text: part, mention });
+  });
+  return out;
+}
+
+/**
+ * Text with @mentions picked out in brand red on a light red tint, so a tagged person is obvious at a
+ * glance. Use inside a <Text> (it returns nested Text runs).
+ */
+export function MentionText({ text, style }) {
+  const colors = useColors();
+  const runs = splitMentions(text);
+  if (!runs.some((r) => r.mention)) return text;
+  return runs.map((r, i) => (r.mention
+    ? <Text key={i} style={[{ color: colors.brand[700], backgroundColor: colors.brand[100], borderRadius: 4, fontWeight: '700' }, style]}>{r.text}</Text>
+    : r.text));
+}
+
+export function SectionHeader({ title, count, right, color, style, icon }) {
   const colors = useColors();
   return (
     <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing.lg, paddingBottom: spacing.sm }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        {!!icon && <Ionicons name={icon} size={16} color={color || colors.brand[600]} />}
         <Text style={{ ...type.headline, fontSize: fontSize.md, color: color || colors.gray[800] }}>{title}</Text>
         {count !== undefined && <Text style={{ ...type.caption, color: colors.gray[500] }}>{count}</Text>}
       </View>

@@ -182,6 +182,7 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
   return (
     <View
       {...glass('capsule')}
+      dataSet={{ buddyFloor: '1' }}
       style={{ height: 66, marginHorizontal: 14, marginBottom: Math.max(insets.bottom, 10), borderRadius: 33, backgroundColor: colors.white }}
     >
       <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
