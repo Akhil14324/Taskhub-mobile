@@ -29,8 +29,13 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
   const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
+  // Only a real touch / click on the capsule (or the New to-do shortcut) may open the dialog. Focus that arrives
+  // any other way (the browser handing focus back when the dialog closes) is ignored: that was the dialog
+  // opening a second time by itself.
+  const armedAt = useRef(0);
+  const arm = () => { armedAt.current = Date.now(); };
   useImperativeHandle(ref, () => ({
-    focus: () => inputRef.current?.focus(),
+    focus: () => { arm(); inputRef.current?.focus(); },
     blur: () => inputRef.current?.blur(),
     // Where the capsule is right now, so the dialog closing into it lands on it even if the keyboard moved it.
     measure: (cb) => { const n = wrapRef.current; if (n?.measureInWindow) n.measureInWindow((x, y, width, height) => cb({ x, y, width, height })); },
@@ -78,16 +83,21 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
     });
   };
 
-  // When the dialog closes, the browser's modal hands focus back to this input; that must not open the
-  // dialog again, so focus arriving right after the capsule reappears is ignored.
-  const shownAt = useRef(0);
+  // When the dialog closes, let go of any focus the browser put back here.
   useEffect(() => {
-    if (!hidden) { shownAt.current = Date.now(); inputRef.current?.blur(); }
+    if (!hidden) { armedAt.current = 0; inputRef.current?.blur(); }
   }, [hidden]);
 
   return (
     // A plain View carries the ref: it is the one that can report its window rect (an animated one cannot on web).
-    <View ref={wrapRef} collapsable={false} style={styles.slot} dataSet={hidden ? undefined : { buddyFloor: '1' }}>
+    <View
+      ref={wrapRef}
+      collapsable={false}
+      style={styles.slot}
+      dataSet={hidden ? undefined : { buddyFloor: '1' }}
+      onTouchStart={hidden ? undefined : arm}
+      onPointerDown={hidden ? undefined : arm}
+    >
     <Animated.View
       {...glass('capsule')}
       pointerEvents={hidden ? 'none' : 'auto'}
@@ -101,10 +111,11 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
         onSubmitEditing={submit}
         onFocus={() => {
           if (onExpand) {
+            if (hidden || Date.now() - armedAt.current > 1500) { inputRef.current?.blur(); return; }
+            armedAt.current = 0;
             // Before the keyboard starts: let it cover the page instead of resizing it (the dialog takes over the hold).
             const release = holdKeyboardOverlay();
             setTimeout(release, 4000);
-            if (hidden || Date.now() - shownAt.current < 1500) { inputRef.current?.blur(); return; }
             expand();
             return;
           }
