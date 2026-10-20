@@ -782,10 +782,16 @@ function Buddy({ userId, dark, todos, onHide }) {
   const mood = m.need ? (m.need.kind === 'water' ? 'Thirsty' : 'Stiff')
     : m.asleep || anim === 'sleep' ? 'Sleepy'
       : (pet.current.happiness || 0) > 75 ? 'Very happy' : (pet.current.happiness || 0) > 40 ? 'Content' : 'Needs attention';
+  // The cat re-renders on every frame tick (~8 a second), so the stats card's numbers (storage reads and a pass
+  // over every to-do) are only worked out while the card is open: otherwise they cost the app on every frame.
   let water = { count: 0, goal: 8 };
   let stretch = { count: 0 };
-  try { water = readWater(userId); stretch = readStretch(userId); } catch { /* storage blocked */ }
-  const doneToday = todos.filter((t) => t.is_done && t.done_at && toYmd(new Date(t.done_at)) === todayYmd()).length;
+  let doneToday = 0;
+  if (card) {
+    try { water = readWater(userId); stretch = readStretch(userId); } catch { /* storage blocked */ }
+    const today = todayYmd();
+    doneToday = todos.filter((t) => t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today).length;
+  }
 
   const toyRows = toy ? (toy.kind === 'bowl' ? PROPS.bowlEmpty : toy.kind === 'bowlFull' ? PROPS.bowlFull : toy.kind === 'butterfly' ? PROPS[tick % 4 < 2 ? 'butterfly0' : 'butterfly1'] : PROPS[toy.kind]) : null;
   const toySize = toyRows ? frameSize(toyRows) : null;

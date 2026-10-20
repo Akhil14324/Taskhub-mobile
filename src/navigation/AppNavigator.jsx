@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { ActivityIndicator, Text, View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
 import { syncNavigationBack } from '../utils/backStack';
@@ -195,14 +195,17 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
           const focused = !isMore && state.index === index;
           const color = focused ? colors.brand[700] : colors.gray[500];
           const label = isMore ? t('more') : (typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name);
-          const onPress = () => {
-            if (isMore) { onMore(); return; }
+          // A tab switches the moment the finger lands (not on release), like a native tab bar; the release
+          // then finds it already current and does nothing. Keyboard presses still arrive through onPress.
+          const go = () => {
+            if (navigation.getState().index === index) return;
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+            if (!event.defaultPrevented) navigation.navigate(route.name);
           };
+          const onPress = isMore ? onMore : go;
           return (
             <SlideItem key={route.key} active={focused} style={{ flex: 1 }}>
-              <AnimatedPressable onPress={onPress} haptic="light" water accessibilityLabel={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 28, paddingVertical: 4 }}>
+              <AnimatedPressable onPress={onPress} onPressIn={isMore ? undefined : go} haptic="light" water accessibilityLabel={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 28, paddingVertical: 4 }}>
                 {isMore
                   ? <Ionicons name="ellipsis-horizontal-outline" size={22} color={color} />
                   : options.tabBarIcon?.({ focused, color, size: 22 })}
@@ -264,6 +267,26 @@ function MainTabs() {
   };
   const closeMore = () => { closedAt.current = Date.now(); setMoreVisible(false); };
 
+  // Tabs that were never opened would mount (a large screen, in one go) on the first tap, which is the slow
+  // switch. Instead each one is mounted in the background, hidden, once the app is idle after start-up, as an
+  // interruptible transition so a tap meanwhile is never held up. Later switches only show what is there.
+  const [warm, setWarm] = useState(() => new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const order = ['Todos', 'Dashboard', 'ChatList'];
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 600));
+    const next = (i) => {
+      if (cancelled || i >= order.length) return;
+      idle(() => {
+        if (cancelled) return;
+        startTransition(() => setWarm((w) => new Set(w).add(order[i])));
+        setTimeout(() => next(i + 1), 700);
+      });
+    };
+    const start = setTimeout(() => next(0), 1200);
+    return () => { cancelled = true; clearTimeout(start); };
+  }, []);
+
   const today = todayYmd();
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
@@ -323,6 +346,7 @@ function MainTabs() {
           name="Dashboard"
           component={TabHome}
           options={{
+            lazy: !warm.has('Dashboard'),
             tabBarLabel: t('home'),
             tabBarIcon: ({ focused, color }) => (
               <AnimatedTabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} badge={unreadCount} />
@@ -333,6 +357,7 @@ function MainTabs() {
           name="Todos"
           component={TabTodos}
           options={{
+            lazy: !warm.has('Todos'),
             tabBarLabel: 'To-do',
             tabBarIcon: ({ focused, color }) => (
               <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge + approvalCount} />
@@ -343,6 +368,7 @@ function MainTabs() {
           name="ChatList"
           component={TabChat}
           options={{
+            lazy: !warm.has('ChatList'),
             tabBarLabel: t('chat'),
             tabBarIcon: ({ focused, color }) => (
               <AnimatedTabIcon name={focused ? 'chatbubble' : 'chatbubble-outline'} focused={focused} color={color} badge={chatUnread} />

@@ -1,37 +1,38 @@
-import { useEffect } from 'react';
+import { memo, useLayoutEffect, useRef } from 'react';
+import { View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { SPRING } from '../theme/motion';
+import { SPRING, springCss } from '../theme/motion';
 import useReducedMotion from '../hooks/useReducedMotion';
 
 /**
- * How a module arrives. One spring drives opacity, a short slide and a slight settle in scale.
- * Opacity reaches 1 early (by ~40% of the spring) because an ancestor with opacity < 1 flattens the
- * backdrop blur of every glass surface inside it: the sooner it is 1, the sooner the glass is real.
- * When the spring is done the transform is dropped entirely (an identity transform would still make
- * a containing block for fixed / absolute children).
+ * How a module arrives: a quick fade and a short spring slide, played by the browser itself (Web Animations
+ * API on transform / opacity), so it runs on the compositor and keeps moving while JavaScript is still busy
+ * with the screen that just appeared. It starts in a layout effect, before the first paint, so the finished
+ * screen never flashes first. Opacity is 1 within ~120 ms because an ancestor with opacity < 1 flattens the
+ * backdrop blur of every glass surface inside it. Nothing is left behind when it ends (fill 'none'): an
+ * identity transform would still make a containing block for fixed / absolute children.
  */
-function arrival(p, dx, dy) {
-  'worklet';
-  const v = Math.min(1, Math.max(0, p));
-  if (p >= 0.9995) return { opacity: 1, transform: [] };
-  const rest = 1 - p;
-  return {
-    opacity: Math.min(1, v * 1.8),
-    transform: [{ translateX: dx * rest }, { translateY: dy * rest }],
-  };
+function arrive(el, dx, dy) {
+  if (!el || typeof el.animate !== 'function') return null;
+  const { easing, duration } = springCss(SPRING.screen);
+  const fade = el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' });
+  const slide = el.animate(
+    [{ transform: `translate3d(${dx}px, ${dy}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
+    { duration, easing },
+  );
+  return () => { fade.cancel(); slide.cancel(); };
 }
 
 /**
  * Mounts, then springs in. Put `key` on it to replay the arrival when the content it holds changes
  * (a different layout or view): dir -1 / 1 slides from the left / right, 0 rises from below.
  */
-export function Reveal({ dir = 0, distance = 30, rise = 14, style, children }) {
+export function Reveal({ dir = 0, distance = 24, rise = 10, style, children }) {
   const reduced = useReducedMotion();
-  const p = useSharedValue(reduced ? 1 : 0);
-  useEffect(() => { if (!reduced) p.value = withSpring(1, SPRING.screen); }, [p, reduced]);
-  const animated = useAnimatedStyle(() => arrival(p.value, dir * distance, dir ? 0 : rise));
-  return <Animated.View style={[{ flex: 1 }, style, animated]}>{children}</Animated.View>;
+  const ref = useRef(null);
+  // Once, on mount: the `key` the caller sets is what replays it.
+  useLayoutEffect(() => (reduced ? undefined : arrive(ref.current, dir * distance, dir ? 0 : rise) || undefined), []);
+  return <View ref={ref} style={[{ flex: 1 }, style]}>{children}</View>;
 }
 
 // Which way the last tab change went, so tabs slide the way the bar suggests.
@@ -42,28 +43,30 @@ let lastTab = -1;
  * Wraps a screen so it animates every time it comes into focus (tab change, route push, back).
  * The native stack does no transition at all in a browser, so this is where module changes get their
  * motion. `kind` 'tab' slides sideways by tab order; 'push' glides in from the right.
+ * The screen itself is memoised: gaining or losing focus re-renders only this wrapper, never the
+ * (often large) screen inside it, which is what made switching modules feel heavy.
  */
 export function withScreenTransition(Component, kind = 'push', name) {
+  const Screen = memo(Component);
   function Transitioned(props) {
     const focused = useIsFocused();
     const reduced = useReducedMotion();
-    const p = useSharedValue(reduced ? 1 : 0);
-    const dir = useSharedValue(kind === 'push' ? 1 : 0);
-    useEffect(() => {
-      if (reduced) { p.value = 1; return; }
-      if (!focused) { p.value = 0; return; } // hidden: park it at the start for the next arrival
+    const ref = useRef(null);
+    useLayoutEffect(() => {
+      if (!focused || reduced) return undefined;
+      let dx = 28; let dy = 0;
       if (kind === 'tab') {
         const i = TAB_ORDER.indexOf(name);
-        dir.value = lastTab < 0 || i === lastTab ? 0 : i > lastTab ? 1 : -1;
+        const dir = lastTab < 0 || i === lastTab ? 0 : i > lastTab ? 1 : -1;
         lastTab = i;
+        dx = dir * 24; dy = dir ? 0 : 10;
       }
-      p.value = withSpring(1, SPRING.screen);
-    }, [focused, reduced, p, dir]);
-    const animated = useAnimatedStyle(() => arrival(p.value, dir.value * 34, dir.value ? 0 : 16));
+      return arrive(ref.current, dx, dy) || undefined;
+    }, [focused, reduced]);
     return (
-      <Animated.View style={[{ flex: 1 }, animated]}>
-        <Component {...props} />
-      </Animated.View>
+      <View ref={ref} style={{ flex: 1 }}>
+        <Screen {...props} />
+      </View>
     );
   }
   Transitioned.displayName = `Transitioned(${Component.displayName || Component.name || 'Screen'})`;
