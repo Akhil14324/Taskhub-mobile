@@ -9,6 +9,7 @@ import { TodoCheckbox, DueChip, Avatar } from '../kit';
 import { buildTree, subtaskProgress } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
 import { glass } from '../../theme/glass';
+import StepReview, { StepTag } from './StepReview';
 
 const LEVEL = 20;
 
@@ -44,6 +45,7 @@ export default function SubtaskTree({ parent, onOpen }) {
   const progress = subtaskProgress(parent, todos);
   const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
   const canAdd = parent.permissions ? parent.permissions.can_add_subtask : true;
+  const noSteps = progress.total === 0 && canAdd && !parent.parent_id && !parent.is_done;
 
   const startAdd = (id) => {
     setAddingTo(id);
@@ -141,6 +143,11 @@ export default function SubtaskTree({ parent, onOpen }) {
             </AnimatedPressable>
           )}
         </View>
+        {depth === 0 && !!t.step_state && (
+          <View style={{ marginLeft: 36, marginRight: spacing.sm }}>
+            {t.step_state === 'awaiting_review' ? <StepReview step={t} /> : <StepTag step={t} />}
+          </View>
+        )}
         {!isCollapsed && node.children.map((child) => renderNode(child, depth + 1))}
         {addingTo === t.id && addField(t.id, depth + 1)}
       </View>
@@ -149,17 +156,26 @@ export default function SubtaskTree({ parent, onOpen }) {
 
   return (
     <View>
-      <Text style={styles.label}>Sub-tasks{progress.total ? ` · ${progress.done}/${progress.total} · ${percent}%` : ''}</Text>
+      <Text style={styles.label}>{parent.parent_id ? 'Sub-tasks' : 'Steps'}{progress.total ? ` · ${progress.done}/${progress.total} · ${percent}%` : ''}</Text>
       {progress.total > 0 && (
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${percent}%` }]} />
         </View>
       )}
       {tree.map((node) => renderNode(node, 0))}
+      {noSteps && addingTo !== parent.id && (
+        <View {...glass('inset')} style={[styles.nudge, { borderColor: colors.brand[200] }]}>
+          <Ionicons name="list" size={18} color={colors.brand[600]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nudgeTitle}>Does this have steps? Add them.</Text>
+            <Text style={styles.nudgeText}>"{parent.title}" is one line, but the work behind it is several. Write each step so the team can see the plan, and each finished step gets checked before the next one starts.</Text>
+          </View>
+        </View>
+      )}
       {addingTo === parent.id ? addField(parent.id, 0) : canAdd && (
         <AnimatedPressable style={styles.addButton} onPress={() => startAdd(parent.id)}>
           <Ionicons name="add" size={18} color={colors.brand[600]} />
-          <Text style={styles.addText}>Add sub-task</Text>
+          <Text style={styles.addText}>{noSteps ? 'Add the first step' : parent.parent_id ? 'Add sub-task' : 'Add a step'}</Text>
         </AnimatedPressable>
       )}
     </View>
@@ -187,6 +203,9 @@ const createStyles = (colors) => StyleSheet.create({
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   assignee: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 11, color: colors.gray[500] },
+  nudge: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', borderWidth: 1, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.xs },
+  nudgeTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
+  nudgeText: { fontSize: fontSize.sm, color: colors.gray[600], marginTop: 2 },
   addButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.sm },
   addText: { color: colors.brand[600], fontWeight: '600', fontSize: fontSize.sm },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },

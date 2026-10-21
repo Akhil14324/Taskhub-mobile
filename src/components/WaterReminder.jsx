@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -100,6 +100,12 @@ export default function WaterReminder() {
   const userId = user?.id;
   const [state, setState] = useState(() => load(userId));
   const [asking, setAsking] = useState(false);
+  // The chip can be dragged anywhere (it sat on top of other controls); the spot is remembered per device.
+  const chipRef = useRef(null);
+  const draggedRef = useRef(false);
+  const [pos, setPos] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem('th.water.pos') || 'null'); } catch { return null; }
+  });
 
   const update = useCallback((patch) => {
     setState((prev) => {
@@ -149,6 +155,51 @@ export default function WaterReminder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dueNow]);
 
+  useEffect(() => {
+    const el = chipRef.current && (chipRef.current.getBoundingClientRect ? chipRef.current : null);
+    if (!el || !enabled) return undefined;
+    let start = null;
+    const clampPos = (x, y) => ({
+      x: Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, x)),
+      y: Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, y)),
+    });
+    const down = (e) => {
+      const r = el.getBoundingClientRect();
+      start = { px: e.clientX, py: e.clientY, x: r.left, y: r.top, moved: false };
+      draggedRef.current = false;
+      try { el.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+    };
+    const move = (e) => {
+      if (!start) return;
+      const dx = e.clientX - start.px;
+      const dy = e.clientY - start.py;
+      if (!start.moved && Math.hypot(dx, dy) < 6) return;
+      start.moved = true;
+      draggedRef.current = true;
+      setPos(clampPos(start.x + dx, start.y + dy));
+    };
+    const up = () => {
+      if (start?.moved) {
+        setPos((p) => {
+          try { window.localStorage.setItem('th.water.pos', JSON.stringify(p)); } catch { /* private mode */ }
+          return p;
+        });
+        setTimeout(() => { draggedRef.current = false; }, 0);
+      }
+      start = null;
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+    };
+  }, [enabled, userId]);
+
   if (!enabled || !userId) return null;
 
   // A glass only counts (and the reminder only stops) once a photo of the bottle or glass is added. It is
@@ -177,7 +228,7 @@ export default function WaterReminder() {
   };
   const done = state.count >= GOAL;
   // Phones: in the header, between the page title and the search icon. Desktop: bottom right.
-  const place = desktop ? { right: 24, bottom: 104 } : { right: 152, top: insets.top + 29 };
+  const place = pos ? { left: pos.x, top: pos.y } : desktop ? { right: 24, bottom: 104 } : { right: 152, top: insets.top + 29 };
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -204,9 +255,10 @@ export default function WaterReminder() {
         </View>
       )}
       <Pressable
-        onPress={() => setAsking((v) => !v)}
+        ref={chipRef}
+        onPress={() => { if (!draggedRef.current) setAsking((v) => !v); }}
         {...glass('capsule')}
-        style={[styles.chip, place]}
+        style={[styles.chip, place, { touchAction: 'none', cursor: 'grab' }]}
         accessibilityLabel={`Water: ${state.count} of ${GOAL} glasses today`}
       >
         <Ionicons name={done ? 'checkmark-circle' : 'water-outline'} size={16} color={colors.brand[600]} />

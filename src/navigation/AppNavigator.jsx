@@ -291,17 +291,17 @@ function MainTabs() {
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
   const moreItems = [
-    { label: 'Progress', icon: 'sunny-outline', route: 'Progress' },
-    { label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
-    { label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
-    ...(user?.can_monitor ? [{ label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
-    ...(featureOn(user?.preferences, 'leaderboard') ? [{ label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
-    ...(featureOn(user?.preferences, 'automation') ? [{ label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
-    ...(user?.permissions?.manage_access ? [{ label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
-    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
-    { label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
-    { label: t('profile'), icon: 'person-outline', route: 'Profile' },
-    { label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
+    { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
+    { group: 'Work', label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
+    ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
+    ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
+    ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
+    ...(user?.permissions?.manage_access ? [{ group: 'Organisation', label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
+    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ group: 'Organisation', label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
+    { group: 'Organisation', label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
+    { group: 'You', label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
+    { group: 'You', label: t('profile'), icon: 'person-outline', route: 'Profile' },
+    { group: 'You', label: t('logout'), icon: 'log-out-outline', color: colors.red[600], action: 'logout' },
   ];
 
   const handleMoreItem = (item) => {

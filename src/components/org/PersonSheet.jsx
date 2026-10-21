@@ -6,6 +6,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useTodos } from '../../context/TodoContext';
+import { PickerSheet } from '../todos/Pickers';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import api from '../../api/client';
 import AnimatedPressable from '../AnimatedPressable';
@@ -127,6 +129,21 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
           {canManage && (
             <View style={styles.manage}>
               <Text style={styles.manageTitle}>Manage</Text>
+              {memberships.map((m) => (
+                <View key={m.business_id} style={styles.bizRow}>
+                  <Ionicons name="briefcase-outline" size={17} color={colors.gray[500]} />
+                  <Text style={styles.bizRowName} numberOfLines={1}>{m.business_name}</Text>
+                  {pickable.length > 0 && (
+                    <AnimatedPressable disabled={busy} onPress={() => setPicker({ mode: 'move', from: m.business_id })} style={styles.bizBtn}>
+                      <Text style={styles.bizBtnText}>Move</Text>
+                    </AnimatedPressable>
+                  )}
+                  <AnimatedPressable disabled={busy} onPress={() => takeOut(m)} style={styles.bizBtn} accessibilityLabel={`Take out of ${m.business_name}`}>
+                    <Ionicons name="close" size={15} color={colors.gray[600]} />
+                  </AnimatedPressable>
+                </View>
+              ))}
+              {pickable.length > 0 && <ManageRow icon="add-circle-outline" label="Add to a business" onPress={() => setPicker({ mode: 'add' })} />}
               <ManageRow icon="create-outline" label="Edit position & businesses" onPress={() => { onClose(); onEdit?.(person); }} />
               <ManageRow icon="key-outline" label="Reset password" onPress={resetPassword} />
               <ManageRow icon="person-remove-outline" label="Remove from TaskHub" danger onPress={remove} />
@@ -170,6 +187,10 @@ const createStyles = (colors) => StyleSheet.create({
   name: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900] },
   title: { fontSize: fontSize.base, fontWeight: '600', color: colors.brand[600], marginTop: 2 },
   username: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },
+  bizRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8 },
+  bizRowName: { flex: 1, fontSize: fontSize.base, color: colors.gray[800], fontWeight: '600' },
+  bizBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.gray[100], alignItems: 'center', justifyContent: 'center' },
+  bizBtnText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[700] },
   memberships: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
   membership: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
   dot: { width: 7, height: 7, borderRadius: 4 },

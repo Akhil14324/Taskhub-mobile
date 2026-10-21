@@ -167,7 +167,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const peopleFields = (ments, me, assignPick) => {
     if (businessId) return {};
     if (giveToPerson) return { mention_ids: [], delegate_to: giveToPerson.id };
-    if (!ments.length) return { mention_ids: [] };
+    if (!ments.length) return {}; // unresolved tags: the server matches them itself
     if (isSubtask) return { mention_ids: ments.map((p) => p.id) };
     if (!me) return ments.length === 1 ? { mention_ids: [], delegate_to: ments[0].id } : { mention_ids: [], delegate_ids: ments.map((p) => p.id) };
     return { mention_ids: ments.map((p) => p.id), assign_to: ments.some((p) => p.id === assignPick) ? assignPick : undefined };

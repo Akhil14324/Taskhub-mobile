@@ -1,5 +1,5 @@
 import { memo, useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -88,15 +88,23 @@ export function Header({ title, lang, toggleLang, theme, toggleTheme }) {
     <View style={[styles.header, { paddingTop: spacing.md }]}>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.headerActions}>
-        <AnimatedPressable onPress={toggleLang} style={styles.langBtn} haptic="light">
-          <Text style={styles.langText}>{lang === 'en' ? 'EN' : 'TE'}</Text>
-        </AnimatedPressable>
         <AnimatedPressable onPress={toggleTheme} style={styles.iconBtn} haptic="light">
           <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.gray[600]} />
         </AnimatedPressable>
       </View>
     </View>
   );
+}
+
+/** Items with the same `group` sit together under one caption, in the order they first appear. */
+function groupItems(items) {
+  const out = [];
+  items.forEach((item) => {
+    const last = out[out.length - 1];
+    if (last && last.title === item.group) last.items.push(item);
+    else out.push({ title: item.group, items: [item] });
+  });
+  return out;
 }
 
 export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
@@ -146,23 +154,32 @@ export function MoreMenu({ visible, onClose, title, items, onItemPress }) {
               <Ionicons name="close-outline" size={22} color={colors.gray[400]} />
             </AnimatedPressable>
           </View>
-          <View style={styles.sheetItems}>
-            {items.map((item, index) => (
-              <AnimatedPressable
-                key={index}
-                {...glass('inset')}
-                style={styles.sheetItem}
-                onPress={() => {
-                  onClose();
-                  onItemPress(item);
-                }}
-                haptic="light"
-              >
-                <Ionicons name={item.icon} size={22} color={item.color || colors.gray[600]} />
-                <Text style={[styles.sheetItemText, { color: item.color || colors.gray[700] }]}>{item.label}</Text>
-              </AnimatedPressable>
+          <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={styles.sheetItems} showsVerticalScrollIndicator={false}>
+            {groupItems(items).map((g, gi) => (
+              <View key={gi} style={{ marginBottom: spacing.md }}>
+                {!!g.title && <Text style={styles.groupTitle}>{g.title}</Text>}
+                <View {...glass('inset')} style={styles.group}>
+                  {g.items.map((item, index) => (
+                    <AnimatedPressable
+                      key={index}
+                      style={[styles.sheetItem, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[200] }]}
+                      onPress={() => {
+                        onClose();
+                        onItemPress(item);
+                      }}
+                      haptic="light"
+                    >
+                      <View style={[styles.itemIcon, { backgroundColor: item.color ? 'transparent' : colors.brand[50] }]}>
+                        <Ionicons name={item.icon} size={19} color={item.color || colors.brand[600]} />
+                      </View>
+                      <Text style={[styles.sheetItemText, { flex: 1, color: item.color || colors.gray[800] }]}>{item.label}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={colors.gray[300]} />
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </View>
             ))}
-          </View>
+          </ScrollView>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -367,14 +384,15 @@ const createStyles = (colors) => StyleSheet.create({
   sheetItems: {
     paddingVertical: spacing.sm,
   },
+  groupTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.gray[500], marginBottom: 6, marginLeft: 6 },
+  group: { borderRadius: 18, overflow: 'hidden' },
+  itemIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sheetItem: {
-    borderRadius: 16,
-    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
   },
   sheetItemText: {
     fontSize: fontSize.base,

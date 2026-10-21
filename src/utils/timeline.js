@@ -200,6 +200,9 @@ export function describeEntry(entry, who = 'Someone') {
     case 'deadline_changed': return { icon: 'alert-circle', title: `${who} changed the deadline`, detail: `${WHEN(e.from_value)} → ${WHEN(e.to_value)}`, tone: 'warn' };
     case 'priority_changed': return { icon: 'flag', title: `${who} changed priority`, detail: `${e.from_value} → ${e.to_value}`, tone: 'neutral' };
     case 'completed': return { icon: 'checkmark-circle', title: `${who} completed it`, detail: e.meta?.recurring ? 'Repeats — next round started' : null, tone: 'good' };
+    case 'step_done': return { icon: 'flag', title: `${who} finished a step`, detail: e.note, tone: 'neutral' };
+    case 'step_reviewed': return { icon: 'git-compare', title: `${who} decided: ${e.to_value || 'reviewed'}`, detail: e.note, tone: e.to_value === 'Go ahead' ? 'good' : e.to_value === 'Redo' || e.to_value === 'Roadblock' ? 'bad' : 'warn' };
+    case 'meeting': return { icon: 'videocam', title: `${who} set up a meeting`, detail: e.to_value, tone: 'neutral' };
     case 'reopened': return { icon: 'refresh-circle', title: `${who} reopened it`, detail: e.note, tone: 'warn' };
     case 'left': return { icon: 'exit', title: `${who} left this to-do`, tone: 'warn' };
     case 'edited': return { icon: 'create', title: `${who} edited it`, detail: e.note, tone: 'neutral' };

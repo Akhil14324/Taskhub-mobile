@@ -260,6 +260,20 @@ const sit = (face = 'normal', tail = 0, paw = 0) => frame(22, 17,
   [TAIL_SIT[tail], 14, 8, 'under'],
 );
 
+// ---- a sitting cat holding a water bottle in its paw; tilted up to its mouth when it drinks -------------
+
+const BOTTLE_UP = ['.kkk.', '.krk.', 'kkkkk', 'kcccK', 'kcccK', 'kcccK', 'kcccK', 'kkkkk'].map((r) => r.replace('K', 'k'));
+const BOTTLE_TILT = ['..kkkk..', '.krrkcck', 'kkkkcccck', '.kcccccck', '..kkkkkk.'].map((r) => r.replace('K', 'k'));
+
+/** tilt 0: the bottle held up beside the head; tilt 1: raised to the mouth, the head tipped back. */
+const sitBottle = (face = 'normal', tail = 0, tilt = 0) => frame(22, 17,
+  [BODY_SIT_PAW, 0, 10],
+  [headWith(face), 0, 0],
+  tilt ? [BOTTLE_TILT, 8, 6] : [BOTTLE_UP, 15, 3],
+  [MITT, tilt ? 12 : 11, tilt ? 9 : 8],
+  [TAIL_SIT[tail], 14, 8, 'under'],
+);
+
 // ---- standing / walking, side on (28 x 18); the head stays turned toward you ------------------------
 
 const SIDE_W = 28;
@@ -355,6 +369,7 @@ export const PROPS = {
   bang: ['rr', 'rr', 'rr', '..', 'rr'],
   ques: ['.kkk.', 'k...k', '...k.', '..k..', '.....', '..k..'],
   note: ['..kk', '..kk', '..k.', 'kkk.', 'kk..'],
+  bottleLying: ['kkk.........', 'krk.kkkkkkkk', 'kkkkcccccccck', '...kkkkkkkkk'],
   bowlEmpty: ['k..........k', 'krrrrrrrrrrk', '.krrrrrrrrk.', '..kkkkkkkk..'],
   bowlFull: ['kcccccccccck', 'krrrrrrrrrrk', '.krrrrrrrrk.', '..kkkkkkkk..'],
   yarn: ['..kkk..', '.kryrk.', 'krrryrk', 'kryrrrk', 'krrrryk', '.kryrk.', '..kkk..'],
@@ -430,6 +445,10 @@ export const ANIMS = {
   grumpy: [sit('grumpy', 0), sit('grumpy', 1)],
   sweat: [sit('sweat', 0), sit('sweat', 1)],
   shock: [sit('shock', 2)],
+  holdBottle: [sitBottle('normal', 0), sitBottle('normal', 1), sitBottle('blink', 2), sitBottle('normal', 1)],
+  askBottle: [sitBottle('meow', 0), sitBottle('normal', 1), sitBottle('meow', 2), sitBottle('normal', 0)],
+  cryBottle: [sitBottle('cry', 0), sitBottle('cry', 1), sitBottle('sad', 1)],
+  sip: [sitBottle('happy', 0), sitBottle('blink', 1, 1), sitBottle('happy', 1, 1), sitBottle('blink', 2, 1), sitBottle('happy', 1)],
   walk: [side('lookR', 0, 0), side('lookR', 1, 1, { bob: 1 }), side('lookR', 2, 2), side('lookR', 3, 1, { bob: 1 })],
   stand: [side('lookR', 2, 0), side('lookR', 2, 1), side('blink', 2, 2), side('lookR', 2, 1)],
   typing: [typingFront('lookDown', 0, 0), typingFront('lookDown', 1, 1), typingFront('lookDown', 0, 2), typingFront('blink', 1, 1)],

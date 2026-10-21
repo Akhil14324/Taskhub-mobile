@@ -4,6 +4,7 @@ import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
 import { showToast, emit } from '../utils/events';
+import { openNotificationTarget } from '../navigation/navigationRef';
 import { formatDue } from '../utils/dates';
 import {
   labelsFrom, descendantsOf, doneSectionOf, activeSectionOf, placeSectionsOf,
@@ -128,7 +129,11 @@ export function TodoProvider({ children }) {
           : t.parent_id ? ''
             : ` · ${listName || 'Inbox'}${(t.members || []).length > 1 ? ', shared' : ''}`;
       const due = t.due_date ? ` · ${formatDue(t.due_date)}` : '';
-      showToast({ message: `Added${where}${due}`, tone: 'success', icon: t.business_id ? 'briefcase' : t.due_date ? 'calendar' : 'file-tray' });
+      // A top-level to-do with no steps gets a nudge: the work behind one line is usually several steps.
+      const steps = !t.parent_id && !t.is_done
+        ? { actionLabel: 'Add steps', onAction: () => openNotificationTarget({ todoId: t.id, noAlert: true }), duration: 5200 }
+        : {};
+      showToast({ message: `Added${where}${due}${steps.actionLabel ? ' · does it have steps?' : ''}`, tone: 'success', icon: t.business_id ? 'briefcase' : t.due_date ? 'calendar' : 'file-tray', ...steps });
     }
     if (!res.data.todo.parent_id) emit('buddy', { type: 'added' });
     return res.data.todo;

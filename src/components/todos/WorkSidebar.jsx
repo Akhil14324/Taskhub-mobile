@@ -86,9 +86,9 @@ export default function WorkSidebar({
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <SlideGroup pillStyle={{ borderRadius: radius.md }}>
         <Heading>My work</Heading>
+        <Item icon="file-tray-outline" label="Inbox" count={counts.inbox} active={view === 'inbox'} onPress={() => onView('inbox')} />
         <Item icon="today-outline" label="Today" count={counts.today} urgent active={view === 'today'} onPress={() => onView('today')} />
         <Item icon="calendar-outline" label="Upcoming" active={view === 'upcoming'} onPress={() => onView('upcoming')} />
-        <Item icon="file-tray-outline" label="Inbox" count={counts.inbox} active={view === 'inbox'} onPress={() => onView('inbox')} />
         <Item icon="person-add-outline" label="Assigned" count={counts.assigned} urgent active={view === 'assigned'} onPress={() => onView('assigned')} />
         <Item icon="people-outline" label="Shared" count={counts.shared} active={view === 'shared'} onPress={() => onView('shared')} />
         <Item icon="checkmark-done-outline" label="Completed" active={view === 'done'} onPress={() => onView('done')} />

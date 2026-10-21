@@ -104,7 +104,7 @@ export default function HomeScreen() {
       <View style={styles.panelHead}>
         <View style={styles.panelTitleRow}>
           <Ionicons name="person-outline" size={16} color={colors.brand[600]} />
-          <Text style={styles.panelTitle}>Your to-dos</Text>
+          <Text style={styles.panelTitle}>Today</Text>
         </View>
         <AnimatedPressable style={styles.addBtn} onPress={() => setAddOpen(true)} accessibilityLabel="Add a to-do">
           <Ionicons name="add" size={18} color="#fff" />
@@ -117,7 +117,7 @@ export default function HomeScreen() {
           <Text style={styles.ringValue}>{doneToday}/{totalToday}</Text>
         </ProgressRing>
         <View style={{ flex: 1 }}>
-          <Text style={styles.bigLine}>Today</Text>
+          <Text style={styles.bigLine}>{doneToday} of {totalToday} done</Text>
           <Text style={styles.mutedLine}>
             {totalToday === 0 ? 'Nothing scheduled. Plan your day.'
               : dueNow.length === 0 ? 'Everything is done.'
@@ -127,43 +127,15 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.list}>
-        {dueNow.slice(0, 6).map((t) => (
-          <View key={t.id} style={styles.row}>
-            <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
-            <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
-              {t.due_date < today && <DueChip date={t.due_date} compact />}
-            </AnimatedPressable>
-          </View>
-        ))}
-        {dueNow.length > 6 && <Text style={styles.moreText}>{dueNow.length - 6} more</Text>}
-        {dueNow.length === 0 && totalToday === 0 && <Text style={styles.empty}>Press Add to capture your first to-do for today.</Text>}
-      </View>
-
-      <AnimatedPressable onPress={() => navigation.navigate('Todos')} style={styles.linkRow}>
-        <Text style={styles.link}>Open my to-dos</Text>
+      {/* The full list lives in My day and the Inbox; Home only says how the day is going and where to go. */}
+      <AnimatedPressable onPress={() => navigation.navigate('Progress', { tab: 'today' })} style={styles.linkRow}>
+        <Text style={styles.link}>Plan my day</Text>
         <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
       </AnimatedPressable>
-
-      {insights?.week && (
-        <View style={styles.week}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.smallHead}>This week</Text>
-            <Text style={styles.mutedLine}>{insights.week.reduce((s, x) => s + x.count, 0)} done</Text>
-          </View>
-          <View style={styles.bars}>
-            {insights.week.map((x) => (
-              <View key={x.day} style={styles.barCol}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.bar, { height: `${Math.max(6, (x.count / weekMax) * 100)}%` }, x.day === insights.today && styles.barToday]} />
-                </View>
-                <Text style={[styles.barLabel, x.day === insights.today && styles.barLabelToday]}>{WEEKDAYS_SHORT[parseYmd(x.day).getDay()][0]}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
+      <AnimatedPressable onPress={() => navigation.navigate('Todos')} style={styles.linkRow}>
+        <Text style={styles.link}>Open my Inbox{personal.filter((t) => !t.is_done && !t.due_date && !t.list_id).length ? ` · ${personal.filter((t) => !t.is_done && !t.due_date && !t.list_id).length} waiting` : ''}</Text>
+        <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
+      </AnimatedPressable>
     </View>
   );
 
@@ -234,11 +206,6 @@ export default function HomeScreen() {
             )}
           </View>
           {!desktop && <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />}
-          {!desktop && (
-            <AnimatedPressable onPress={toggleLang} style={styles.langBtn}>
-              <Text style={styles.langText}>{lang === 'en' ? 'తె' : 'EN'}</Text>
-            </AnimatedPressable>
-          )}
           {!desktop && <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />}
         </View>
 

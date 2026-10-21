@@ -103,9 +103,6 @@ export default function Signup() {
               color={colors.gray[500]}
             />
           </AnimatedPressable>
-          <AnimatedPressable onPress={toggleLang} style={styles.toggleBtn} haptic="light">
-            <Text style={styles.toggleText}>{lang === 'en' ? 'తె' : 'EN'}</Text>
-          </AnimatedPressable>
         </View>
         <Animated.View style={[logoStyle]}>
           <View style={styles.logo}>

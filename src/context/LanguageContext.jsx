@@ -16,7 +16,7 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem('lang');
-      if (saved) setLang(saved);
+      if (saved === 'te') AsyncStorage.removeItem('lang'); // Telugu is not wired up; always English
       initRef.current = true;
     })();
   }, []);

@@ -374,6 +374,9 @@ export default function ChatListScreen({ onOpen, activeId, onCollapse } = {}) {
         maxToRenderPerBatch={8}
         windowSize={10}
         removeClippedSubviews
+        ListFooterComponent={filteredConversations.length > 0 ? (
+          <Text style={{ textAlign: 'center', fontSize: fontSize.xs, color: colors.gray[400], paddingVertical: spacing.lg }}>Messages are deleted after 30 days</Text>
+        ) : null}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={48} color={colors.gray[300]} />

@@ -41,8 +41,8 @@ const LINES = {
   combo: ['On fire!', 'Unstoppable!', 'Zoom zoom!', 'Another one!'],
   added: ['Got it!', 'Noted.', 'Into the Inbox.', 'Saved!', 'Typed it up.'],
   hello: ['Hi!', 'Meow.', 'Need a break?', 'I am here if you need me.', 'Pet me?', '*stares at you*', 'Is it treat time?'],
-  water1: ['Water time? I brought my bowl.', 'Mrrp. Thirsty. You too?', 'Drink with me?'],
-  water2: ['I am SO thirsty...', 'Please... one glass of water?', 'My bowl is empty and so is your glass.'],
+  water1: ['Water time? I brought my bottle.', 'Mrrp. Thirsty. You too?', 'Drink with me?'],
+  water2: ['I am SO thirsty...', 'Please... one glass of water?', 'My bottle is empty and so is your glass.'],
   water3: ['*faints from thirst*', 'Too... dry... drink to save me.'],
   stretch1: ['Stretch with me!', 'Big stretch time.', 'Up! One minute stretch.'],
   stretch2: ['I am getting stiff...', 'My back! Your back! Stretch!', 'Creak. Creak.'],
@@ -264,14 +264,15 @@ function Buddy({ userId, dark, todos, onHide }) {
     const m = me.current;
     m.need = need;
     setGlow(!!need && need.level >= 3);
-    if (!need) { setToy((t) => (t && (t.kind === 'bowl' ? null : t))); return; }
+    if (!need) { setToy((t) => (t && (t.kind === 'bottleLying' ? null : t))); return; }
     if (m.mode === 'perch' || m.mode === 'drag') return;
     const spot = small ? window.innerWidth / 2 : window.innerWidth - 220;
     const settle = () => {
       if (need.kind === 'water') {
-        setToy({ kind: 'bowl', x: m.x + 26 * (m.facing || 1), y: floorAt(m.x) });
-        if (need.level === 1) { setAnim('meow'); say(pickLine('water1'), 0, needActions(need)); }
-        if (need.level === 2) { setAnim('cry'); say(pickLine('water2'), 0, needActions(need)); }
+        // It holds its own bottle (and sips from it when you drink); passed out, the bottle lies beside it.
+        setToy(need.level >= 3 ? { kind: 'bottleLying', x: m.x + 34 * (m.facing || 1), y: floorAt(m.x) } : null);
+        if (need.level === 1) { setAnim('askBottle'); say(pickLine('water1'), 0, needActions(need)); }
+        if (need.level === 2) { setAnim('cryBottle'); say(pickLine('water2'), 0, needActions(need)); }
         if (need.level >= 3) { setAnim('flat'); say(pickLine('water3'), 0, needActions(need)); }
       } else {
         if (need.level === 1) { setAnim('stretch'); say(pickLine('stretch1'), 0, needActions(need)); }
@@ -425,8 +426,8 @@ function Buddy({ userId, dark, todos, onHide }) {
       case 'water-drank':
         m.need = null;
         setGlow(false);
-        setToy({ kind: 'bowlFull', x: m.x + 30 * (m.facing || 1), y: floorAt(m.x) });
-        act('drink', 3500, () => { setToy(null); act('happy', 1500); });
+        setToy(null);
+        act('sip', 3500, () => act('happy', 1500));
         say(`${pickLine('drank')} ${e.count}/${e.goal}`, 3500);
         spawn('drop', 3);
         playPurr(1.2);
@@ -478,7 +479,7 @@ function Buddy({ userId, dark, todos, onHide }) {
     if (!force && same(need, m.need)) return;
     const louder = need && (!m.need || need.level > m.need.level);
     m.need = need;
-    if (!need) { setGlow(false); setBubble((b) => (b?.actions ? null : b)); setToy((t) => (t?.kind === 'bowl' ? null : t)); if (m.until === Infinity) { m.until = 0; m.busy = 0; } return; }
+    if (!need) { setGlow(false); setBubble((b) => (b?.actions ? null : b)); setToy((t) => (t?.kind === 'bottleLying' ? null : t)); if (m.until === Infinity) { m.until = 0; m.busy = 0; } return; }
     if (louder || force) { m.busy = 0; applyNeed(need); }
   }, [userId, applyNeed]);
 
@@ -491,7 +492,7 @@ function Buddy({ userId, dark, todos, onHide }) {
       const m = me.current;
       if (!m.need || m.mode === 'perch' || m.mode === 'drag') return;
       if (m.need.level === 2 && m.mode === 'still' && Math.random() < 0.5) {
-        leapTo(m.x, floorAt(m.x), () => { m.mode = 'still'; m.until = Infinity; setAnim('cry'); });
+        leapTo(m.x, floorAt(m.x), () => { m.mode = 'still'; m.until = Infinity; setAnim(m.need?.kind === 'water' ? 'cryBottle' : 'cry'); });
         m.leap.peak = 34;
       }
       const every = m.need.level >= 3 ? 5 * MIN : 3 * MIN;
@@ -793,7 +794,7 @@ function Buddy({ userId, dark, todos, onHide }) {
     doneToday = todos.filter((t) => t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today).length;
   }
 
-  const toyRows = toy ? (toy.kind === 'bowl' ? PROPS.bowlEmpty : toy.kind === 'bowlFull' ? PROPS.bowlFull : toy.kind === 'butterfly' ? PROPS[tick % 4 < 2 ? 'butterfly0' : 'butterfly1'] : PROPS[toy.kind]) : null;
+  const toyRows = toy ? (toy.kind === 'bowl' ? PROPS.bowlEmpty : toy.kind === 'bottleLying' ? PROPS.bottleLying : toy.kind === 'bowlFull' ? PROPS.bowlFull : toy.kind === 'butterfly' ? PROPS[tick % 4 < 2 ? 'butterfly0' : 'butterfly1'] : PROPS[toy.kind]) : null;
   const toySize = toyRows ? frameSize(toyRows) : null;
 
   if (hidden) return null;

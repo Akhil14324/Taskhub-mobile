@@ -23,6 +23,7 @@ import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
 import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
+import MeetPanel from './MeetPanel';
 import ClaudePanel from './ClaudePanel';
 import PromptSheet from './PromptSheet';
 import { Avatar, Chip, PRIORITY, TodoCheckbox, DueChip } from '../kit';
@@ -49,12 +50,12 @@ function Prop({ icon, label, children, onPress, last, hidden }) {
   if (hidden) return null;
   const Wrapper = onPress ? AnimatedPressable : View;
   return (
-    <Wrapper onPress={onPress} style={{ paddingVertical: 10, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <Ionicons name={icon} size={14} color={colors.gray[400]} />
-        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.gray[500], textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</Text>
+    <Wrapper onPress={onPress} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.gray[200] }}>
+      <View style={{ width: 88, flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 2 }}>
+        <Ionicons name={icon} size={15} color={colors.gray[400]} />
+        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.gray[500] }} numberOfLines={1}>{label}</Text>
       </View>
-      {children}
+      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
     </Wrapper>
   );
 }
@@ -127,6 +128,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const [labelText, setLabelText] = useState(null); // null = not adding
   const [customDuration, setCustomDuration] = useState(false);
   const [durationText, setDurationText] = useState('');
+  const [extra, setExtra] = useState(() => new Set()); // optional fields the person chose to add
   const loadedFor = useRef(null);
 
   useEffect(() => {
@@ -138,6 +140,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       setLabelText(null);
       setCustomDuration(false);
       setInfoOpen(false);
+      setExtra(new Set());
     }
     if (!todoId) loadedFor.current = null;
   }, [todo, todoId]);
@@ -175,6 +178,17 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     if (label && !todoLabels.includes(label)) save({ labels: [...todoLabels, label] });
     setLabelText(null);
   };
+
+  const showDeadline = on('deadlines') && (!!todo?.deadline_date || extra.has('deadline'));
+  const showLabels = on('labels') && (todoLabels.length > 0 || extra.has('labels'));
+  const showReminder = on('reminders') && (!!todo?.remind_date || extra.has('reminder'));
+  const showTime = on('estimates') && (!!todo?.duration_minutes || extra.has('time'));
+  const addable = editable ? [
+    on('deadlines') && !showDeadline && { key: 'deadline', icon: 'alert-circle-outline', label: 'Deadline', open: () => setDeadlineOpen(true) },
+    on('labels') && !showLabels && { key: 'labels', icon: 'pricetag-outline', label: 'Labels', open: () => setLabelText('') },
+    on('reminders') && !showReminder && { key: 'reminder', icon: 'alarm-outline', label: 'Reminder', open: () => setRemindOpen(true) },
+    on('estimates') && !showTime && { key: 'time', icon: 'time-outline', label: 'Time needed' },
+  ].filter(Boolean) : [];
 
   const offsets = todo?.reminder_offsets || [];
   const toggleOffset = (m) => save({ reminder_offsets: offsets.includes(m) ? offsets.filter((x) => x !== m) : [...offsets, m] });
@@ -311,9 +325,9 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       )}
 
       <GovernancePanel todo={todo} />
-      <ClaudePanel todo={todo} />
-
       <SubtaskTree parent={todo} onOpen={setActiveId} />
+      <MeetPanel todo={todo} />
+      <ClaudePanel todo={todo} />
 
       <View style={styles.tabs}>
         <AnimatedPressable style={[styles.tab, tab === 'comments' && styles.tabActive]} onPress={() => setTab('comments')}>
@@ -380,7 +394,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         </Prop>
       )}
 
-      <Prop hidden={!on('deadlines')} icon="alert-circle-outline" label="Deadline" onPress={editable ? () => setDeadlineOpen(true) : undefined}>
+      <Prop hidden={!showDeadline} icon="alert-circle-outline" label="Deadline" onPress={editable ? () => setDeadlineOpen(true) : undefined}>
         <View style={styles.valueRow}>
           <View style={{ flex: 1 }}>
             {todo.deadline_date
@@ -403,7 +417,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         </View>
       </Prop>
 
-      <Prop hidden={!on('labels')} icon="pricetag-outline" label="Labels">
+      <Prop hidden={!showLabels} icon="pricetag-outline" label="Labels">
         <View style={styles.chipRow}>
           {todoLabels.map((l) => (
             <Chip key={l} small icon="pricetag" label={l} active onRemove={editable ? () => save({ labels: todoLabels.filter((x) => x !== l) }) : undefined} />
@@ -434,7 +448,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       </Prop>
 
       {/* Reminders: a date and time of their own, repeating if wanted, and "before it is due". */}
-      <Prop hidden={!on('reminders')} icon="alarm-outline" label="Reminder" onPress={editable ? () => setRemindOpen(true) : undefined}>
+      <Prop hidden={!showReminder} icon="alarm-outline" label="Reminder" onPress={editable ? () => setRemindOpen(true) : undefined}>
         <View style={styles.valueRow}>
           <View style={{ flex: 1 }}>
             <Text style={reminderText ? styles.propValue : styles.placeholder}>{reminderText || 'No reminder'}</Text>
@@ -461,7 +475,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         )}
       </Prop>
 
-      <Prop hidden={!on('estimates')} icon="time-outline" label="Time needed">
+      <Prop hidden={!showTime} icon="time-outline" label="Time needed">
         <View style={styles.chipRow}>
           {DURATION_PRESETS.map((m) => (
             <Chip key={m} small label={formatDuration(m)} active={todo.duration_minutes === m} onPress={editable ? () => save({ duration_minutes: todo.duration_minutes === m ? null : m }) : undefined} />
@@ -548,6 +562,16 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
             </View>
           )}
         </Prop>
+      )}
+
+      {addable.length > 0 && (
+        <View style={{ paddingTop: 12 }}>
+          <View style={styles.chipRow}>
+            {addable.map((a) => (
+              <Chip key={a.key} small icon={a.icon} label={a.label} onPress={() => { setExtra((prev) => new Set(prev).add(a.key)); a.open?.(); }} />
+            ))}
+          </View>
+        </View>
       )}
     </>
   );

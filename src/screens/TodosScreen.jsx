@@ -1027,9 +1027,9 @@ export default function TodosScreen() {
           ))
         ) : (
           <>
+            <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
             <ViewTab label="Today" icon="today-outline" count={counts.today} active={view === 'today'} onPress={() => setView('today')} />
             <ViewTab label="Upcoming" icon="calendar-outline" active={view === 'upcoming'} onPress={() => setView('upcoming')} />
-            <ViewTab label="Inbox" icon="file-tray-outline" count={counts.inbox} active={view === 'inbox'} onPress={() => setView('inbox')} />
             <ViewTab label="Assigned" icon="person-add-outline" count={counts.assigned} active={view === 'assigned'} onPress={() => setView('assigned')} />
             <ViewTab label="Shared" icon="people-outline" count={counts.shared} active={view === 'shared'} onPress={() => setView('shared')} />
             {inFilterView && (
