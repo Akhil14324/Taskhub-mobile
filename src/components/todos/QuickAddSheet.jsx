@@ -51,6 +51,14 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const { listening, live, levels } = voice;
   const ai = useAi();
   const [splitOpen, setSplitOpen] = useState(false);
+  const [photo, setPhoto] = useState(null);
+  const pickPhoto = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => { if (input.files && input.files[0]) setPhoto(input.files[0]); };
+    input.click();
+  };
   // Who this person usually gives work to, as one-tap suggestions.
   const [usual, setUsual] = useState([]);
   useEffect(() => {
@@ -624,6 +632,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
                 }}
               />
             )}
+            {ai && !isSubtask && <ToolButton icon="camera-outline" label="Photo" open={false} onPress={pickPhoto} />}
             {voice.supported && (
               <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" open={listening} onPress={toggleListening} />
             )}
@@ -639,6 +648,18 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         </View>
       </View>
 
+      <AiTasksSheet
+        visible={!!photo}
+        onClose={() => setPhoto(null)}
+        title="To-dos from your photo"
+        load={() => {
+          const form = new FormData();
+          form.append('file', photo);
+          if (text.trim()) form.append('hint', text.trim());
+          return api.post('/ai/photo', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 }).then((r) => r.data);
+        }}
+        onDone={() => { setText(''); onClose?.(); }}
+      />
       <AiTasksSheet
         visible={splitOpen}
         onClose={() => setSplitOpen(false)}

@@ -24,6 +24,7 @@ import TodoTimeline, { AssignSheet } from './TodoTimeline';
 import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
 import MeetPanel from './MeetPanel';
+import WorkflowSheet from './WorkflowSheet';
 import ClaudePanel from './ClaudePanel';
 import PromptSheet from './PromptSheet';
 import { Avatar, Chip, PRIORITY, TodoCheckbox, DueChip } from '../kit';
@@ -120,6 +121,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [placeOpen, setPlaceOpen] = useState(false);
@@ -226,6 +228,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     !business && { id: 'duplicate', icon: 'copy-outline', label: 'Duplicate' },
     !business && !todo.parent_id && isCreator && businesses.length > 0 && { id: 'move', icon: 'briefcase-outline', label: 'Move to a business' },
     { id: 'template', icon: 'albums-outline', label: 'Save as template' },
+    !todo.parent_id && { id: 'workflow', icon: 'repeat-outline', label: 'Make it a repeating workflow' },
     { id: 'print', icon: 'print-outline', label: 'Print' },
     !!kudosTarget && { id: 'kudos', icon: 'heart-outline', label: `Thank ${kudosTarget.name.split(' ')[0]}` },
     !!deleteLabel && { id: 'delete', icon: 'trash-outline', label: deleteLabel, color: colors.red[600] },
@@ -236,6 +239,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     else if (item.id === 'duplicate') duplicateTodo(todo).catch((err) => showToast({ message: err.response?.data?.error || 'Could not duplicate', tone: 'error' }));
     else if (item.id === 'move') setMoveOpen(true);
     else if (item.id === 'template') setTemplateOpen(true);
+    else if (item.id === 'workflow') setWorkflowOpen(true);
     else if (item.id === 'print') {
       fetchComments(todo.id).catch(() => []).then((comments) => printTodo(todo, todos, comments || []));
     } else if (item.id === 'kudos') setKudosOpen(true);
@@ -689,6 +693,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
           }
         }}
       />
+      <WorkflowSheet visible={workflowOpen} onClose={() => setWorkflowOpen(false)} todoId={todo.id} initial={{ name: todo.title, recurrence: 'monthly' }} />
       <SaveTemplateSheet visible={templateOpen} onClose={() => setTemplateOpen(false)} todo={todo} />
       <KudosSheet visible={kudosOpen} onClose={() => setKudosOpen(false)} toUser={kudosTarget} todo={todo} />
       <ShareToChatSheet

@@ -10,6 +10,8 @@ import { useEngage } from '../context/EngageContext';
 import { useChat } from '../context/ChatContext';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
+import useAi from '../hooks/useAi';
+import AtRiskCard from '../components/engage/AtRiskCard';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
@@ -39,6 +41,7 @@ export default function HomeScreen() {
   const { unreadCount, approvalCount, pushState, enablePush, refreshCounts } = useNotifications();
   const { totalUnread } = useChat();
   const { myDay } = useEngage();
+  const ai = useAi();
 
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -206,6 +209,7 @@ export default function HomeScreen() {
             )}
           </View>
           {!desktop && <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />}
+          {ai && <IconButton icon="sparkles-outline" onPress={() => navigation.navigate('Assistant')} />}
           {!desktop && <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />}
         </View>
 
@@ -265,6 +269,8 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={18} color="#fff" />
           </View>
         </AnimatedPressable>
+
+        <AtRiskCard onOpen={(id) => navigation.navigate('Main', { screen: 'Todos', params: { highlightId: id } })} />
 
         <View style={[styles.panels, desktop && styles.panelsDesktop]}>
           <View style={desktop ? styles.col : undefined}>{personalPanel}</View>

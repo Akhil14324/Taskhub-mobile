@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import api from '../api/client';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -14,7 +14,7 @@ import { Chip } from '../components/kit';
 import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 
-const RANGES = [{ days: 7, label: 'This week' }, { days: 30, label: '30 days' }];
+const RANGES = [{ days: 1, label: 'Yesterday' }, { days: 7, label: 'This week' }, { days: 30, label: '30 days' }];
 
 function Tile({ label, value, hot, styles }) {
   return (
@@ -50,14 +50,17 @@ export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const desktop = useIsDesktop();
-  const [days, setDays] = useState(7);
+  const route = useRoute();
+  const [days, setDays] = useState(route.params?.range === 1 ? 1 : 7);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (d = days) => {
     try {
-      const res = await api.get('/reports/weekly', { params: { days: d }, __skipOops: true, timeout: 60000 });
+      const res = d === 1
+        ? await api.get('/reports/daily', { __skipOops: true, timeout: 60000 })
+        : await api.get('/reports/weekly', { params: { days: d }, __skipOops: true, timeout: 60000 });
       setData(res.data);
       setError('');
     } catch (err) {
@@ -87,11 +90,26 @@ export default function ReportsScreen() {
           <>
             {!!data.narrative && (
               <View {...glass('card')} style={styles.narrative}>
-                <View style={styles.blockHead}><Ionicons name="sparkles" size={16} color={colors.brand[600]} /><Text style={styles.blockTitle}>In short</Text></View>
+                <View style={styles.blockHead}><Ionicons name="sparkles" size={16} color={colors.brand[600]} /><Text style={styles.blockTitle}>{days === 1 ? 'Yesterday in short' : 'In short'}</Text></View>
                 <Text style={styles.narrativeText}>{data.narrative}</Text>
               </View>
             )}
-            {t && (
+            {days === 1 && t && (
+              <>
+                <View style={styles.tiles}>
+                  <Tile styles={styles} label="Finished" value={t.finished} />
+                  <Tile styles={styles} label="New roadblocks" value={t.new_blockers} hot={t.new_blockers > 0} />
+                  <Tile styles={styles} label="Overdue now" value={t.overdue} hot={t.overdue > 0} />
+                </View>
+                <Block styles={styles} colors={colors} onOpen={open} title="Who finished the most" icon="trophy-outline"
+                  rows={(data.top || []).map((p) => ({ main: p.who || 'Someone', sub: `${p.n} finished${p.business ? ` in ${p.business}` : ''}` }))} />
+                <Block styles={styles} colors={colors} onOpen={open} title="New roadblocks" icon="hand-left-outline"
+                  rows={(data.blockers || []).map((b) => ({ main: b.title, sub: b.business || '' }))} />
+                <Block styles={styles} colors={colors} onOpen={open} title="By business" icon="briefcase-outline"
+                  rows={(data.businesses || []).map((b) => ({ main: b.name, sub: `${b.finished} finished · ${b.overdue} overdue · ${b.blocked} stuck` }))} />
+              </>
+            )}
+            {days !== 1 && t && (
               <View style={styles.tiles}>
                 <Tile styles={styles} label="Finished" value={t.completed} />
                 <Tile styles={styles} label="Open" value={t.open} />
@@ -100,7 +118,7 @@ export default function ReportsScreen() {
               </View>
             )}
 
-            {data.businesses.length > 0 && (
+            {days !== 1 && data.businesses.length > 0 && (
               <View {...glass('card')} style={styles.block}>
                 <View style={styles.blockHead}><Ionicons name="briefcase-outline" size={16} color={colors.brand[600]} /><Text style={styles.blockTitle}>Businesses, weakest first</Text></View>
                 {data.businesses.map((b) => (
@@ -119,6 +137,7 @@ export default function ReportsScreen() {
               </View>
             )}
 
+            {days !== 1 && <>
             <Block styles={styles} colors={colors} onOpen={open} title="Waiting on a decision" icon="flag-outline"
               rows={data.waiting.map((w) => ({ id: w.id, main: w.title, sub: `${w.parent} · waiting ${w.days} day${w.days === 1 ? '' : 's'}` }))} />
             <Block styles={styles} colors={colors} onOpen={open} title="Stuck for 2+ days" icon="hand-left-outline"
@@ -127,6 +146,7 @@ export default function ReportsScreen() {
               rows={data.late.map((l) => ({ id: l.id, main: l.title, sub: `${l.business}${l.who ? ` · ${l.who}` : ''} · ${l.days_late} day${l.days_late === 1 ? '' : 's'} late` }))} />
             <Block styles={styles} colors={colors} onOpen={open} title="Overloaded people" icon="people-outline"
               rows={data.overloaded.map((p) => ({ main: p.name, sub: `${p.open} open, ${p.overdue} overdue` }))} />
+            </>}
           </>
         )}
       </ScrollView>

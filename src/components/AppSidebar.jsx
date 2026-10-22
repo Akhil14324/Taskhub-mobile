@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import useAi from '../hooks/useAi';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import BrandMark from './BrandMark';
@@ -35,6 +36,8 @@ const SECTION_OF = {
   Approvals: 'approvals',
   TeamMonitor: 'monitor',
   Reports: 'reports',
+  Assistant: 'assistant',
+  Workflows: 'workflows',
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
@@ -98,6 +101,7 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint, p }) {
  * "go to" keyboard shortcuts (G then H / T / C / A / M / N / O / P) and the "?" help.
  */
 export default function AppSidebar({ routeName }) {
+  const ai = useAi();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { theme, toggleTheme } = useTheme();
@@ -148,6 +152,7 @@ export default function AppSidebar({ routeName }) {
       <Animated.View style={navWidth}>
       <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
+        {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
         <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
@@ -156,6 +161,7 @@ export default function AppSidebar({ routeName }) {
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
+        <Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
         {user?.permissions?.insights && (
           <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Weekly report" active={section === 'reports'} onPress={() => go('Reports')} />
         )}

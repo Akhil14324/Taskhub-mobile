@@ -47,6 +47,9 @@ import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import ReportsScreen from '../screens/ReportsScreen';
+import AssistantScreen from '../screens/AssistantScreen';
+import WorkflowsScreen from '../screens/WorkflowsScreen';
+import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import AccessScreen from '../screens/AccessScreen';
@@ -98,6 +101,8 @@ const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 const FramedReports = framed(ReportsScreen, 900);
+const FramedAssistant = framed(AssistantScreen, 760);
+const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedAccess = framed(AccessScreen, 1100);
@@ -118,6 +123,8 @@ const PushApprovals = T(FramedApprovals);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
 const PushReports = T(FramedReports);
+const PushAssistant = T(FramedAssistant);
+const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
 const PushAccess = T(FramedAccess);
@@ -293,8 +300,11 @@ function MainTabs() {
   const today = todayYmd();
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
+  const ai = useAi();
   const moreItems = [
+    ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
+    { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(user?.permissions?.insights ? [{ group: 'Work', label: 'Weekly report', icon: 'document-text-outline', route: 'Reports' }] : []),
@@ -547,6 +557,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
             <Stack.Screen name="Reports" component={PushReports} />
+            <Stack.Screen name="Assistant" component={PushAssistant} />
+            <Stack.Screen name="Workflows" component={PushWorkflows} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Access" component={PushAccess} />
