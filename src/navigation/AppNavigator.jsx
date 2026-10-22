@@ -46,6 +46,7 @@ import TodosScreen from '../screens/TodosScreen';
 import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
+import ReportsScreen from '../screens/ReportsScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import AccessScreen from '../screens/AccessScreen';
@@ -96,6 +97,7 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
+const FramedReports = framed(ReportsScreen, 900);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedAccess = framed(AccessScreen, 1100);
@@ -115,6 +117,7 @@ const PushGroupInfo = T(FramedGroupInfo);
 const PushApprovals = T(FramedApprovals);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
+const PushReports = T(FramedReports);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
 const PushAccess = T(FramedAccess);
@@ -294,6 +297,7 @@ function MainTabs() {
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
+    ...(user?.permissions?.insights ? [{ group: 'Work', label: 'Weekly report', icon: 'document-text-outline', route: 'Reports' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
     ...(user?.permissions?.manage_access ? [{ group: 'Organisation', label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
@@ -542,6 +546,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Approvals" component={PushApprovals} />
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
+            <Stack.Screen name="Reports" component={PushReports} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Access" component={PushAccess} />

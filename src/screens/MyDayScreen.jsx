@@ -15,6 +15,7 @@ import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import KudosSheet from '../components/engage/KudosSheet';
 import KudosCard from '../components/engage/KudosCard';
+import DayPlan from '../components/engage/DayPlan';
 import { Avatar, DueChip, PRIORITY, ProgressRing, SectionHeader, TodoCheckbox } from '../components/kit';
 import useIsDesktop from '../hooks/useBreakpoint';
 import { greeting, daysFromToday, todayYmd, toYmd, WEEKDAYS, MONTHS_SHORT, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
@@ -310,6 +311,7 @@ export default function MyDayScreen({ embedded = false }) {
       >
         {!desktop && !embedded && <BackTitle title="My Day" style={styles.screenTitle} />}
         {hero}
+        <DayPlan onOpen={setOpenId} />
         <View style={[styles.cols, desktop && styles.colsDesktop]}>
           <View style={desktop ? { flex: 3, minWidth: 0 } : undefined}>{left}</View>
           <View style={desktop ? { flex: 2, minWidth: 0 } : undefined}>{right}</View>

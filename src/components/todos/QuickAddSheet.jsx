@@ -23,6 +23,9 @@ import useVoiceInput from '../../hooks/useVoiceInput';
 import VoiceLive from '../VoiceLive';
 import autoGrow, { virtualKeyboardUp } from '../../utils/autoGrow';
 import { useLang } from '../../context/LanguageContext';
+import useAi from '../../hooks/useAi';
+import AiTasksSheet from './AiTasksSheet';
+import api from '../../api/client';
 
 const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
 
@@ -46,6 +49,14 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const { lang } = useLang();
   const voice = useVoiceInput({ lang: lang === 'te' ? 'te-IN' : 'en-IN', onFinish: () => inputRef.current?.focus() });
   const { listening, live, levels } = voice;
+  const ai = useAi();
+  const [splitOpen, setSplitOpen] = useState(false);
+  // Who this person usually gives work to, as one-tap suggestions.
+  const [usual, setUsual] = useState([]);
+  useEffect(() => {
+    if (!visible) return;
+    api.get('/plan/defaults', { __skipOops: true }).then((r) => setUsual(r.data.assignees || [])).catch(() => {});
+  }, [visible]);
   // Single: one to-do (Enter adds it). Multiple: one to-do per line (Enter adds a line on a touch keyboard).
   const [multi, setMultiState] = useState(() => { try { return localStorage.getItem('quickadd:multi') === '1'; } catch { return false; } });
   const setMulti = (v) => { setMultiState(v); try { localStorage.setItem('quickadd:multi', v ? '1' : '0'); } catch { /* private mode */ } };
@@ -337,8 +348,17 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         <View style={styles.modeRow}>
           <Chip small icon="document-text-outline" label="Single" active={!multi} onPress={() => setMulti(false)} />
           <Chip small icon="list-outline" label="Multiple" active={multi} onPress={() => setMulti(true)} />
+          {ai && !isSubtask && text.trim().length >= 15 && <Chip small icon="sparkles-outline" label="Split into tasks" onPress={() => setSplitOpen(true)} />}
           {multi && <Text style={styles.note}>{lineList.length > 1 ? lineList.length + ' to-dos, one per line' : 'One to-do per line'}</Text>}
         </View>
+        {!businessId && !isSubtask && !text.trim() && usual.length > 0 && (
+          <View style={styles.modeRow}>
+            <Text style={styles.note}>Usually</Text>
+            {usual.slice(0, 3).map((p) => (
+              <Chip key={p.id} small icon="person-outline" label={p.name.split(' ')[0]} onPress={() => { setText(`@${p.username} `); inputRef.current?.focus(); }} />
+            ))}
+          </View>
+        )}
         {listening && <VoiceLive levels={levels} live={live} onStop={voice.stop} />}
         <View style={styles.inputWrap}>
         {/* The same text drawn underneath in clear ink, with a red tint behind each real @person: the
@@ -619,6 +639,13 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         </View>
       </View>
 
+      <AiTasksSheet
+        visible={splitOpen}
+        onClose={() => setSplitOpen(false)}
+        title="Your message as separate tasks"
+        load={() => api.post('/ai/parse-tasks', { text: flat }, { timeout: 60000 }).then((r) => r.data)}
+        onDone={() => { setText(''); onClose?.(); }}
+      />
       <DueDatePicker
         visible={dateOpen}
         onClose={() => setDateOpen(false)}

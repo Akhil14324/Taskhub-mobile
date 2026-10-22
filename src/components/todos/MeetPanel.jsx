@@ -8,6 +8,9 @@ import { glass } from '../../theme/glass';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
 import { Avatar } from '../kit';
+import MeetingCapture from './MeetingCapture';
+import AiTasksSheet from './AiTasksSheet';
+import useAi from '../../hooks/useAi';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
 import { showToast } from '../../utils/events';
 import { timeAgo } from '../../utils/dates';
@@ -41,6 +44,9 @@ export default function MeetPanel({ todo }) {
   const [query, setQuery] = useState('');
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const ai = useAi();
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [extractOpen, setExtractOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +107,12 @@ export default function MeetPanel({ todo }) {
               <Ionicons name="videocam" size={15} color="#fff" />
               <Text style={[styles.btnText, { color: '#fff' }]}>Join</Text>
             </AnimatedPressable>
+            {ai && (
+              <AnimatedPressable style={[styles.btn, { backgroundColor: colors.gray[100] }]} onPress={() => setCaptureOpen(true)}>
+                <Ionicons name="sparkles" size={15} color={colors.brand[600]} />
+                <Text style={[styles.btnText, { color: colors.gray[800] }]}>To-dos from it</Text>
+              </AnimatedPressable>
+            )}
             <AnimatedPressable style={[styles.btn, { backgroundColor: colors.gray[100] }]} onPress={() => copy(latest.meet_url)}>
               <Ionicons name="copy-outline" size={15} color={colors.gray[700]} />
               <Text style={[styles.btnText, { color: colors.gray[800] }]}>Copy link</Text>
@@ -116,6 +128,19 @@ export default function MeetPanel({ todo }) {
         </AnimatedPressable>
       )}
       {!available && <Text style={styles.hint}>Google Meet is not connected yet. The owner needs to add the Google keys on the server.</Text>}
+
+      {!!latest && (
+        <>
+          <MeetingCapture visible={captureOpen} onClose={() => setCaptureOpen(false)} meeting={latest} onExtract={() => setExtractOpen(true)} />
+          <AiTasksSheet
+            visible={extractOpen}
+            onClose={() => setExtractOpen(false)}
+            title="From the meeting"
+            parent={todo}
+            load={() => api.post(`/ai/meetings/${latest.id}/extract`, {}, { timeout: 90000 }).then((r) => r.data)}
+          />
+        </>
+      )}
 
       <BottomSheet visible={open} onClose={() => setOpen(false)} maxHeight={620} avoidKeyboard>
         <View style={{ paddingHorizontal: spacing.sm }}>

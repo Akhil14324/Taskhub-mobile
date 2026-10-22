@@ -3,7 +3,7 @@
 // - Receives Firebase Cloud Messaging web pushes (data-only messages sent by the backend)
 //   and shows them as system notifications, or hands them to the open app.
 // API, socket, and upload traffic always goes straight to the network.
-const CACHE = 'taskhub-shell-v5';
+const CACHE = 'taskhub-shell-v6';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])).then(() => self.skipWaiting()));
@@ -90,6 +90,10 @@ self.addEventListener('push', (event) => {
       // A reminder buzzes longer and stays on screen until it is dismissed, so it is not missed.
       vibrate: loud ? [250, 120, 250, 120, 500, 120, 500] : [80, 40, 80],
       requireInteraction: loud,
+      // A finished step waits for a decision: "Go ahead" can be answered from the notification itself.
+      actions: msg.data.type === 'step_review' && msg.data.quickUrl
+        ? [{ action: 'go', title: 'Go ahead' }, { action: 'open', title: 'Review' }]
+        : undefined,
     });
   })());
 });
@@ -97,6 +101,15 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+
+  if (event.action === 'go' && data.quickUrl) {
+    event.waitUntil(
+      fetch(data.quickUrl, { method: 'POST', mode: 'no-cors' })
+        .then(() => self.registration.showNotification('Sent: go ahead', { body: data.body || '', icon: '/icon-192.png', tag: 'step-go', requireInteraction: false }))
+        .catch(() => self.clients.openWindow(`/?notif=${encodeURIComponent(JSON.stringify(data))}`))
+    );
+    return;
+  }
 
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

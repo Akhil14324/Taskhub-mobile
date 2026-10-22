@@ -34,6 +34,7 @@ const SECTION_OF = {
   GroupInfo: 'chat',
   Approvals: 'approvals',
   TeamMonitor: 'monitor',
+  Reports: 'reports',
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
@@ -154,6 +155,9 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
+        )}
+        {user?.permissions?.insights && (
+          <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Weekly report" active={section === 'reports'} onPress={() => go('Reports')} />
         )}
         {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
         {featureOn(user?.preferences, 'automation') && <Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />}

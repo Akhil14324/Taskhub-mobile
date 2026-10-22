@@ -10,6 +10,9 @@ import { buildTree, subtaskProgress } from '../../utils/todoMeta';
 import { showToast } from '../../utils/events';
 import { glass } from '../../theme/glass';
 import StepReview, { StepTag } from './StepReview';
+import AiTasksSheet from './AiTasksSheet';
+import useAi from '../../hooks/useAi';
+import api from '../../api/client';
 
 const LEVEL = 20;
 
@@ -24,6 +27,8 @@ export default function SubtaskTree({ parent, onOpen }) {
   const [addingTo, setAddingTo] = useState(null); // todo id that is getting a new sub-task
   const [text, setText] = useState('');
   const [collapsed, setCollapsed] = useState(() => new Set());
+  const ai = useAi();
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const below = useMemo(() => todos.filter((t) => t.parent_id != null), [todos]);
   const tree = useMemo(() => {
@@ -163,6 +168,14 @@ export default function SubtaskTree({ parent, onOpen }) {
         </View>
       )}
       {tree.map((node) => renderNode(node, 0))}
+      <AiTasksSheet
+        visible={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+        title="Suggested steps"
+        stepsOnly
+        parent={parent}
+        load={() => api.post('/ai/suggest-steps', { title: parent.title, notes: parent.notes, todo_id: parent.id }, { timeout: 60000 }).then((r) => ({ tasks: (r.data.steps || []).map((title) => ({ title })) }))}
+      />
       {noSteps && addingTo !== parent.id && (
         <View {...glass('inset')} style={[styles.nudge, { borderColor: colors.brand[200] }]}>
           <Ionicons name="list" size={18} color={colors.brand[600]} />
@@ -171,6 +184,12 @@ export default function SubtaskTree({ parent, onOpen }) {
             <Text style={styles.nudgeText}>"{parent.title}" is one line, but the work behind it is several. Write each step so the team can see the plan, and each finished step gets checked before the next one starts.</Text>
           </View>
         </View>
+      )}
+      {ai && canAdd && !parent.is_done && addingTo !== parent.id && (
+        <AnimatedPressable style={styles.addButton} onPress={() => setSuggestOpen(true)}>
+          <Ionicons name="sparkles" size={17} color={colors.brand[600]} />
+          <Text style={styles.addText}>{noSteps ? 'Suggest the steps for me' : 'Suggest more steps'}</Text>
+        </AnimatedPressable>
       )}
       {addingTo === parent.id ? addField(parent.id, 0) : canAdd && (
         <AnimatedPressable style={styles.addButton} onPress={() => startAdd(parent.id)}>
