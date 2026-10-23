@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay, interpolateColor } from 'react-native-reanimated';
@@ -203,17 +203,20 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
   const pop = useSharedValue(1);      // the body squashes in, then springs past 1 and settles
   const mark = useSharedValue(checked ? 1 : 0); // the tick draws in with its own spring
   const burst = useSharedValue(1);    // one ring that expands off the box and fades
-  const mounted = useRef(false);
+  const shown = useRef(null); // the state the animation last played for
 
-  useEffect(() => {
-    const first = !mounted.current;
-    mounted.current = true;
-    fill.value = withTiming(checked ? 1 : 0, { duration: 160 });
+  // Play the state change. Called on press (before React re-renders the whole list, so the first frame is
+  // never held up by that work) and again from the effect, which is a no-op when it already played.
+  const play = useCallback((next) => {
+    const first = shown.current === null;
+    if (shown.current === next) return;
+    shown.current = next;
+    fill.value = withTiming(next ? 1 : 0, { duration: 160 });
     if (first || reduced) {
-      mark.value = checked ? 1 : 0;
+      mark.value = next ? 1 : 0;
       return;
     }
-    if (checked) {
+    if (next) {
       pop.value = 0.74;
       pop.value = withSpring(1, SPRING.pop);
       mark.value = 0;
@@ -223,7 +226,23 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
     } else {
       mark.value = withTiming(0, { duration: 120 });
     }
-  }, [checked, fill, pop, mark, burst, reduced]);
+  }, [fill, pop, mark, burst, reduced]);
+
+  useEffect(() => { play(!!checked); }, [checked, play]);
+
+  // If the press did not end up changing `checked` (refused, or it only opened the task), settle back.
+  const settle = useRef(null);
+  const press = useCallback((e) => {
+    clearTimeout(settle.current);
+    if (onPress) {
+      play(!checked);
+      settle.current = setTimeout(() => play(!!checkedRef.current), 900);
+    }
+    onPress?.(e);
+  }, [onPress, play, checked]);
+  const checkedRef = useRef(checked);
+  checkedRef.current = checked;
+  useEffect(() => () => clearTimeout(settle.current), []);
 
   const open = tint(tone, priority === 4 ? 0 : 0.1);
   const boxStyle = useAnimatedStyle(() => ({
@@ -240,7 +259,7 @@ export const TodoCheckbox = memo(function TodoCheckbox({ checked, priority = 4, 
   }));
 
   return (
-    <AnimatedPressable onPress={onPress} haptic="medium" hitSlop={10} scale={0.9} accessibilityRole="checkbox" accessibilityState={{ checked: !!checked }} accessibilityLabel={checked ? 'Mark as not done' : 'Mark as done'}>
+    <AnimatedPressable onPress={press} haptic="medium" hitSlop={10} scale={0.9} accessibilityRole="checkbox" accessibilityState={{ checked: !!checked }} accessibilityLabel={checked ? 'Mark as not done' : 'Mark as done'}>
       <Animated.View style={[{
         width: size,
         height: size,

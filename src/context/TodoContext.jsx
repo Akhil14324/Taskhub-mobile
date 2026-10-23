@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
 import api from '../api/client';
 import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
@@ -180,7 +180,9 @@ export function TodoProvider({ children }) {
     // Work that needs a review does not close on the spot: wait for the server's answer.
     const needsReview = !!todo.business_id && todo.requires_approval && !todo.permissions?.can_edit && !todo.is_done;
     if (!needsReview) {
-      setTodos((prev) => {
+      // A transition: React renders the (large) list in slices, so the checkbox animation that is already
+      // playing never waits for it.
+      startTransition(() => setTodos((prev) => {
         const below = completing && !todo.recurrence ? new Set(descendantsOf(todo.id, prev).map((t) => t.id)) : null;
         const above = new Set();
         if (!completing && todo.is_done) {
@@ -193,18 +195,21 @@ export function TodoProvider({ children }) {
           if (above.has(t.id)) return { ...t, is_done: false };
           return t;
         });
-      });
+      }));
     }
     if (completing && !needsReview) {
-      feedback.complete();
-      emit('buddy', { type: 'complete', todo });
+      // After the first frame of the tick, so sound synthesis and the buddy never share it.
+      setTimeout(() => {
+        feedback.complete();
+        emit('buddy', { type: 'complete', todo });
+      }, 60);
     }
     try {
       const res = await api.post(`/todos/${todo.id}/toggle`);
       const updated = res.data.todo;
       // Let the strike-through play before the item re-sorts (and, for sections, moves).
       setTimeout(() => {
-        upsert(updated);
+        startTransition(() => upsert(updated));
         if (!keepSection && !res.data.rolled_to) followSection(updated);
       }, 450);
       fetchInsights();

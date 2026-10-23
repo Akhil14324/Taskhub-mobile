@@ -35,6 +35,17 @@ function TodoTreeList({
   if (known.current === null) known.current = new Set(todos.map((t) => t.id));
   useEffect(() => { todos.forEach((t) => known.current.add(t.id)); }, [todos]);
 
+  // subtaskProgress() returns a new object every time, which made every memo'd row re-render whenever any
+  // to-do changed (a tick re-rendered the whole list mid-animation). Reuse the same object while the numbers match.
+  const progressCache = useRef(new Map());
+  const stableProgress = (t) => {
+    const p = subtaskProgress(t, todos);
+    const prev = progressCache.current.get(t.id);
+    if (prev && prev.done === p.done && prev.total === p.total) return prev;
+    progressCache.current.set(t.id, p);
+    return p;
+  };
+
   const renderNode = useCallback((node, depth, section) => {
     const t = node.todo;
     const isCollapsed = collapsed.has(t.id);
@@ -59,7 +70,7 @@ function TodoTreeList({
           onToggle={row.onToggle}
           onOpen={row.onOpen}
           onDelete={row.onDelete}
-          progress={subtaskProgress(t, todos)}
+          progress={stableProgress(t)}
           depth={depth}
           hasChildren={node.children.length > 0}
           parentTitle={depth === 0 ? node.parent?.title : undefined}
