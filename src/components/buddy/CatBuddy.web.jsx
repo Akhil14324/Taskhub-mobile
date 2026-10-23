@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { openNotificationTarget } from '../../navigation/navigationRef';
 import { useTheme } from '../../context/ThemeContext';
 import { useTodos } from '../../context/TodoContext';
 import { featureOn } from '../../utils/features';
@@ -682,6 +683,9 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         owner: String(from.name || 'Someone').split(' ')[0],
         cat: buddyOf({ buddy: from.buddy }),
         line: visitLine(e.kind, String(from.name || 'Someone').split(' ')[0]),
+        // A task being assigned is carried over in the cat's paws and handed to this cat.
+        task: /assign|delegate/.test(String(e.kind)) && e.text ? { title: e.text, id: e.todoId } : null,
+        holding: false,
         x: dir > 0 ? W + 40 : -40,
         y: floorAt(target),
         target,
@@ -690,13 +694,23 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
       };
       const patch = (p) => setGuests((l) => l.map((x) => (x.id === g.id ? { ...x, ...p } : x)));
       setTimeout(() => patch({ x: target }), 60);
-      setTimeout(() => { patch({ phase: 'sit' }); if (m.mode === 'still') { act('wave', 2200); } }, 2000);
-      setTimeout(() => patch({ phase: 'out', x: g.x }), 9500);
-      setTimeout(() => setGuests((l) => l.filter((x) => x.id !== g.id)), 12000);
+      setTimeout(() => { patch({ phase: 'sit', holding: !!(from && e.text && /assign|delegate/.test(String(e.kind))) }); if (m.mode === 'still') { act('wave', 2200); } }, 2000);
+      if (/assign|delegate/.test(String(e.kind)) && e.text) {
+        // Hand-over: the card slides across to this cat, which catches it and offers to open it.
+        setTimeout(() => {
+          patch({ holding: false });
+          if (m.mode === 'still' || m.mode === 'row') act('happy', 2600);
+          spawn('heart', 3);
+          playMeow({ pitch: 1.3, length: 0.3 });
+          say(`Got it from ${g.owner}: ${String(e.text).slice(0, 60)}`, 6000, e.todoId ? [{ label: 'Open it', primary: true, onPress: () => { say(null); openNotificationTarget({ todoId: e.todoId }); } }, { label: 'Later', onPress: () => say(null) }] : undefined);
+        }, 4200);
+      }
+      setTimeout(() => patch({ phase: 'out', x: g.x }), 10500);
+      setTimeout(() => setGuests((l) => l.filter((x) => x.id !== g.id)), 13000);
       return [...list, g];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [subscribe, act, floorAt]);
+  }), [subscribe, act, floorAt, spawn, say]);
 
   // Now and then the cat notices a moving pointer and goes after it.
   useEffect(() => {
@@ -1233,6 +1247,13 @@ function GuestCats({ guests, tick, S, layer, ink, paper, border }) {
           <div className="buddy-bubble" style={{ background: paper, color: ink, border: `2px solid ${border}`, '--bubble-border': border, pointerEvents: 'none', marginBottom: 22 }}>
             <div style={{ fontWeight: 800, opacity: 0.7, fontSize: 11 }}>{g.cat.name}, {g.owner}'s cat</div>
             <div>{g.line}</div>
+          </div>
+        )}
+        {g.task && (g.phase === 'in' || g.holding) && (
+          <div style={{ position: 'absolute', bottom: 12 * S, left: '50%', marginLeft: -22, width: 44, padding: '3px 4px 4px', borderRadius: 4, background: paper, border: `2px solid ${border}`, boxShadow: '0 2px 0 rgba(0,0,0,.18)', transform: `rotate(${g.phase === 'in' ? -8 : 0}deg)` }}>
+            <div style={{ height: 5, background: '#dc2626', borderRadius: 2, marginBottom: 3 }} />
+            <div style={{ height: 3, background: border, opacity: 0.5, borderRadius: 1, marginBottom: 2 }} />
+            <div style={{ height: 3, width: '60%', background: border, opacity: 0.5, borderRadius: 1 }} />
           </div>
         )}
         <Sprite rows={rows} scale={S} flip={walking && heading < 0} palette={paletteFor(g.cat.coat)} />
