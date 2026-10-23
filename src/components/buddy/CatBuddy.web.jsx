@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useTodos } from '../../context/TodoContext';
 import { featureOn } from '../../utils/features';
@@ -67,6 +68,17 @@ const LINES = {
   stalk: ['Got it!', 'Mine.', 'It got away.', 'Pounce!'],
   weekend: ['Is it the weekend?', 'Party time.'],
 };
+/** What a visiting cat says, from the kind of notification that brought it. */
+function visitLine(kind = '', owner = 'Someone') {
+  const k = String(kind);
+  if (/assign|delegate|shared|proposed|added/.test(k)) return `${owner} sent you a task.`;
+  if (/comment|reply|mention/.test(k)) return `${owner} wrote to you.`;
+  if (/kudos|thank/.test(k)) return `${owner} says thanks!`;
+  if (/nudge|bell/.test(k)) return `${owner} is ringing the bell!`;
+  if (/approv|done|completed|review/.test(k)) return `${owner} has news about a task.`;
+  if (/chat/.test(k)) return `${owner} messaged you.`;
+  return `${owner} says hi.`;
+}
 const pickLine = (k) => LINES[k][Math.floor(Math.random() * LINES[k].length)];
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -171,6 +183,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   const [fx, setFx] = useState([]);           // floating hearts, Zs, drops
   const [toy, setToy] = useState(null);       // { kind: 'yarn' | 'butterfly' | 'mug' | 'bowl' | 'bowlFull' | 'fish', x, y }
   const [card, setCard] = useState(false);
+  const [guests, setGuests] = useState([]);    // other people's cats visiting this screen
   const [edit, setEdit] = useState(false);        // the card shows the name / coat / hat editor
   const [nameDraft, setNameDraft] = useState('');
   useEffect(() => { if (!card) setEdit(false); }, [card]);
@@ -194,6 +207,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   nameRef.current = profile.name;
   const flags = useRef({});
   flags.current = {
+    social: featureOn(prefs, 'buddy_social'),
     chase: featureOn(prefs, 'buddy_chase'),
     rows: featureOn(prefs, 'buddy_rows'),
     mood: featureOn(prefs, 'buddy_mood'),
@@ -646,6 +660,43 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
     if (!need) { setGlow(false); setBubble((b) => (b?.actions ? null : b)); setToy((t) => (t?.kind === 'bottleLying' ? null : t)); if (m.until === Infinity) { m.until = 0; m.busy = 0; } return; }
     if (louder || force) { m.busy = 0; applyNeed(need); }
   }, [userId, applyNeed]);
+
+  // Other people's cats: one walks on when someone does something that involves you.
+  const { subscribe } = useChat();
+  const lastVisit = useRef({});
+  useEffect(() => subscribe('buddy:visit', (e) => {
+    const m = me.current;
+    const from = e?.from;
+    if (!flags.current.social || !from?.id || isFocusActive() || document.hidden) return;
+    const now = Date.now();
+    if (now - (lastVisit.current[from.id] || 0) < 25e3) return;
+    lastVisit.current[from.id] = now;
+    setGuests((list) => {
+      if (list.length >= 3) return list;
+      const W = window.innerWidth;
+      const idx = list.length;
+      const dir = m.x < W / 2 ? 1 : -1;
+      const target = Math.max(40, Math.min(W - 40, m.x + dir * (70 + idx * 58)));
+      const g = {
+        id: `${from.id}-${now}`,
+        owner: String(from.name || 'Someone').split(' ')[0],
+        cat: buddyOf({ buddy: from.buddy }),
+        line: visitLine(e.kind, String(from.name || 'Someone').split(' ')[0]),
+        x: dir > 0 ? W + 40 : -40,
+        y: floorAt(target),
+        target,
+        dir,
+        phase: 'in',
+      };
+      const patch = (p) => setGuests((l) => l.map((x) => (x.id === g.id ? { ...x, ...p } : x)));
+      setTimeout(() => patch({ x: target }), 60);
+      setTimeout(() => { patch({ phase: 'sit' }); if (m.mode === 'still') { act('wave', 2200); } }, 2000);
+      setTimeout(() => patch({ phase: 'out', x: g.x }), 9500);
+      setTimeout(() => setGuests((l) => l.filter((x) => x.id !== g.id)), 12000);
+      return [...list, g];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [subscribe, act, floorAt]);
 
   // Now and then the cat notices a moving pointer and goes after it.
   useEffect(() => {
@@ -1149,10 +1200,45 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
 
         <Sprite rows={rows} scale={S} flip={front ? false : flip} palette={coatPalette} />
       </div>
+      <GuestCats guests={guests} tick={tick} S={S} layer={layer} ink={ink} paper={paper} border={border} />
       <ZTicker active={anim === 'sleep'} spawn={spawn} />
     </>,
     document.body,
   );
+}
+
+/** Cats that belong to other people, walking in to say something. Each is drawn in its owner's coat and hat. */
+function GuestCats({ guests, tick, S, layer, ink, paper, border }) {
+  return guests.map((g) => {
+    const walking = g.phase !== 'sit';
+    const set = animsFor(g.cat.hat);
+    const anim = walking ? set.walk : set.sit;
+    const rows = anim[Math.floor(tick / (walking ? 1 : 3)) % anim.length];
+    const leaving = g.phase === 'out';
+    const heading = leaving ? g.dir : -g.dir; // +1 walks right (it comes in from the right edge when dir is 1, so it walks left)
+    const boxW = 28 * S;
+    const boxH = 20 * S;
+    return (
+      <div
+        key={g.id}
+        aria-hidden="true"
+        style={{
+          position: 'fixed', left: 0, top: 0, width: boxW, height: boxH, zIndex: layer, pointerEvents: 'none',
+          transform: `translate(${Math.round(g.x - boxW / 2)}px, ${Math.round(g.y - boxH)}px)`,
+          transition: g.phase === 'sit' ? 'none' : 'transform 1.9s linear',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        }}
+      >
+        {g.phase === 'sit' && (
+          <div className="buddy-bubble" style={{ background: paper, color: ink, border: `2px solid ${border}`, '--bubble-border': border, pointerEvents: 'none', marginBottom: 22 }}>
+            <div style={{ fontWeight: 800, opacity: 0.7, fontSize: 11 }}>{g.cat.name}, {g.owner}'s cat</div>
+            <div>{g.line}</div>
+          </div>
+        )}
+        <Sprite rows={rows} scale={S} flip={walking && heading < 0} palette={paletteFor(g.cat.coat)} />
+      </div>
+    );
+  });
 }
 
 // Zs drift up from a sleeping cat every couple of seconds.

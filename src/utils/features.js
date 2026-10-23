@@ -8,6 +8,7 @@ export const FEATURES = [
   { group: 'Health and focus', key: 'stretch', icon: 'body-outline', label: 'Stretch break', hint: 'Every two hours, a one-minute guided stretch for your neck, back, wrists or eyes', default: true },
   { group: 'Health and focus', key: 'focus', icon: 'timer-outline', label: 'Focus mode', hint: 'A full-screen landscape timer for one task. Notifications wait until it ends', default: true },
   { group: 'Cat buddy', key: 'buddy', icon: 'paw-outline', label: 'Cat buddy', hint: 'A pixel cat at the bottom of the screen (click it to rename it and change how it looks). Types along when you add a task, blows a kiss when you finish one, and gets thirsty and stiff with you', default: true },
+  { group: 'Cat buddy', key: 'buddy_social', icon: 'people-outline', label: 'Visiting cats', hint: 'When someone assigns you a task, comments, thanks you or messages you, their cat walks onto your screen to say so. Your cat visits them too', default: true },
   { group: 'Cat buddy', key: 'buddy_chase', icon: 'locate-outline', label: 'Follows your pointer', hint: 'Its eyes follow the cursor, and now and then it stalks the pointer across the screen and pounces', default: true },
   { group: 'Cat buddy', key: 'buddy_rows', icon: 'list-outline', label: 'Plays with your tasks', hint: 'It hops onto a task in your list to sit, and gives an overdue one a push', default: true },
   { group: 'Cat buddy', key: 'buddy_mood', icon: 'happy-outline', label: 'Mood from your work', hint: 'Sunny when nothing is overdue, gloomy when work piles up', default: true },
