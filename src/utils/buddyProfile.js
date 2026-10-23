@@ -32,3 +32,17 @@ export function buddyOf(preferences) {
     hat: HATS.some((h) => h.key === b.hat) ? b.hat : 'none',
   };
 }
+
+/** The treats shop: what a look costs and the bond level it needs. Anything not listed is free. */
+export const SHOP = {
+  hat: {
+    party: { cost: 3, level: 1 }, bow: { cost: 3, level: 1 }, glasses: { cost: 4, level: 1 },
+    beanie: { cost: 5, level: 2 }, shades: { cost: 6, level: 3 }, crown: { cost: 10, level: 4 },
+  },
+  coat: { rose: { cost: 4, level: 1 }, shadow: { cost: 6, level: 2 }, ruby: { cost: 8, level: 3 } },
+};
+
+/** Bond grows with petting, playing and finished tasks: level 2 at 8 points, then 32, 72, 128, 200. */
+export const bondLevel = (points = 0) => Math.min(6, 1 + Math.floor(Math.sqrt(Math.max(0, points) / 8)));
+export const bondStart = (level) => 8 * (level - 1) ** 2;
+export const BOND_TITLES = ['', 'Stranger', 'Friend', 'Buddy', 'Pal', 'Soulmate', 'Best friends'];

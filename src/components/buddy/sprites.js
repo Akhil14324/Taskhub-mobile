@@ -411,6 +411,8 @@ const stretchPose = (face = 'happy', tail = 0, { paws = true } = {}) => {
 export const PROPS = {
   heart: ['.rr.rr.', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'],
   heartSmall: ['r.r', 'rrr', '.r.'],
+  bell: ['..kk..', '.kddk.', 'kdrrdk', 'kdrrdk', 'kkkkkk', '..kk..'],
+  trophy: ['kkkkkkk', 'kyyyyyk', 'kyyyyyk', '.kyyyk.', '..kyk..', '..kyk..', '.kkkkk.'],
   z: ['kkkk', '..k.', '.k..', 'kkkk'],
   zSmall: ['kkk', '.k.', 'kkk'],
   drop: ['..k..', '.kck.', 'kccck', 'kccck', '.kkk.'],

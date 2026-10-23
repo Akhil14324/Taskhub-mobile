@@ -12,8 +12,9 @@ import { playMeow, playPurr, haptic } from '../../utils/feedback';
 import { todayYmd, toYmd } from '../../utils/dates';
 import { readWater } from '../WaterReminder';
 import { readStretch } from '../StretchBreak';
-import { buddyOf, COATS, HATS, DEFAULT_NAME } from '../../utils/buddyProfile';
-import { PALETTE, PROPS, animsFor, frameSize, paletteFor } from './sprites';
+import { buddyOf, COATS, HATS, DEFAULT_NAME, SHOP, bondLevel, bondStart, BOND_TITLES } from '../../utils/buddyProfile';
+import { PROPS, animsFor, frameSize, paletteFor } from './sprites';
+import { Sprite } from './Sprite';
 
 /**
  * Mochi, the pixel cat that lives at the bottom of the screen: a small Tamagotchi made of the same white
@@ -84,7 +85,7 @@ const pickLine = (k) => LINES[k][Math.floor(Math.random() * LINES[k].length)];
 const rand = (a, b) => a + Math.random() * (b - a);
 
 function loadState(id) {
-  const fresh = { treats: 3, happiness: 70, day: todayYmd(), hiddenDay: null, pets: 0 };
+  const fresh = { treats: 3, happiness: 70, day: todayYmd(), hiddenDay: null, pets: 0, bond: 0, owned: [], best: 0 };
   try { return { ...fresh, ...(JSON.parse(localStorage.getItem(storeKey(id)) || 'null') || {}) }; } catch { return fresh; }
 }
 function saveState(id, s) {
@@ -93,50 +94,12 @@ function saveState(id, s) {
 
 // ---- drawing --------------------------------------------------------------------------------------------
 
-const pathCache = new WeakMap();
-/** One path per colour, each pixel run on a row merged into one rectangle. */
-function paths(rows) {
-  let out = pathCache.get(rows);
-  if (out) return out;
-  const byColour = {};
-  rows.forEach((row, y) => {
-    let x = 0;
-    while (x < row.length) {
-      const ch = row[x];
-      if (ch === '.') { x += 1; continue; }
-      let n = 1;
-      while (row[x + n] === ch) n += 1;
-      if (!byColour[ch]) byColour[ch] = [];
-      byColour[ch].push(`M${x} ${y}h${n}v1h-${n}z`);
-      x += n;
-    }
-  });
-  out = Object.keys(byColour).map((ch) => ({ ch, d: byColour[ch].join('') }));
-  pathCache.set(rows, out);
-  return out;
-}
-
-function Sprite({ rows, scale, flip, style, palette = PALETTE }) {
-  const { w, h } = frameSize(rows);
-  return (
-    <svg
-      width={w * scale}
-      height={h * scale}
-      viewBox={`0 0 ${w} ${h}`}
-      shapeRendering="crispEdges"
-      style={{ display: 'block', transform: flip ? 'scaleX(-1)' : undefined, ...style }}
-      aria-hidden="true"
-    >
-      {paths(rows).map((p) => <path key={p.ch} fill={palette[p.ch] || '#000'} d={p.d} />)}
-    </svg>
-  );
-}
-
 const CSS = `
 @keyframes buddy-float { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; transform: translate(calc(var(--dx) * .2), -10px) scale(1); } 100% { opacity: 0; transform: translate(var(--dx), var(--rise)) scale(1); } }
 @keyframes buddy-pop { 0% { opacity: 0; transform: translate(-50%, 6px) scale(.85); } 100% { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @keyframes buddy-glow { 0%, 100% { box-shadow: inset 0 0 60px 6px rgba(220, 38, 38, .28); } 50% { box-shadow: inset 0 0 110px 22px rgba(220, 38, 38, .55); } }
 @keyframes buddy-fall { 0% { transform: translate(0, 0) rotate(0); } 100% { transform: translate(var(--dx), 120vh) rotate(540deg); } }
+@keyframes buddy-peek { from { transform: translateY(105%); } to { transform: translateY(0); } }
 @keyframes buddy-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
 .buddy-cat { position: fixed; left: 0; top: 0; pointer-events: auto; touch-action: none; cursor: grab; will-change: transform; -webkit-tap-highlight-color: transparent; user-select: none; }
 .buddy-cat:active { cursor: grabbing; }
@@ -187,6 +150,9 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   const [guests, setGuests] = useState([]);    // other people's cats visiting this screen
   const [edit, setEdit] = useState(false);        // the card shows the name / coat / hat editor
   const [nameDraft, setNameDraft] = useState('');
+  const [shopMsg, setShopMsg] = useState('');
+  const [game, setGame] = useState(false);
+  const [peek, setPeek] = useState(null);       // the cat popping up from the bottom edge with a notification
   useEffect(() => { if (!card) setEdit(false); }, [card]);
   const [glow, setGlow] = useState(false);
   const [layer, setLayer] = useState(9500);
@@ -214,14 +180,52 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
     mood: featureOn(prefs, 'buddy_mood'),
     life: featureOn(prefs, 'buddy_life'),
     cheer: featureOn(prefs, 'buddy_cheer'),
+    bond: featureOn(prefs, 'buddy_bond'),
+    games: featureOn(prefs, 'buddy_games'),
+    peek: featureOn(prefs, 'buddy_peek'),
   };
   const hat = profile.hat !== 'none' ? profile.hat : (flags.current.life && new Date().getDay() === 6 ? 'party' : 'none'); // Saturdays are party days
   const ANIMS = animsFor(hat);
   const coatPalette = useMemo(() => paletteFor(profile.coat), [profile.coat]);
   const saveLook = (patch) => update?.({ buddy: { ...profile, ...patch } });
+  /** Is this look free, already bought, or on right now? (With the shop switched off everything is free.) */
+  const owned = (kind, key) => !SHOP[kind][key] || !flags.current.bond || (pet.current.owned || []).includes(`${kind}:${key}`) || profile[kind] === key;
+  const shopTitle = (kind, key, label) => (owned(kind, key) ? label : `${label}: ${SHOP[kind][key].cost} treats, bond level ${SHOP[kind][key].level}`);
+  /** Wear a look, buying it first if it is in the shop and there are enough treats and bond. */
+  const choose = (kind, key) => {
+    if (owned(kind, key)) { saveLook({ [kind]: key }); setShopMsg(''); return; }
+    const price = SHOP[kind][key];
+    const level = bondLevel(pet.current.bond);
+    if (level < price.level) { setShopMsg(`Needs bond level ${price.level}; you are at ${level}. Pet, play and finish tasks.`); return; }
+    if ((pet.current.treats || 0) < price.cost) { setShopMsg(`That costs ${price.cost} treats and you have ${pet.current.treats || 0}. Finish tasks to earn more.`); return; }
+    savePet({ treats: pet.current.treats - price.cost, owned: [...(pet.current.owned || []), `${kind}:${key}`] });
+    saveLook({ [kind]: key });
+    setShopMsg(`Bought for ${price.cost} treats!`);
+    spawn('heart', 3);
+  };
   const sizeRef = useRef({ w: 22 * S, h: 17 * S });
   const pet = useRef(loadState(userId));
   const savePet = (patch) => { pet.current = { ...pet.current, ...patch }; saveState(userId, pet.current); force((n) => n + 1); };
+  /** Bond grows with care; a new level is announced. */
+  const gainBond = (n) => {
+    const before = bondLevel(pet.current.bond);
+    savePet({ bond: (pet.current.bond || 0) + n });
+    const after = bondLevel(pet.current.bond);
+    if (after > before && flags.current.bond) {
+      say(`Bond level ${after}: ${BOND_TITLES[after]}! New things to unlock.`, 4800);
+      spawn('heart', 5);
+    }
+  };
+  const finishGame = (score) => {
+    const reward = Math.min(6, Math.floor(score / 4));
+    const best = Math.max(pet.current.best || 0, score);
+    setGame(false);
+    savePet({ treats: Math.min(99, (pet.current.treats || 0) + reward), best });
+    gainBond(2);
+    act('happy', 2600);
+    spawn('heart', 4);
+    say(`${score} caught${reward ? `, +${reward} treat${reward > 1 ? 's' : ''}` : ''}! Best ${best}.`, 4200);
+  };
 
   // Where it is and what it is doing (read by the loop; never React state).
   const me = useRef({
@@ -495,7 +499,8 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
       m.rowUntil = Date.now() + rand(9e3, 16e3);
       setFlip(false);
       setAnim('sit');
-      say(pickLine(overdue ? 'overdue' : 'row'), 2800);
+      if (!overdue && flags.current.bond && bondLevel(pet.current.bond) >= 3 && Math.random() < 0.4) { setAnim('loaf'); say('Mine now. Nap time.', 2600); }
+      else say(pickLine(overdue ? 'overdue' : 'row'), 2800);
       if (overdue) {
         setTimeout(() => {
           if (m.rowEl !== el) return;
@@ -576,6 +581,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         const now = Date.now();
         m.combo = [...m.combo.filter((t) => now - t < 60e3), now];
         savePet({ treats: Math.min(99, (pet.current.treats || 0) + 1), happiness: Math.min(100, (pet.current.happiness || 0) + 4) });
+        gainBond(2);
         if (m.need?.level >= 2) { spawn('heartSmall', 1); break; }
         if (flags.current.cheer) {
           const { doneToday } = workMood();
@@ -599,6 +605,10 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         haptic('success');
         break;
       }
+      case 'roulette': // the Pick for me dialog chose a task: the cat points at it
+        if (m.mode === 'still') act('pounce', 1500);
+        say(`I pick: ${String(e.title || '').slice(0, 50)}`, 3500);
+        break;
       case 'water-due':
         checkNeeds(true);
         break;
@@ -611,6 +621,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         spawn('drop', 3);
         playPurr(1.2);
         savePet({ happiness: Math.min(100, (pet.current.happiness || 0) + 6) });
+        gainBond(1);
         break;
       case 'water-skipped':
         if (e.snoozes >= 2) { act('grumpy', 2600, () => checkNeeds(true)); say(`That is ${e.snoozes} snoozes. I am counting.`, 2600); }
@@ -625,6 +636,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         say('Stretch with me! I am doing it too.', 4000);
         break;
       case 'stretch-done':
+        gainBond(1);
         act('happy', 2500);
         say(pickLine('stretched'), 2500);
         spawn('heartSmall', 3);
@@ -665,11 +677,13 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   // Other people's cats: one walks on when someone does something that involves you.
   const { subscribe } = useChat();
   const lastVisit = useRef({});
+  const lastVisitAt = useRef(0);
   useEffect(() => subscribe('buddy:visit', (e) => {
     const m = me.current;
     const from = e?.from;
     if (!flags.current.social || !from?.id || isFocusActive() || document.hidden) return;
     const now = Date.now();
+    lastVisitAt.current = now;
     if (now - (lastVisit.current[from.id] || 0) < 25e3) return;
     lastVisit.current[from.id] = now;
     setGuests((list) => {
@@ -686,6 +700,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         // A task being assigned is carried over in the cat's paws and handed to this cat.
         task: /assign|delegate/.test(String(e.kind)) && e.text ? { title: e.text, id: e.todoId } : null,
         holding: false,
+        bell: /nudge|bell/.test(String(e.kind)),
         x: dir > 0 ? W + 40 : -40,
         y: floorAt(target),
         target,
@@ -712,14 +727,31 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [subscribe, act, floorAt, spawn, say]);
 
+  // A new notification with no visitor attached: the cat pops up from the bottom edge holding it.
+  useEffect(() => subscribe('notification:new', (n) => {
+    if (!flags.current.peek || isFocusActive() || document.hidden) return;
+    setTimeout(() => {
+      if (Date.now() - lastVisitAt.current < 2500) return; // a visiting cat already brought this one
+      const W = window.innerWidth;
+      let x = rand(70, W - 70);
+      if (Math.abs(x - me.current.x) < 90) x = x < W / 2 ? Math.min(W - 70, x + 160) : Math.max(70, x - 160);
+      const id = Date.now();
+      setPeek({ id, x, text: n?.title || n?.message || 'New notification', n });
+      setTimeout(() => setPeek((p) => (p && p.id === id ? null : p)), 7500);
+    }, 800);
+  }), [subscribe]);
+
   // Now and then the cat notices a moving pointer and goes after it.
   useEffect(() => {
+    let beat = 0;
     const id = setInterval(() => {
       const m = me.current;
+      beat += 1;
+      if (beat % 2 && !(flags.current.bond && bondLevel(pet.current.bond) >= 5)) return; // close friends follow you twice as often
       if (!flags.current.chase || m.mode !== 'still' || m.need || m.asleep || Date.now() < m.busy) return;
       if (Date.now() - m.pointer.at > 1500 || Math.abs(m.pointer.x - m.x) < 140) return;
       if (Math.random() < 0.3) stalk();
-    }, 7000);
+    }, 3500);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -829,12 +861,14 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
     say('Prrrrr...', 2200);
     playPurr(1.6);
     savePet({ pets: (pet.current.pets || 0) + 1, happiness: Math.min(100, (pet.current.happiness || 0) + 3) });
+    gainBond(1);
   };
 
   const giveTreat = () => {
     if (!(pet.current.treats > 0)) { say('No treats left. Finish a task to earn one!', 2600); return; }
     const m = me.current;
     savePet({ treats: pet.current.treats - 1, happiness: Math.min(100, (pet.current.happiness || 0) + 8) });
+    gainBond(2);
     setCard(false);
     setToy({ kind: 'fish', x: m.x + 24 * (m.facing || 1), y: floorAt(m.x) });
     act('drink', 1800, () => { setToy(null); act('happy', 1800); say('Nom nom. Thank you!', 2000); spawn('heartSmall', 3); });
@@ -936,7 +970,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         } else {
           m.x = r.left + m.rowDx;
           m.y = r.top + 2;
-          if (Date.now() > m.busy && !['sit', 'pounce', 'lookL', 'lookR'].includes(animRef.current)) setAnim('sit');
+          if (Date.now() > m.busy && !['sit', 'pounce', 'lookL', 'lookR', 'loaf'].includes(animRef.current)) setAnim('sit');
         }
       } else if (m.mode === 'fall') {
         m.vy += GRAVITY * dt;
@@ -1041,6 +1075,9 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
       : (pet.current.happiness || 0) > 75 ? 'Very happy' : (pet.current.happiness || 0) > 40 ? 'Content' : 'Needs attention';
   // The cat re-renders on every frame tick (~8 a second), so the stats card's numbers (storage reads and a pass
   // over every to-do) are only worked out while the card is open: otherwise they cost the app on every frame.
+  const bondPts = pet.current.bond || 0;
+  const bondLvl = bondLevel(bondPts);
+  const bondPct = bondLvl >= 6 ? 100 : Math.round(((bondPts - bondStart(bondLvl)) / (bondStart(bondLvl + 1) - bondStart(bondLvl))) * 100);
   let water = { count: 0, goal: 8 };
   let stretch = { count: 0 };
   let doneToday = 0;
@@ -1155,9 +1192,9 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
                       key={c.key}
                       type="button"
                       aria-label={c.label}
-                      title={c.label}
-                      onClick={(ev) => { ev.stopPropagation(); saveLook({ coat: c.key }); }}
-                      style={{ width: 28, height: 28, borderRadius: 14, background: c.swatch, border: `2.5px solid ${profile.coat === c.key ? '#dc2626' : border}`, cursor: 'pointer', padding: 0 }}
+                      title={shopTitle('coat', c.key, c.label)}
+                      onClick={(ev) => { ev.stopPropagation(); choose('coat', c.key); }}
+                      style={{ width: 28, height: 28, borderRadius: 14, background: c.swatch, border: `2.5px solid ${profile.coat === c.key ? '#dc2626' : border}`, cursor: 'pointer', padding: 0, opacity: owned('coat', c.key) ? 1 : 0.45 }}
                     />
                   ))}
                 </div>
@@ -1167,13 +1204,14 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
                     <button
                       key={h.key}
                       type="button"
-                      onClick={(ev) => { ev.stopPropagation(); saveLook({ hat: h.key }); }}
-                      style={{ font: '700 11.5px System, Inter, sans-serif', border: 0, borderRadius: 999, padding: '5px 9px', cursor: 'pointer', background: profile.hat === h.key ? '#dc2626' : soft, color: profile.hat === h.key ? '#fff' : ink }}
+                      onClick={(ev) => { ev.stopPropagation(); choose('hat', h.key); }}
+                      style={{ font: '700 11.5px System, Inter, sans-serif', border: 0, borderRadius: 999, padding: '5px 9px', cursor: 'pointer', background: profile.hat === h.key ? '#dc2626' : soft, color: profile.hat === h.key ? '#fff' : ink, opacity: owned('hat', h.key) ? 1 : 0.55 }}
                     >
-                      {h.label}
+                      {h.label}{!owned('hat', h.key) ? ` · ${SHOP.hat[h.key].cost}` : ''}
                     </button>
                   ))}
                 </div>
+                {flags.current.bond && <div style={{ opacity: 0.7, fontSize: 11.5, margin: '2px 0 0' }}>{shopMsg || `You have ${pet.current.treats || 0} treats. Faded looks cost treats (the number) and bond level.`}</div>}
                 <div className="acts">
                   <button type="button" style={{ background: '#dc2626', color: '#fff' }} onClick={(ev) => { ev.stopPropagation(); saveLook({ name: nameDraft.trim() || DEFAULT_NAME }); setEdit(false); }}>Done</button>
                 </div>
@@ -1182,6 +1220,12 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
             <>
             <h4>{profile.name}</h4>
             <div style={{ opacity: 0.75, marginBottom: 6 }}>{mood} · {pet.current.treats || 0} treat{pet.current.treats === 1 ? '' : 's'}</div>
+            {flags.current.bond && (
+              <>
+                <div>Bond · level {bondLvl}, {BOND_TITLES[bondLvl]}</div>
+                <div className="bar" style={{ background: soft }}><i style={{ width: `${bondPct}%` }} /></div>
+              </>
+            )}
             <div>Happiness</div>
             <div className="bar" style={{ background: soft }}><i style={{ width: `${pet.current.happiness || 0}%` }} /></div>
             <div>Water today · {water.count}/{water.goal}</div>
@@ -1198,6 +1242,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
                   setCard(false);
                   if (m.asleep || anim === 'sleep') { m.asleep = false; act('stretch', 1600); } else { m.asleep = true; act('sleep', 5 * MIN, () => { m.asleep = false; act('stretch', 1600); }); }
                 }],
+                ...(flags.current.games ? [['Play catch', () => { setCard(false); setGame(true); }]] : []),
                 ['Customize', () => { setNameDraft(profile.name); setEdit(true); }],
                 ['Hide for today', () => { savePet({ hiddenDay: todayYmd() }); onHide(); }],
               ].map(([label, fn]) => (
@@ -1214,8 +1259,116 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
 
         <Sprite rows={rows} scale={S} flip={front ? false : flip} palette={coatPalette} />
       </div>
+      {game && <CatchGame S={S} layer={layer + 3} ink={ink} paper={paper} border={border} onEnd={finishGame} />}
+      <PeekCat peek={peek} tick={tick} S={S} layer={layer} ink={ink} paper={paper} border={border} cat={{ coat: profile.coat, hat }} onOpen={() => { const n = peek?.n || {}; setPeek(null); openNotificationTarget({ ...(n.data || {}), type: n.type, title: n.title, body: n.message }); }} />
       <GuestCats guests={guests} tick={tick} S={S} layer={layer} ink={ink} paper={paper} border={border} />
       <ZTicker active={anim === 'sleep'} spawn={spawn} />
+    </>,
+    document.body,
+  );
+}
+
+/** Your cat popping up from the bottom edge, holding the notification that just arrived. */
+function PeekCat({ peek, tick, S, layer, ink, paper, border, cat, onOpen }) {
+  if (!peek) return null;
+  const frames = animsFor(cat.hat).happy;
+  const rows = frames[Math.floor(tick / 3) % frames.length].slice(0, 11);
+  const w = 22 * S;
+  const h = 11 * S;
+  return (
+    <div key={peek.id} style={{ position: 'fixed', left: Math.round(peek.x - w / 2), bottom: 0, width: w, height: h, zIndex: layer, pointerEvents: 'none' }}>
+      {!!peek.text && (
+        <div className="buddy-bubble" style={{ background: paper, color: ink, border: `2px solid ${border}`, '--bubble-border': border, cursor: 'pointer' }} onClick={onOpen}>
+          <div>{String(peek.text).slice(0, 80)}</div>
+          <div style={{ opacity: 0.6, fontSize: 11 }}>Tap to open</div>
+        </div>
+      )}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+        <div style={{ animation: 'buddy-peek .45s cubic-bezier(.2,.8,.3,1.1) both' }}>
+          <Sprite rows={rows} scale={S} palette={paletteFor(cat.coat)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A 20-second game: tap the falling hearts and fish, skip the mugs. Calls onEnd(score). */
+function CatchGame({ S, layer, ink, paper, border, onEnd }) {
+  const [, rerender] = useState(0);
+  const [left, setLeft] = useState(20);
+  const [score, setScore] = useState(0);
+  const items = useRef([]);
+  const els = useRef(new Map());
+  const scoreRef = useRef(0);
+  const endRef = useRef(onEnd);
+  endRef.current = onEnd;
+  const done = useRef(false);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const t0 = last;
+    let spawnIn = 0.2;
+    let uid = 0;
+    let shown = 20;
+    const step = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const elapsed = (now - t0) / 1000;
+      if (elapsed >= 20) { if (!done.current) { done.current = true; endRef.current(scoreRef.current); } return; }
+      raf = requestAnimationFrame(step);
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      spawnIn -= dt;
+      let changed = false;
+      if (spawnIn <= 0) {
+        spawnIn = rand(0.35, 0.75) * (1 - elapsed / 50);
+        const r = Math.random();
+        uid += 1;
+        items.current.push({ id: uid, kind: r < 0.6 ? 'heart' : r < 0.85 ? 'fish' : 'mug', x: rand(30, W - 60), y: -30, vy: rand(150, 270) + elapsed * 5 });
+        changed = true;
+      }
+      for (const it of items.current) {
+        it.y += it.vy * dt;
+        const el = els.current.get(it.id);
+        if (el) el.style.transform = `translate(${it.x}px, ${it.y}px)`;
+      }
+      const kept = items.current.filter((it) => it.y < H + 40);
+      if (kept.length !== items.current.length) { items.current = kept; changed = true; }
+      const secs = Math.ceil(20 - elapsed);
+      if (secs !== shown) { shown = secs; setLeft(secs); }
+      if (changed) rerender((n) => n + 1);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const catchIt = (it) => {
+    items.current = items.current.filter((x) => x.id !== it.id);
+    const gain = it.kind === 'fish' ? 2 : it.kind === 'heart' ? 1 : -1;
+    scoreRef.current = Math.max(0, scoreRef.current + gain);
+    setScore(scoreRef.current);
+    if (it.kind !== 'mug') playMeow({ pitch: 1.5, length: 0.12 });
+    haptic('light');
+  };
+
+  return createPortal(
+    <>
+      <div style={{ position: 'fixed', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: layer + 5, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 999, background: paper, color: ink, border: `2px solid ${border}`, font: '700 13px System, Inter, sans-serif' }}>
+        <span>Catch! {score}</span>
+        <span style={{ opacity: 0.6 }}>{left}s</span>
+        <button type="button" onClick={() => { if (!done.current) { done.current = true; onEnd(scoreRef.current); } }} style={{ border: 0, borderRadius: 999, padding: '4px 10px', background: '#dc2626', color: '#fff', font: '700 12px System, Inter, sans-serif', cursor: 'pointer' }}>End</button>
+      </div>
+      {items.current.map((it) => (
+        <div
+          key={it.id}
+          ref={(el) => { if (el) els.current.set(it.id, el); else els.current.delete(it.id); }}
+          onPointerDown={(ev) => { ev.preventDefault(); catchIt(it); }}
+          style={{ position: 'fixed', left: 0, top: 0, zIndex: layer + 4, padding: 12, margin: -12, cursor: 'pointer', touchAction: 'none', transform: `translate(${it.x}px, ${it.y}px)` }}
+        >
+          <Sprite rows={PROPS[it.kind]} scale={S * (it.kind === 'heart' ? 0.9 : 1)} />
+        </div>
+      ))}
     </>,
     document.body,
   );
@@ -1247,6 +1400,11 @@ function GuestCats({ guests, tick, S, layer, ink, paper, border }) {
           <div className="buddy-bubble" style={{ background: paper, color: ink, border: `2px solid ${border}`, '--bubble-border': border, pointerEvents: 'none', marginBottom: 22 }}>
             <div style={{ fontWeight: 800, opacity: 0.7, fontSize: 11 }}>{g.cat.name}, {g.owner}'s cat</div>
             <div>{g.line}</div>
+          </div>
+        )}
+        {g.bell && g.phase === 'sit' && (
+          <div style={{ position: 'absolute', bottom: 11 * S, left: '50%', marginLeft: 6, animation: 'buddy-shake .25s linear infinite' }}>
+            <Sprite rows={PROPS.bell} scale={S * 0.8} />
           </div>
         )}
         {g.task && (g.phase === 'in' || g.holding) && (

@@ -5,7 +5,7 @@ import { useColors } from '../context/ThemeContext';
 import useFeature from '../hooks/useFeature';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
-import { on as onEvent, openFocus, showToast } from '../utils/events';
+import { on as onEvent, openFocus, showToast, emit } from '../utils/events';
 import { pickTask } from '../utils/roulette';
 import { openNotificationTarget } from '../navigation/navigationRef';
 
@@ -26,6 +26,7 @@ export default function RoulettePicker() {
     const pick = pickTask(candidates, []);
     if (!pick) { showToast({ message: 'Nothing open to pick from here', icon: 'checkmark-done' }); return; }
     setRound({ candidates, skip: [pick.todo.id], pick });
+    emit('buddy', { type: 'roulette', title: pick.todo.title });
   }), []);
 
   if (!round) return null;
@@ -35,6 +36,7 @@ export default function RoulettePicker() {
     const next = pickTask(round.candidates, round.skip);
     if (!next) { showToast({ message: 'That was every open to-do here', icon: 'checkmark-done' }); return; }
     setRound({ ...round, skip: [...round.skip, next.todo.id], pick: next });
+    emit('buddy', { type: 'roulette', title: next.todo.title });
   };
 
   return (

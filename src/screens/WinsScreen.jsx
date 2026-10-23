@@ -12,6 +12,8 @@ import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { SkeletonList } from '../components/Skeleton';
 import { Avatar, Chip, EmptyHero } from '../components/kit';
 import BadgeMedal from '../components/engage/BadgeMedal';
+import CatPicture from '../components/buddy/CatPicture';
+import useFeature from '../hooks/useFeature';
 import KudosSheet from '../components/engage/KudosSheet';
 import { parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT, timeAgo } from '../utils/dates';
 import { openNotificationTarget } from '../navigation/navigationRef';
@@ -55,6 +57,7 @@ function Bar({ label, value, max, right }) {
 function WeekTab({ week, setWeek, data, onCheer }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { on } = useFeature();
   if (!data) return <SkeletonList count={3} type="notification" />;
   const maxDay = Math.max(1, ...data.days.map((d) => d.count));
   const maxBiz = Math.max(1, ...data.businesses.map((b) => b.count));
@@ -96,6 +99,18 @@ function WeekTab({ week, setWeek, data, onCheer }) {
       </View>
 
       {!data.totals.done && <EmptyHero icon="trophy" title="Nothing finished yet" message="Finished business work shows up here for everyone in the business to see." />}
+
+      {data.top.length > 0 && !!data.top[0].buddy && on('buddy') && on('buddy_wins') && (
+        <View {...glass('card')} style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: spacing.md }]}>
+          <CatPicture cat={data.top[0].buddy} withTrophy scale={4} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>{data.top[0].buddy.name} holds the trophy</Text>
+            <Text style={{ color: colors.gray[600], fontSize: fontSize.sm }}>
+              For {data.top[0].name}, who finished {data.top[0].count} {data.top[0].count === 1 ? 'task' : 'tasks'} {week === 0 ? 'this week' : 'that week'}.
+            </Text>
+          </View>
+        </View>
+      )}
 
       {data.top.length > 0 && (
         <View {...glass('card')} style={styles.card}>
