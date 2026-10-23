@@ -25,6 +25,17 @@ export const PALETTE = {
   y: '#ffd9a8', // yarn and butterfly highlight (warm cream)
 };
 
+/** Coat colours: only fur ('w'), fur in shade ('s'), blush ('p') and sometimes the outline change. */
+const COAT_PALETTES = {
+  snow: {},
+  cream: { w: '#fff0dc', s: '#ecd9c0' },
+  rose: { w: '#ffc9cf', s: '#eaa7b0', p: '#ff7f8a' },
+  ruby: { w: '#ef6a72', s: '#c9444d', p: '#ffd0d6', r: '#ffffff', d: '#ffd0d6' },
+  shadow: { w: '#6b5a5a', s: '#4f4040', k: '#160d0d', p: '#ff9aa4' },
+};
+/** The full palette for a coat name (unknown names are the plain white cat). */
+export const paletteFor = (coat) => ({ ...PALETTE, ...(COAT_PALETTES[coat] || {}) });
+
 // ---- grid helpers -----------------------------------------------------------------------------------
 
 const blank = (w, h) => Array.from({ length: h }, () => Array(w).fill('.'));
@@ -219,7 +230,45 @@ const FACES = {
   ],
 };
 
-const headWith = (face) => frame(16, 10, [HEAD, 0, 0], [FACES[face] || FACES.normal, 0, 5]);
+// Hats are drawn over the head's own rows ('_' erases the ear pixel under them), so every pose gets them.
+const HATS = {
+  party: [[[
+    '.......kk.......',
+    '......krrk......',
+    '.....krwrrk.....',
+  ], 0, 0]],
+  crown: [[[
+    '.....k.yy.k.....',
+    '.....kyyyyk.....',
+    '.....kyryyk.....',
+  ], 0, 0]],
+  beanie: [[[
+    '___.__kwwk__.___',
+    '..kkkkkkkkkkkk..',
+    '..krrrrrrrrrrk..',
+    '.kdrdrdrdrdrdrk.',
+  ], 0, 0]],
+  bow: [[[
+    '................',
+    '.........rr.rr..',
+    '.........rrdrr..',
+    '..........rr....',
+  ], 0, 0]],
+  glasses: [[[
+    '..rrrr....rrrr..',
+    '..r..r.rr.r..r..',
+    '..r..r....r..r..',
+    '..rrrr....rrrr..',
+  ], 0, 5]],
+  shades: [[[
+    '..kkkk....kkkk..',
+    '..kkkkkkkkkkkk..',
+    '..kkkk....kkkk..',
+    '...kk......kk...',
+  ], 0, 5]],
+};
+let currentHat = 'none';
+const headWith = (face) => frame(16, 10, [HEAD, 0, 0], [FACES[face] || FACES.normal, 0, 5], ...(HATS[currentHat] || []));
 
 // ---- sitting, facing you (22 x 17) ------------------------------------------------------------------
 
@@ -430,7 +479,7 @@ const typingFront = (face = 'lookDown', step = 0, tail = 0) => frame(22, 20,
 // ---- the frame set the buddy plays ------------------------------------------------------------------
 
 /** name -> list of frames (each an array of strings). Facing right; the renderer mirrors for left. */
-export const ANIMS = {
+const makeAnims = () => ({
   sit: [sit('normal', 0), sit('normal', 0), sit('normal', 1), sit('blink', 1), sit('normal', 2), sit('normal', 0)],
   lookL: [sit('lookL', 0), sit('lookL', 1)],
   lookR: [sit('lookR', 0), sit('lookR', 1)],
@@ -467,7 +516,20 @@ export const ANIMS = {
     [headWith('shock'), 0, 0],
     [TAIL_SIT[1], 13, 9, 'under'],
   )],
-};
+});
+
+const animCache = {};
+/** The frame set for a hat ('none' for a bare head). Built once per hat. */
+export function animsFor(hat = 'none') {
+  const key = HATS[hat] ? hat : 'none';
+  if (!animCache[key]) {
+    currentHat = key;
+    animCache[key] = makeAnims();
+    currentHat = 'none';
+  }
+  return animCache[key];
+}
+export const ANIMS = animsFor('none');
 
 /** Width and height of a frame in pixels. */
 export const frameSize = (rows) => ({ w: width(rows), h: rows.length });
