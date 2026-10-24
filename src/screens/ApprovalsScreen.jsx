@@ -13,6 +13,7 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import PromptSheet from '../components/todos/PromptSheet';
+import ErpApprovals, { useErpApprovals } from '../components/ErpApprovals';
 import { IconButton, EmptyHero, SectionHeader, Avatar } from '../components/kit';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useShortcuts from '../hooks/useShortcuts';
@@ -25,7 +26,8 @@ import { glass } from '../theme/glass';
  *  - tasks proposed by people below me (accept or decline)
  *  - finished work to review (approve or ask for changes)
  *  - requests to delete a task
- * plus the requests I made myself.
+ * plus the requests I made myself, and (for people who linked their account) approvals waiting in the
+ * Hospital ERP, which open in the ERP (components/ErpApprovals.jsx).
  */
 /** A card that can be swiped: right to approve, left to decline (or ask for changes). */
 function SwipeCard({ onApprove, onDecline, approveLabel, declineLabel, selected, children }) {
@@ -72,6 +74,7 @@ export default function ApprovalsScreen() {
   const [busy, setBusy] = useState(null);
   const [prompt, setPrompt] = useState(null);
   const [selKey, setSelKey] = useState(null);
+  const erp = useErpApprovals();
 
   const load = useCallback(async () => {
     try {
@@ -115,7 +118,7 @@ export default function ApprovalsScreen() {
   const reviews = data?.reviews || [];
   const requests = data?.requests || [];
   const mine = data?.mine || [];
-  const nothing = !proposals.length && !reviews.length && !requests.length;
+  const nothing = !proposals.length && !reviews.length && !requests.length && !erp.items.length;
 
   // Every decision in one list, so swipes, buttons and the keyboard all do the same thing.
   const decisions = [
@@ -174,11 +177,13 @@ export default function ApprovalsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: 60 + insets.bottom }]}
-          refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+          refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); erp.load(true); }} />}
         >
           {nothing && (
             <EmptyHero icon="shield-checkmark" title="Nothing waiting on you" message="Tasks proposed by your team, finished work that needs your sign-off and deletion requests appear here." />
           )}
+
+          <ErpApprovals erp={erp} part="list" />
 
           {proposals.length > 0 && <SectionHeader title="Suggested tasks" count={proposals.length} />}
           {proposals.map((t) => (
@@ -306,6 +311,8 @@ export default function ApprovalsScreen() {
               )}
             </View>
           ))}
+
+          <ErpApprovals erp={erp} part="connect" />
         </ScrollView>
       )}
       <PromptSheet value={prompt} onClose={() => setPrompt(null)} onSubmit={onPrompt} />

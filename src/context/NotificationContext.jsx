@@ -19,6 +19,7 @@ const NotificationContext = createContext(null);
 
 const APPROVAL_TYPES = new Set([
   'approval_request', 'approval_approved', 'approval_rejected', 'task_approved', 'task_rejected', 'todo_proposed', 'todo_review',
+  'erp_approval',
 ]);
 
 const TYPE_ICONS = {
@@ -28,6 +29,7 @@ const TYPE_ICONS = {
   task_completed: 'checkmark-done-circle',
   task_comment: 'chatbubble-ellipses',
   approval_request: 'shield-checkmark',
+  erp_approval: 'business',
   warning: 'warning',
   overdue: 'alarm',
   todo_shared: 'list',
@@ -110,6 +112,12 @@ export function NotificationProvider({ children }) {
     });
     return () => sub?.remove();
   }, [user, refreshCounts, refreshPushState]);
+
+  // Hospital ERP approvals changed (one approved in the ERP, or a new one): the Approvals badge follows.
+  useEffect(() => {
+    if (!user) return undefined;
+    return subscribe('erp:approvals', () => refreshCounts());
+  }, [user, subscribe, refreshCounts]);
 
   // Live notifications from the socket → badge + in-app banner.
   useEffect(() => {

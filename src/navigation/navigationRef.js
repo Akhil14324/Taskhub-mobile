@@ -47,7 +47,7 @@ export function openNotificationTarget(data = {}) {
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
-  if (data.approvalId || data.type === 'approval_request') return navigateWhenReady('Approvals');
+  if (data.approvalId || data.type === 'approval_request' || data.type === 'erp_approval') return navigateWhenReady('Approvals');
   if (todoId) return navigateWhenReady('Main', { screen: 'Todos', params: { highlightId: todoId } });
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');
