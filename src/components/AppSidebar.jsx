@@ -41,6 +41,7 @@ const SECTION_OF = {
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
+  MeetingNotes: 'meetings',
   Access: 'access',
   Everything: 'everything',
   Notifications: 'notifications',
@@ -162,6 +163,7 @@ export default function AppSidebar({ routeName }) {
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
         <Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
+        <Entry p={p} icon="mic-outline" activeIcon="mic" label="Meetings" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
         {user?.permissions?.insights && (
           <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Weekly report" active={section === 'reports'} onPress={() => go('Reports')} />
         )}

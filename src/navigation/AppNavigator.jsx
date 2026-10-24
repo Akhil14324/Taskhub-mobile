@@ -52,6 +52,7 @@ import WorkflowsScreen from '../screens/WorkflowsScreen';
 import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
+import MeetingNotesScreen from '../screens/MeetingNotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
@@ -105,6 +106,7 @@ const FramedAssistant = framed(AssistantScreen, 760);
 const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
+const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
 const FramedAccess = framed(AccessScreen, 1100);
 const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
@@ -127,6 +129,7 @@ const PushAssistant = T(FramedAssistant);
 const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
+const PushMeetingNotes = T(FramedMeetingNotes);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
 const PushPersonMonitor = T(FramedPersonMonitor);
@@ -305,6 +308,7 @@ function MainTabs() {
     ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
+    { group: 'Work', label: 'Meetings', icon: 'mic-outline', route: 'MeetingNotes' },
     { group: 'Work', label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(user?.permissions?.insights ? [{ group: 'Work', label: 'Weekly report', icon: 'document-text-outline', route: 'Reports' }] : []),
@@ -561,6 +565,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Workflows" component={PushWorkflows} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
+            <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />
             <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />

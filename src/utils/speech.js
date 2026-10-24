@@ -43,7 +43,7 @@ const join = (a, b) => (a && b ? `${a.replace(/\s+$/, '')} ${b.replace(/^\s+/, '
  * `onLevel(0..1)` drives a wave meter: the real microphone level on a laptop; on a phone (where a second
  * microphone stream can knock the recogniser off) it follows the speech itself.
  */
-export function startListening({ lang = 'en-IN', onText, onEnd, onError, onLevel }) {
+export function startListening({ lang = 'en-IN', onText, onFinal, onEnd, onError, onLevel }) {
   const Recognition = getRecognition();
   if (!Recognition) return null;
   const ua = navigator.userAgent;
@@ -116,6 +116,16 @@ export function startListening({ lang = 'en-IN', onText, onEnd, onError, onLevel
       if (sessionText) heard = true;
       bump = 0.5 + Math.random() * 0.4;
       onText?.(normalizeSpoken(join(finalText, sessionText)));
+      // Each finished phrase is reported once, raw, and never changes again: a caller that saves text
+      // (a meeting transcript) can write it without duplicates from words still being worked out.
+      const finals = [];
+      for (let i = 0; i < event.results.length; i += 1) {
+        if (event.results[i].isFinal) finals.push(event.results[i][0].transcript.trim());
+      }
+      if (finals.length > (rec.__emitted || 0)) {
+        onFinal?.(finals.slice(rec.__emitted || 0).join(' '));
+        rec.__emitted = finals.length;
+      }
       // Remember finished words so a restart does not lose them.
       rec.__final = fin.trim();
     };

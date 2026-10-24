@@ -86,6 +86,19 @@ export default function MeetPanel({ todo }) {
     }
   };
 
+  // Automatic: the server makes each task as a to-do for the person it is for, then the lists update by socket.
+  const createFromMeeting = async (meeting) => {
+    try {
+      const res = await api.post(`/ai/meetings/${meeting.id}/extract`, { create: true }, { timeout: 90000 });
+      const made = res.data.created || [];
+      const failed = res.data.failed || [];
+      if (!made.length && !failed.length) showToast({ message: 'Nothing to turn into to-dos from that', tone: 'info' });
+      else showToast({ message: `${made.length} to-do${made.length === 1 ? '' : 's'} created${failed.length ? `, ${failed.length} failed` : ''}`, tone: failed.length ? 'error' : 'success' });
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not make the to-dos', tone: 'error' });
+    }
+  };
+
   const latest = meetings[0];
   return (
     <View style={{ marginTop: spacing.md }}>
@@ -131,7 +144,7 @@ export default function MeetPanel({ todo }) {
 
       {!!latest && (
         <>
-          <MeetingCapture visible={captureOpen} onClose={() => setCaptureOpen(false)} meeting={latest} onExtract={() => setExtractOpen(true)} />
+          <MeetingCapture visible={captureOpen} onClose={() => setCaptureOpen(false)} meeting={latest} onExtract={(o) => (o?.auto ? createFromMeeting(latest) : setExtractOpen(true))} />
           <AiTasksSheet
             visible={extractOpen}
             onClose={() => setExtractOpen(false)}

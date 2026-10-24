@@ -30,6 +30,7 @@ export default function MeetingCapture({ visible, onClose, meeting, onExtract })
   const [shareTab, setShareTab] = useState(true);
   const [paste, setPaste] = useState('');
   const [busy, setBusy] = useState(false);
+  const [auto, setAuto] = useState(true);
   const rec = useRef({ active: false, recorder: null, timer: null, ctx: null, streams: [], queue: Promise.resolve() });
   const canRecord = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia;
   const canShare = canRecord && !!navigator.mediaDevices?.getDisplayMedia;
@@ -132,7 +133,7 @@ export default function MeetingCapture({ visible, onClose, meeting, onExtract })
   };
 
   const ready = !recording && pending === 0 && chars > 40;
-  const make = () => { onClose(); onExtract(); };
+  const make = () => { onClose(); onExtract({ auto }); };
 
   return (
     <BottomSheet visible={visible} onClose={() => { if (!recording) onClose(); }} maxHeight={640} avoidKeyboard>
@@ -189,9 +190,14 @@ export default function MeetingCapture({ visible, onClose, meeting, onExtract })
           </View>
         )}
 
+        <AnimatedPressable style={styles.check} onPress={() => setAuto((v) => !v)}>
+          <Ionicons name={auto ? 'checkbox' : 'square-outline'} size={22} color={auto ? colors.brand[600] : colors.gray[400]} />
+          <Text style={styles.checkText}>Create them straight away, each given to the person it is for. Untick to review the list first.</Text>
+        </AnimatedPressable>
+
         <AnimatedPressable style={[styles.go, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={make}>
           <Ionicons name="sparkles" size={17} color="#fff" />
-          <Text style={styles.goText}>Make to-dos</Text>
+          <Text style={styles.goText}>{auto ? 'Make to-dos now' : 'Review to-dos'}</Text>
         </AnimatedPressable>
       </View>
     </BottomSheet>
