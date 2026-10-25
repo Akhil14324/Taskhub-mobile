@@ -11,11 +11,9 @@ import { todayYmd } from '../utils/dates';
 import { on as onEvent, emit } from '../utils/events';
 import { grabAttention } from '../utils/attention';
 import { isFocusActive, anyPopup, setPopup } from '../utils/focus';
+import { remindersOf } from '../utils/reminders';
 
-const EVERY_MS = 2 * 60 * 60 * 1000;
 const SNOOZE_MS = 15 * 60 * 1000;
-const FROM_HOUR = 9;
-const TO_HOUR = 19;
 const SECONDS = 60;
 
 const STRETCHES = [
@@ -30,10 +28,10 @@ const STRETCHES = [
 const key = (userId) => `th.stretch.${userId}`;
 
 /** For the cat buddy: stretches today and how long one has been overdue (ms; 0 outside 09:00-19:00). */
-export function readStretch(userId) {
+export function readStretch(userId, cfg = remindersOf()) {
   const s = load(userId);
   const hour = new Date().getHours();
-  const inHours = hour >= FROM_HOUR && hour < TO_HOUR;
+  const inHours = hour >= cfg.stretchFrom && hour < cfg.stretchTo;
   return { count: s.count, due: inHours && Date.now() >= s.next, overdue: inHours ? Math.max(0, Date.now() - s.next) : 0, snoozes: s.snoozes || 0 };
 }
 
@@ -62,6 +60,9 @@ export default function StretchBreak() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const enabled = featureOn(user?.preferences, 'stretch');
   const userId = user?.id;
+  const cfg = useMemo(() => remindersOf(user?.preferences), [user?.preferences]);
+  const everyMs = cfg.stretchEvery * 60 * 1000;
+  const { stretchFrom, stretchTo } = cfg;
   const [state, setState] = useState(() => load(userId));
   const [asking, setAsking] = useState(false);
   const [left, setLeft] = useState(null); // null = not started
@@ -86,7 +87,7 @@ export default function StretchBreak() {
       });
       const hour = new Date().getHours();
       setState((prev) => {
-        const due = hour >= FROM_HOUR && hour < TO_HOUR && Date.now() >= prev.next;
+        const due = hour >= stretchFrom && hour < stretchTo && Date.now() >= prev.next;
         if (due && !isFocusActive() && !anyPopup()) setAsking(true);
         return prev;
       });
@@ -94,7 +95,7 @@ export default function StretchBreak() {
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
-  }, [enabled, userId]);
+  }, [enabled, userId, stretchFrom, stretchTo]);
 
   useEffect(() => {
     setPopup('stretch', asking);
@@ -133,7 +134,7 @@ export default function StretchBreak() {
     haptic('light');
     setAsking(false);
     setLeft(null);
-    update({ count: state.count + 1, next: Date.now() + EVERY_MS, snoozes: 0 });
+    update({ count: state.count + 1, next: Date.now() + everyMs, snoozes: 0 });
     emit('buddy', { type: 'stretch-done', count: state.count + 1 });
   };
   const snooze = () => {

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { remindersOf, MEOW_RATE, VOLUME } from './reminders';
 
 /**
  * Small sounds and haptics, both optional in Settings. Sounds are synthesised in the browser (no audio
@@ -7,17 +8,22 @@ import { Platform } from 'react-native';
  *
  * Defaults: haptics on, sounds off (an office is a quiet place), celebrations on.
  */
-let settings = { sounds: false, haptics: true, celebrations: true, reduceMotion: false, reminderSound: true };
+let settings = { sounds: false, haptics: true, celebrations: true, reduceMotion: false, reminderSound: true, catMeows: 'normal', catGain: 1 };
 
 export function configureFeedback(prefs = {}) {
+  const reminders = remindersOf(prefs);
   settings = {
     sounds: prefs.sounds === true,
     haptics: prefs.haptics !== false,
     celebrations: prefs.celebrations !== false,
     reduceMotion: !!prefs.reduceMotion,
     reminderSound: prefs.reminderSound !== false,
+    catMeows: reminders.catMeows,
+    catGain: VOLUME[reminders.catVolume],
   };
 }
+/** How often the cat meows on its own (0 = never). Read by the cat buddy when it picks what to do. */
+export const catMeowRate = () => MEOW_RATE[settings.catMeows];
 export const celebrationsOn = () => settings.celebrations;
 export const motionReduced = () => settings.reduceMotion;
 
@@ -84,12 +90,12 @@ export function playReminder() {
  * filter whose pitch rises then falls ("mi-aow"); a purr is a low rumble pulsing about 25 times a second.
  * `attention` meows (water, stretch) follow the reminder-sound setting; the rest follow "sounds".
  */
-export function playMeow({ attention = false, pitch = 1, length = 0.5 } = {}) {
-  if (attention ? !settings.reminderSound : !settings.sounds) return;
+function synthMeow({ attention, pitch, length }) {
   try {
     const c = audio();
     if (!c) return;
     const t0 = c.currentTime + 0.01;
+    const peak = (attention ? 0.22 : 0.12) * settings.catGain;
     const osc = c.createOscillator();
     const filter = c.createBiquadFilter();
     const gain = c.createGain();
@@ -103,8 +109,8 @@ export function playMeow({ attention = false, pitch = 1, length = 0.5 } = {}) {
     filter.frequency.linearRampToValueAtTime(1700, t0 + length * 0.4);
     filter.frequency.linearRampToValueAtTime(800, t0 + length);
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(attention ? 0.22 : 0.12, t0 + 0.05);
-    gain.gain.setValueAtTime(attention ? 0.22 : 0.12, t0 + length * 0.7);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.05);
+    gain.gain.setValueAtTime(peak, t0 + length * 0.7);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
     osc.connect(filter); filter.connect(gain); gain.connect(c.destination);
     osc.start(t0);
@@ -112,8 +118,19 @@ export function playMeow({ attention = false, pitch = 1, length = 0.5 } = {}) {
   } catch (e) { /* no audio available */ }
 }
 
+export function playMeow({ attention = false, pitch = 1, length = 0.5 } = {}) {
+  if (settings.catMeows === 'never') return;
+  if (attention ? !settings.reminderSound : !settings.sounds) return;
+  synthMeow({ attention, pitch, length });
+}
+
+/** The Settings "try it" button: plays a meow at the chosen volume, whatever the other sound switches say. */
+export function previewMeow() {
+  synthMeow({ attention: false, pitch: 1.15, length: 0.5 });
+}
+
 export function playPurr(seconds = 1.2) {
-  if (!settings.sounds) return;
+  if (!settings.sounds || settings.catMeows === 'never') return;
   try {
     const c = audio();
     if (!c) return;
@@ -122,14 +139,15 @@ export function playPurr(seconds = 1.2) {
     const lfo = c.createOscillator();
     const lfoGain = c.createGain();
     const gain = c.createGain();
+    const peak = 0.06 * settings.catGain;
     osc.type = 'triangle';
     osc.frequency.value = 70;
     lfo.type = 'sine';
     lfo.frequency.value = 25;
     lfoGain.gain.value = 0.05;
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.15);
-    gain.gain.setValueAtTime(0.06, t0 + seconds - 0.2);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.15);
+    gain.gain.setValueAtTime(peak, t0 + seconds - 0.2);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + seconds);
     lfo.connect(lfoGain); lfoGain.connect(gain.gain);
     osc.connect(gain); gain.connect(c.destination);

@@ -8,7 +8,8 @@ import { useTodos } from '../../context/TodoContext';
 import { featureOn } from '../../utils/features';
 import { on, emit } from '../../utils/events';
 import { isFocusActive } from '../../utils/focus';
-import { playMeow, playPurr, haptic } from '../../utils/feedback';
+import { playMeow, playPurr, haptic, catMeowRate } from '../../utils/feedback';
+import { remindersOf, CRY_SCALE } from '../../utils/reminders';
 import { todayYmd, toYmd } from '../../utils/dates';
 import { readWater } from '../WaterReminder';
 import { readStretch } from '../StretchBreak';
@@ -172,6 +173,10 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   const profile = buddyOf(prefs);
   const nameRef = useRef(profile.name);
   nameRef.current = profile.name;
+  // The water / stretch timing and the cat's voice are the person's own settings (`preferences.reminders`).
+  const rem = remindersOf(prefs);
+  const remRef = useRef(rem);
+  remRef.current = rem;
   const flags = useRef({});
   flags.current = {
     social: featureOn(prefs, 'buddy_social'),
@@ -384,7 +389,7 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
       [0.06, () => chaseButterfly()],
       [0.05, () => knockMug()],
       [0.04, () => zoomies()],
-      [0.06, () => { act('meow', 2200); playMeow({ pitch: rand(0.9, 1.2) }); say(helloLine(), 3000); }],
+      [0.06 * catMeowRate(), () => { act('meow', 2200); playMeow({ pitch: rand(0.9, 1.2) }); say(helloLine(), 3000); }],
       [0.04, () => act('wave', 2200)],
     ];
     const total = choices.reduce((s, [w]) => s + w, 0);
@@ -659,8 +664,8 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
     const m = me.current;
     let need = null;
     try {
-      const w = readWater(userId);
-      const s = readStretch(userId);
+      const w = readWater(userId, remRef.current);
+      const s = readStretch(userId, remRef.current);
       const lvl = (ms) => (ms < 15 * MIN ? 1 : ms < 40 * MIN ? 2 : 3);
       const water = w.due ? { kind: 'water', level: lvl(w.overdue) } : null;
       const stretch = s.due ? { kind: 'stretch', level: lvl(s.overdue) } : null;
@@ -768,8 +773,10 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
         leapTo(m.x, floorAt(m.x), () => { m.mode = 'still'; m.until = Infinity; setAnim(m.need?.kind === 'water' ? 'cryBottle' : 'cry'); });
         m.leap.peak = 34;
       }
-      const every = m.need.level >= 3 ? 5 * MIN : 3 * MIN;
-      if (m.need.level >= 2 && Date.now() - lastMeow > every) { lastMeow = Date.now(); playMeow({ attention: true, pitch: 0.8, length: 0.9 }); }
+      // The gap between cries follows the person's choice; "never" silences them.
+      const scale = CRY_SCALE[remRef.current.catMeows];
+      const every = (m.need.level >= 3 ? 5 : 3) * MIN * scale;
+      if (scale > 0 && m.need.level >= 2 && Date.now() - lastMeow > every) { lastMeow = Date.now(); playMeow({ attention: true, pitch: 0.8, length: 0.9 }); }
     }, 20e3);
     return () => clearInterval(id);
   }, [checkNeeds, leapTo, floorAt]);
@@ -1078,11 +1085,11 @@ function Buddy({ userId, dark, todos, prefs, update, onHide }) {
   const bondPts = pet.current.bond || 0;
   const bondLvl = bondLevel(bondPts);
   const bondPct = bondLvl >= 6 ? 100 : Math.round(((bondPts - bondStart(bondLvl)) / (bondStart(bondLvl + 1) - bondStart(bondLvl))) * 100);
-  let water = { count: 0, goal: 8 };
+  let water = { count: 0, goal: rem.waterGoal };
   let stretch = { count: 0 };
   let doneToday = 0;
   if (card) {
-    try { water = readWater(userId); stretch = readStretch(userId); } catch { /* storage blocked */ }
+    try { water = readWater(userId, rem); stretch = readStretch(userId, rem); } catch { /* storage blocked */ }
     const today = todayYmd();
     doneToday = todos.filter((t) => t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today).length;
   }

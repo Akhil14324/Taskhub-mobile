@@ -4,10 +4,10 @@
  * choice follows the person to another device. A key that was never touched uses its default.
  */
 export const FEATURES = [
-  { group: 'Health and focus', key: 'water', icon: 'water-outline', label: 'Water reminder', hint: 'A drop in the header and an hourly nudge to drink 8 glasses (2 L) a day', default: true },
-  { group: 'Health and focus', key: 'stretch', icon: 'body-outline', label: 'Stretch break', hint: 'Every two hours, a one-minute guided stretch for your neck, back, wrists or eyes', default: true },
+  { group: 'Health and focus', key: 'water', icon: 'water-outline', label: 'Water reminder', hint: 'A drop in the header and a nudge to drink water. How often and how many glasses are set in My settings', default: true },
+  { group: 'Health and focus', key: 'stretch', icon: 'body-outline', label: 'Stretch break', hint: 'A one-minute guided stretch for your neck, back, wrists or eyes. How often is set in My settings', default: true },
   { group: 'Health and focus', key: 'focus', icon: 'timer-outline', label: 'Focus mode', hint: 'A full-screen landscape timer for one task. Notifications wait until it ends', default: true },
-  { group: 'Cat buddy', key: 'buddy', icon: 'paw-outline', label: 'Cat buddy', hint: 'A pixel cat at the bottom of the screen (click it to rename it and change how it looks). Types along when you add a task, blows a kiss when you finish one, and gets thirsty and stiff with you', default: true },
+  { group: 'Cat buddy', key: 'buddy', icon: 'paw-outline', label: 'Cat buddy', hint: 'A pixel cat at the bottom of the screen (click it to rename it and change how it looks). Types along when you add a task, blows a kiss when you finish one, and gets thirsty and stiff with you. How often it meows is set in My settings', default: true },
   { group: 'Cat buddy', key: 'buddy_social', icon: 'people-outline', label: 'Visiting cats', hint: 'When someone assigns you a task, comments, thanks you or messages you, their cat walks onto your screen to say so. Your cat visits them too', default: true },
   { group: 'Cat buddy', key: 'buddy_bond', icon: 'ribbon-outline', label: 'Bond and treats shop', hint: 'Your bond with the cat grows as you pet it and finish tasks; spend treats on hats and coats. Off: every look is free and the bond is hidden', default: true },
   { group: 'Cat buddy', key: 'buddy_games', icon: 'game-controller-outline', label: 'Catch game', hint: 'A 20-second game from the cat card: tap the falling hearts and fish, skip the mugs. Earns treats', default: true },

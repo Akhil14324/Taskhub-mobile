@@ -13,14 +13,12 @@ import { isFocusActive, anyPopup, setPopup } from '../utils/focus';
 import { todayYmd } from '../utils/dates';
 import { on as onEvent, emit } from '../utils/events';
 import { grabAttention } from '../utils/attention';
+import { remindersOf } from '../utils/reminders';
 
 // 8 glasses of 250 ml = 2 litres: the usual "at least" for a healthy adult (food supplies the rest).
-const GOAL = 8;
+// The goal, the interval and the hours are the person's own choice (Settings, `reminders`).
 const GLASS_ML = 250;
-const EVERY_MS = 60 * 60 * 1000;
 const SNOOZE_MS = 15 * 60 * 1000;
-const FROM_HOUR = 8;
-const TO_HOUR = 21;
 
 /** Shrinks a picked photo to a small square-ish thumbnail so a day of them fits in storage. */
 function thumbnail(file) {
@@ -64,12 +62,13 @@ const key = (userId) => `th.water.${userId}`;
  * For the cat buddy: today's glasses, the goal, and how long a glass has been overdue (ms, 0 when not due
  * or outside 08:00-21:00). Reads what this component stores, so it survives a reload.
  */
-export function readWater(userId) {
+export function readWater(userId, cfg = remindersOf()) {
   const s = load(userId);
   const hour = new Date().getHours();
-  const inHours = hour >= FROM_HOUR && hour < TO_HOUR;
-  const overdue = s.count < GOAL && inHours ? Math.max(0, Date.now() - s.next) : 0;
-  return { count: s.count, goal: GOAL, due: s.count < GOAL && inHours && Date.now() >= s.next, overdue, snoozes: s.snoozes || 0 };
+  const inHours = hour >= cfg.waterFrom && hour < cfg.waterTo;
+  const goal = cfg.waterGoal;
+  const overdue = s.count < goal && inHours ? Math.max(0, Date.now() - s.next) : 0;
+  return { count: s.count, goal, due: s.count < goal && inHours && Date.now() >= s.next, overdue, snoozes: s.snoozes || 0 };
 }
 
 function load(userId) {
@@ -98,6 +97,10 @@ export default function WaterReminder() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const enabled = featureOn(user?.preferences, 'water') && user?.preferences?.waterReminder !== false;
   const userId = user?.id;
+  const cfg = useMemo(() => remindersOf(user?.preferences), [user?.preferences]);
+  const goal = cfg.waterGoal;
+  const everyMs = cfg.waterEvery * 60 * 1000;
+  const { waterFrom, waterTo } = cfg;
   const [state, setState] = useState(() => load(userId));
   const [asking, setAsking] = useState(false);
   // The chip can be dragged anywhere (it sat on top of other controls); the spot is remembered per device.
@@ -128,7 +131,7 @@ export default function WaterReminder() {
       });
       const hour = new Date().getHours();
       setState((prev) => {
-        const due = prev.count < GOAL && hour >= FROM_HOUR && hour < TO_HOUR && Date.now() >= prev.next;
+        const due = prev.count < goal && hour >= waterFrom && hour < waterTo && Date.now() >= prev.next;
         if (due && !isFocusActive() && !anyPopup()) setAsking(true);
         return prev;
       });
@@ -136,7 +139,7 @@ export default function WaterReminder() {
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
-  }, [enabled, userId]);
+  }, [enabled, userId, goal, waterFrom, waterTo]);
 
   useEffect(() => {
     setPopup('water', asking);
@@ -147,10 +150,10 @@ export default function WaterReminder() {
   useEffect(() => onEvent('water:open', () => { if (enabled) setAsking(true); }), [enabled]);
 
   // When the card comes up by itself (it is due), make sure it is noticed.
-  const dueNow = asking && state.count < GOAL && Date.now() >= state.next;
+  const dueNow = asking && state.count < goal && Date.now() >= state.next;
   useEffect(() => {
     if (!dueNow) return;
-    grabAttention({ title: 'Drink water', body: `${state.count} of ${GOAL} glasses so far today. Your cat is thirsty too.`, tag: 'water' });
+    grabAttention({ title: 'Drink water', body: `${state.count} of ${goal} glasses so far today. Your cat is thirsty too.`, tag: 'water' });
     emit('buddy', { type: 'water-due' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dueNow]);
@@ -209,9 +212,9 @@ export default function WaterReminder() {
     if (!photo) return;
     haptic('light');
     setAsking(false);
-    const count = Math.min(GOAL, state.count + 1);
-    update({ count, next: Date.now() + EVERY_MS, photos: [...(state.photos || []), photo].slice(-GOAL), snoozes: 0 });
-    emit('buddy', { type: 'water-drank', count, goal: GOAL });
+    const count = Math.min(goal, state.count + 1);
+    update({ count, next: Date.now() + everyMs, photos: [...(state.photos || []), photo].slice(-goal), snoozes: 0 });
+    emit('buddy', { type: 'water-drank', count, goal });
   };
   const snooze = () => {
     setAsking(false);
@@ -221,12 +224,12 @@ export default function WaterReminder() {
   // Closing the pop-up without a photo asks again in 5 minutes instead of nagging every 30 seconds.
   const closePopup = () => {
     setAsking(false);
-    if (state.next <= Date.now() && state.count < GOAL) {
+    if (state.next <= Date.now() && state.count < goal) {
       update({ next: Date.now() + 5 * 60 * 1000, snoozes: (state.snoozes || 0) + 1 });
       emit('buddy', { type: 'water-skipped', snoozes: (state.snoozes || 0) + 1 });
     }
   };
-  const done = state.count >= GOAL;
+  const done = state.count >= goal;
   // Phones: in the header, between the page title and the search icon. Desktop: bottom right.
   const place = pos ? { left: pos.x, top: pos.y } : desktop ? { right: 24, bottom: 104 } : { right: 152, top: insets.top + 29 };
 
@@ -239,7 +242,7 @@ export default function WaterReminder() {
             <Ionicons name="water" size={34} color={colors.brand[600]} />
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{done ? 'Goal reached' : 'Time to drink water'}</Text>
-              <Text style={styles.sub}>{state.count} of {GOAL} glasses today ({(GOAL * GLASS_ML) / 1000} L is the goal)</Text>
+              <Text style={styles.sub}>{state.count} of {goal} glasses today ({(goal * GLASS_ML) / 1000} L is the goal)</Text>
               {(state.photos || []).length > 0 && (
                 <View style={styles.thumbs}>
                   {state.photos.map((src, i) => <Image key={i} source={{ uri: src }} style={styles.thumb} />)}
@@ -259,10 +262,10 @@ export default function WaterReminder() {
         onPress={() => { if (!draggedRef.current) setAsking((v) => !v); }}
         {...glass('capsule')}
         style={[styles.chip, place, { touchAction: 'none', cursor: 'grab' }]}
-        accessibilityLabel={`Water: ${state.count} of ${GOAL} glasses today`}
+        accessibilityLabel={`Water: ${state.count} of ${goal} glasses today`}
       >
         <Ionicons name={done ? 'checkmark-circle' : 'water-outline'} size={16} color={colors.brand[600]} />
-        <Text style={styles.chipText}>{state.count}/{GOAL}</Text>
+        <Text style={styles.chipText}>{state.count}/{goal}</Text>
       </Pressable>
     </View>
   );
