@@ -6,10 +6,11 @@ import { apple } from '../theme/motion';
 
 // The light-red highlight under the selected control is one shape that travels. Its edge facing the way it is
 // moving runs ahead and the trailing edge follows a beat later, so it stretches across the gap and then
-// settles, the way a drop of liquid crosses a surface.
-const LEAD = apple(0.34, 0.82);
-const TRAIL = apple(0.66, 0.84);
-const MID = apple(0.5, 0.8);
+// settles, the way a drop of liquid crosses a surface. Both edges are critically damped (ratio 1): an underdamped
+// edge overshoots its target and swings back, which read as the highlight going past the tab and returning.
+const LEAD = apple(0.36, 1);
+const TRAIL = apple(0.52, 1);
+const MID = apple(0.44, 1);
 
 const Ctx = createContext(null);
 

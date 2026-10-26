@@ -720,6 +720,9 @@ export default function TodoDetailSheet({ todoId, onClose }) {
   const open = !!todoId && exists;
 
   const [mounted, setMounted] = useState(false);
+  // The heavy body (every field, picker and comment list) mounts one frame after the window starts moving, so the
+  // arrival spring is never held up by the first render of the task.
+  const [bodyReady, setBodyReady] = useState(false);
   const timer = useRef(null);
   const arrive = useSharedValue(0);
   useEffect(() => {
@@ -727,10 +730,11 @@ export default function TodoDetailSheet({ todoId, onClose }) {
     if (open) {
       setMounted(true);
       arrive.value = withSpring(1, SPRING.sheet);
-    } else {
-      arrive.value = withTiming(0, { duration: 160 });
-      timer.current = setTimeout(() => setMounted(false), 200);
+      const frameId = requestAnimationFrame(() => setBodyReady(true));
+      return () => cancelAnimationFrame(frameId);
     }
+    arrive.value = withTiming(0, { duration: 160 });
+    timer.current = setTimeout(() => { setMounted(false); setBodyReady(false); }, 200);
     return () => clearTimeout(timer.current);
   }, [open, arrive]);
 
@@ -742,17 +746,21 @@ export default function TodoDetailSheet({ todoId, onClose }) {
   }, [open, onClose]);
   useBackClose(open, onClose);
 
+  // Only opacity animates on a phone: the window is full-screen and its glass blur is redrawn on every frame of a
+  // transform, which is what made opening a task stutter. The desktop window keeps a small scale and rise.
   const scrim = useAnimatedStyle(() => ({ opacity: Math.min(1, arrive.value) }));
   const frame = useAnimatedStyle(() => ({
     opacity: Math.min(1, arrive.value * 1.5),
-    transform: [{ scale: 0.95 + 0.05 * Math.min(1, arrive.value) }, { translateY: (1 - Math.min(1, arrive.value)) * (desktop ? 10 : 40) }],
+    transform: desktop
+      ? [{ scale: 0.95 + 0.05 * Math.min(1, arrive.value) }, { translateY: (1 - Math.min(1, arrive.value)) * 10 }]
+      : [],
   }));
 
   if (!mounted && !open) return null;
 
   return (
     <RNModal visible transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View {...glass('scrim')} style={[{ flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: desktop ? 24 : 0 }, scrim]}>
+      <Animated.View style={[{ flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: desktop ? 24 : 0 }, scrim]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <Animated.View
           {...glass('sheet')}
@@ -764,7 +772,7 @@ export default function TodoDetailSheet({ todoId, onClose }) {
             frame,
           ]}
         >
-          <TodoDetailBody todoId={todoId} onClose={onClose} wide={desktop} />
+          {bodyReady && <TodoDetailBody todoId={todoId} onClose={onClose} wide={desktop} />}
         </Animated.View>
       </Animated.View>
     </RNModal>

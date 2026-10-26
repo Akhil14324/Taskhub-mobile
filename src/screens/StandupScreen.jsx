@@ -11,7 +11,7 @@ import BackTitle from '../components/BackTitle';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { SkeletonList } from '../components/Skeleton';
 import { Avatar, Chip, EmptyHero } from '../components/kit';
-import { addDays, formatDayHeader } from '../utils/dates';
+import { addDays, formatDayHeader, formatDue } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
 import { glass } from '../theme/glass';
 
@@ -70,8 +70,26 @@ function Section({ def, items, onChange, readOnly }) {
   );
 }
 
-function PostCard({ post, onNudge }) {
+const STATUS_LABEL = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', in_review: 'In review', on_hold: 'On hold' };
+
+/** The person's open work, shown when their stand-up is opened: what they are accountable for right now. */
+function TaskList({ tasks }) {
   const colors = useColors();
+  if (!tasks.length) return <Text style={{ fontSize: fontSize.sm, color: colors.gray[500] }}>No open tasks.</Text>;
+  return tasks.map((t) => (
+    <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Ionicons name={t.status === 'blocked' ? 'hand-left-outline' : 'ellipse-outline'} size={14} color={colors.gray[400]} />
+      <Text style={{ flex: 1, fontSize: fontSize.base, color: colors.gray[800] }} numberOfLines={1}>{t.title}</Text>
+      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.gray[500] }}>{STATUS_LABEL[t.status] || 'To do'}</Text>
+      {!!t.due_date && <Text style={{ fontSize: 11, color: colors.gray[400] }}>{formatDue(t.due_date)}</Text>}
+    </View>
+  ));
+}
+
+function PostCard({ post }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+  const tasks = post.tasks || [];
   return (
     <View style={{
       marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.lg, borderRadius: radius.xl, backgroundColor: colors.white,
@@ -87,6 +105,16 @@ function PostCard({ post, onNudge }) {
       </View>
       {SECTIONS.map((s) => (post[s.key] || []).length > 0 && <Section key={s.key} def={s} items={post[s.key]} readOnly />)}
       {!!post.note && <Text style={{ fontSize: fontSize.sm, color: colors.gray[700], lineHeight: 19 }}>{post.note}</Text>}
+      <AnimatedPressable onPress={() => setOpen((v) => !v)} style={styles.taskToggle} accessibilityLabel={open ? 'Hide tasks' : 'Show tasks'}>
+        <Ionicons name="list-outline" size={15} color={colors.brand[600]} />
+        <Text style={styles.taskToggleText}>Tasks · {tasks.length}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.brand[600]} />
+      </AnimatedPressable>
+      {open && (
+        <View style={{ gap: 8 }}>
+          <TaskList tasks={tasks} />
+        </View>
+      )}
     </View>
   );
 }
@@ -297,4 +325,6 @@ const createStyles = (colors) => StyleSheet.create({
   navIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 26, borderRadius: 13, backgroundColor: colors.brand[50] },
   nudgeText: { fontSize: 11, fontWeight: '800', color: colors.brand[700] },
+  taskToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: colors.brand[50] },
+  taskToggleText: { fontSize: 12, fontWeight: '800', color: colors.brand[700] },
 });
