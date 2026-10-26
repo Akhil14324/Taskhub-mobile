@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import useAi from '../hooks/useAi';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import BrandMark from './BrandMark';
 import { useColors, useTheme } from '../context/ThemeContext';
@@ -150,7 +150,8 @@ export default function AppSidebar({ routeName }) {
         <Animated.Text style={[styles.brandText, fadeStyle]} numberOfLines={1}>TaskHub</Animated.Text>
       </View>
 
-      <Animated.View style={navWidth}>
+      <Animated.View style={[navWidth, { flex: 1, minHeight: 0 }]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
       <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
         {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
@@ -178,9 +179,8 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
         <Entry p={p} icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />
       </SlideGroup>
+      </ScrollView>
       </Animated.View>
-
-      <View style={{ flex: 1 }} />
 
       <View style={styles.group}>
         <Entry p={p} icon={panel.open ? 'chevron-back-outline' : 'chevron-forward-outline'} label={panel.open ? 'Collapse sidebar' : 'Expand sidebar'} hint={hint('app.sidebar')} onPress={panel.toggle} />
