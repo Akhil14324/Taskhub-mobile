@@ -12,6 +12,8 @@ import { useColors, useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import useAi from '../hooks/useAi';
 import AtRiskCard from '../components/engage/AtRiskCard';
+import DailyReportCard from '../components/engage/DailyReportCard';
+import TeamBoard from '../components/engage/TeamBoard';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
@@ -25,8 +27,8 @@ import { showToast } from '../utils/events';
 import { glass } from '../theme/glass';
 
 /**
- * Home. Two clearly separate panels: what is mine (personal to-dos) and what belongs to the business
- * (tasks everyone in it can see). Both are computed from the to-do store, so nothing extra is fetched.
+ * Home. The daily report and the team graph (completed and pending work, attendance) come first, then my own
+ * day and the business work given to me. The to-do store feeds the personal panels; the team data is fetched.
  */
 export default function HomeScreen() {
   const colors = useColors();
@@ -46,9 +48,11 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [openTodoId, setOpenTodoId] = useState(null);
+  const [reportKey, setReportKey] = useState(0);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setReportKey((k) => k + 1);
     await Promise.all([fetchTodos(), fetchInsights(), refreshCounts(), refreshUser?.()]);
     setRefreshing(false);
   }, [fetchTodos, fetchInsights, refreshCounts, refreshUser]);
@@ -72,19 +76,7 @@ export default function HomeScreen() {
   const percent = totalToday ? Math.round((doneToday / totalToday) * 100) : 0;
   const weekMax = Math.max(1, ...(insights?.week || []).map((x) => x.count));
 
-  // ---- business ------------------------------------------------------------
-  const bizStats = useMemo(() => businesses.map((b) => {
-    const items = todos.filter((t) => t.business_id === b.id && !t.parent_id && t.review_state !== 'rejected');
-    const live = items.filter((t) => t.review_state === 'accepted');
-    return {
-      ...b,
-      open: live.filter((t) => !t.is_done).length,
-      overdue: live.filter((t) => !t.is_done && t.due_date && t.due_date < today).length,
-      review: live.filter((t) => t.status === 'in_review' && !t.is_done).length,
-      proposed: items.filter((t) => t.review_state === 'proposed').length,
-      mine: live.filter((t) => !t.is_done && t.assignee_id === meId).length,
-    };
-  }), [businesses, todos, today, meId]);
+  // ---- business work given to me (the team graph covers everyone else) ----
   const assignedToMe = useMemo(
     () => todos
       .filter((t) => t.business_id && !t.is_done && t.assignee_id === meId && t.review_state === 'accepted')
@@ -92,15 +84,11 @@ export default function HomeScreen() {
       .slice(0, 6),
     [todos, meId]
   );
-  const hasBusiness = businesses.length > 0;
-
   const tryEnablePush = async () => {
     const result = await enablePush();
     if (result === 'granted') showToast({ message: 'Notifications are on', tone: 'success' });
     else if (result === 'denied') showToast({ message: 'Notifications are blocked in your browser settings', tone: 'error' });
   };
-
-  const openBusiness = (id) => navigation.navigate('Main', { screen: 'Todos', params: { business_id: id } });
 
   const personalPanel = (
     <View {...glass('card')} style={styles.panel}>
@@ -142,51 +130,29 @@ export default function HomeScreen() {
     </View>
   );
 
-  const businessPanel = hasBusiness ? (
+  // Business work assigned to me. The same tasks also sit in my To-do; the whole team is on the graph above.
+  const assignedPanel = assignedToMe.length > 0 ? (
     <View {...glass('card')} style={styles.panel}>
       <View style={styles.panelHead}>
         <View style={styles.panelTitleRow}>
           <Ionicons name="briefcase-outline" size={16} color={colors.brand[600]} />
-          <Text style={styles.panelTitle}>Business tasks</Text>
+          <Text style={styles.panelTitle}>Business work for you</Text>
         </View>
-        {desktop && <Text style={styles.mutedLine}>Visible to everyone in the business</Text>}
       </View>
-      {!desktop && <Text style={[styles.mutedLine, { marginTop: -spacing.md, marginBottom: spacing.lg }]}>Visible to everyone in the business</Text>}
-
-      {assignedToMe.length > 0 && (
-        <View style={styles.list}>
-          <Text style={styles.smallHead}>Assigned to you</Text>
-          {assignedToMe.map((t) => (
-            <View key={t.id} style={styles.row}>
-              <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
-              <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
-                <View style={styles.rowMeta}>
-                  <Text style={styles.metaTag}>{t.business_name}</Text>
-                  {!!t.due_date && <DueChip date={t.due_date} compact />}
-                </View>
-              </AnimatedPressable>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <Text style={[styles.smallHead, { marginTop: spacing.lg }]}>{user?.is_leader ? 'All businesses' : 'Your businesses'}</Text>
-      {bizStats.map((b) => (
-        <AnimatedPressable key={b.id} style={styles.biz} onPress={() => openBusiness(b.id)}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bizName} numberOfLines={1}>{b.name}</Text>
-            <Text style={styles.bizMeta} numberOfLines={1}>
-              {b.can_manage ? 'You manage this business' : 'Member'}
-              {b.mine > 0 ? ` · ${b.mine} yours` : ''}
-            </Text>
+      <View style={styles.list}>
+        {assignedToMe.map((t) => (
+          <View key={t.id} style={styles.row}>
+            <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
+            <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
+              <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
+              <View style={styles.rowMeta}>
+                <Text style={styles.metaTag}>{t.business_name}</Text>
+                {!!t.due_date && <DueChip date={t.due_date} compact />}
+              </View>
+            </AnimatedPressable>
           </View>
-          <Stat label="Open" value={b.open} />
-          <Stat label="Overdue" value={b.overdue} hot={b.overdue > 0} />
-          <Stat label={b.can_manage && b.proposed ? 'Suggested' : 'Review'} value={b.can_manage && b.proposed ? b.proposed : b.review} hot={(b.can_manage && b.proposed > 0) || b.review > 0} />
-          <Ionicons name="chevron-forward" size={16} color={colors.gray[300]} />
-        </AnimatedPressable>
-      ))}
+        ))}
+      </View>
     </View>
   ) : null;
 
@@ -249,6 +215,9 @@ export default function HomeScreen() {
           </AnimatedPressable>
         )}
 
+        <DailyReportCard refreshKey={reportKey} />
+        <TeamBoard refreshKey={reportKey} />
+
         <AnimatedPressable onPress={() => navigation.navigate('Progress')}>
           <View {...glass('accent')} style={styles.dayCard}>
             <View style={styles.dayIcon}><Ionicons name="sunny" size={22} color="#fff" /></View>
@@ -274,7 +243,7 @@ export default function HomeScreen() {
 
         <View style={[styles.panels, desktop && styles.panelsDesktop]}>
           <View style={desktop ? styles.col : undefined}>{personalPanel}</View>
-          {businessPanel && <View style={desktop ? styles.col : undefined}>{businessPanel}</View>}
+          {assignedPanel && <View style={desktop ? styles.col : undefined}>{assignedPanel}</View>}
         </View>
 
         {!desktop && (
@@ -289,16 +258,6 @@ export default function HomeScreen() {
 
       <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{}} />
       <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />
-    </View>
-  );
-}
-
-function Stat({ label, value, hot }) {
-  const colors = useColors();
-  return (
-    <View style={{ width: 54, alignItems: 'center' }}>
-      <Text style={{ fontSize: fontSize.md, fontWeight: '700', color: hot ? colors.brand[600] : colors.gray[900] }}>{value}</Text>
-      <Text style={{ fontSize: 10, color: colors.gray[500] }}>{label}</Text>
     </View>
   );
 }
