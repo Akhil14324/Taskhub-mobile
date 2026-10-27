@@ -11,12 +11,14 @@ import MyDayScreen from './MyDayScreen';
 import StandupScreen from './StandupScreen';
 import WinsScreen from './WinsScreen';
 import GoalsScreen from './GoalsScreen';
+import SprintsScreen from './SprintsScreen';
 
 const TABS = [
   { key: 'today', label: 'Today', icon: 'sunny', Component: MyDayScreen },
   { key: 'standup', label: 'Stand-up', icon: 'megaphone', Component: StandupScreen },
   { key: 'wins', label: 'Wins', icon: 'trophy', Component: WinsScreen },
   { key: 'goals', label: 'Goals', icon: 'flag', Component: GoalsScreen },
+  { key: 'sprints', label: 'Sprints', icon: 'speedometer', Component: SprintsScreen },
 ];
 
 /**
