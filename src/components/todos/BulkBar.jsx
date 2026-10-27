@@ -7,7 +7,7 @@ import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 
 /** Floating action bar shown while selecting several to-dos. */
-export default function BulkBar({ count, onComplete, onDate, onPriority, onMove, onDuplicate, onDelete }) {
+export default function BulkBar({ count, onComplete, onDate, onPriority, onPlan, onMove, onDuplicate, onDelete }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -16,6 +16,7 @@ export default function BulkBar({ count, onComplete, onDate, onPriority, onMove,
     { icon: 'checkmark-circle-outline', label: 'Complete', onPress: onComplete },
     { icon: 'calendar-outline', label: 'Date', onPress: onDate },
     { icon: 'flag-outline', label: 'Priority', onPress: onPriority },
+    ...(onPlan ? [{ icon: 'speedometer-outline', label: 'Plan', onPress: onPlan }] : []),
     { icon: 'albums-outline', label: 'Move', onPress: onMove },
     { icon: 'copy-outline', label: 'Duplicate', onPress: onDuplicate },
     { icon: 'trash-outline', label: 'Delete', onPress: onDelete, danger: true },

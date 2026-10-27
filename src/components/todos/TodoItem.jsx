@@ -241,6 +241,24 @@ function TodoItem({
                   <Text style={styles.metaText}>{progress.done}/{progress.total} · {Math.round((progress.done / progress.total) * 100)}%</Text>
                 </View>
               )}
+              {!simple && todo.business_id && (todo.item_type === 'bug' || todo.item_type === 'feature') && (
+                <View style={styles.metaItem}>
+                  <Ionicons name={todo.item_type === 'bug' ? 'bug-outline' : 'sparkles-outline'} size={12} color={colors.gray[500]} />
+                  <Text style={styles.metaText}>{todo.item_type === 'bug' ? 'Bug' : 'Feature'}</Text>
+                </View>
+              )}
+              {!simple && todo.business_id && todo.story_points !== null && todo.story_points !== undefined && (
+                <View style={styles.metaItem}>
+                  <Ionicons name="speedometer-outline" size={12} color={colors.gray[500]} />
+                  <Text style={styles.metaText}>{todo.story_points} pt{todo.story_points === 1 ? '' : 's'}</Text>
+                </View>
+              )}
+              {!simple && todo.business_id && !!todo.sprint_name && !todo.is_done && (
+                <View style={styles.metaItem}>
+                  <Ionicons name="flag-outline" size={12} color={colors.gray[500]} />
+                  <Text style={styles.metaText} numberOfLines={1}>{todo.sprint_name}</Text>
+                </View>
+              )}
               {!simple && todo.comment_count > 0 && (
                 <View style={styles.metaItem}>
                   <Ionicons name="chatbubble-outline" size={11} color={colors.gray[500]} />

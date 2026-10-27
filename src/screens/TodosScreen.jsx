@@ -29,7 +29,18 @@ import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import { openTemplates } from '../utils/events';
 import BulkBar from '../components/todos/BulkBar';
-import SprintPanel from '../components/todos/SprintPanel';
+import BizTabs from '../components/biz/BizTabs';
+import SprintStrip from '../components/biz/SprintStrip';
+import SprintTab from '../components/biz/SprintTab';
+import EpicsTab from '../components/biz/EpicsTab';
+import ReleasesTab from '../components/biz/ReleasesTab';
+import TimeTab from '../components/biz/TimeTab';
+import ReportsTab from '../components/biz/ReportsTab';
+import PlanSheet from '../components/biz/PlanSheet';
+import WipSheet from '../components/biz/WipSheet';
+import useWorkspace from '../hooks/useWorkspace';
+import { useSprintList } from '../hooks/useSprints';
+import useTimer from '../hooks/useTimer';
 import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
 import { useNowTick } from '../components/todos/TimeHealth';
@@ -151,10 +162,34 @@ export default function TodosScreen() {
   const business = bizId ? businesses.find((b) => b.id === bizId) || null : null;
 
   // A business can have sections, saved filters and labels like a person's own work. Sections belong to the business.
-  const [bizFilter, setBizFilter] = useState(null); // { kind: 'filter' | 'label', key }
+  const [bizFilter, setBizFilter] = useState(null); // { kind: 'filter' | 'label' | 'sprint' | 'epic' | 'release', key }
   const [listGroup, setListGroup] = useState('date'); // business list layout: 'date' | 'section'
-  useEffect(() => { setBizFilter(null); }, [bizId]);
+  // The business's workspace: Work (the list and board below) plus Sprint, Epics, Releases, Time and Reports.
+  const [bizTab, setBizTab] = useState('work');
+  const [bizBarOpen, setBizBarOpen] = useState(false);
+  const [pendingTime, setPendingTime] = useState(0);
+  const [planIds, setPlanIds] = useState(null);
+  const [wipOpen, setWipOpen] = useState(false);
+  const nextTab = useRef(null);
+  useEffect(() => {
+    setBizFilter(null);
+    setBizTab(nextTab.current || 'work');
+    nextTab.current = null;
+    setBizBarOpen(false);
+    setPendingTime(0);
+  }, [bizId]);
+  const ws = useWorkspace(bizId);
+  const sprintList = useSprintList(bizId);
+  const { timer } = useTimer();
+  const inTab = !!business && bizTab !== 'work'; // a workspace tab other than Work replaces the list
   const bizAll = useMemo(() => (bizId ? todos.filter((t) => t.business_id === bizId) : []), [todos, bizId]);
+  // The sprint line above the list keeps up with the tasks: reload its totals when what is in a sprint changes.
+  const sprintStamp = useMemo(
+    () => `${bizAll.filter((t) => t.sprint_id).length}:${bizAll.filter((t) => t.sprint_id && t.is_done).length}:${bizAll.filter((t) => !t.sprint_id && !t.is_done).length}`,
+    [bizAll]
+  );
+  const reloadSprints = sprintList.reload;
+  useEffect(() => { if (bizId) reloadSprints(); }, [sprintStamp, bizId, reloadSprints]);
   const bizSections = useMemo(() => allSections.filter((s) => s.business_id === bizId && !s.archived), [allSections, bizId]);
   const bizArchived = useMemo(() => allSections.filter((s) => s.business_id === bizId && s.archived), [allSections, bizId]);
   const bizLabels = useMemo(() => labelsFrom(bizAll), [bizAll]);
@@ -167,7 +202,9 @@ export default function TodosScreen() {
       keep = bizFilter.key === 'backlog'
         ? roots.filter((t) => !t.sprint_id && !t.is_done)
         : roots.filter((t) => t.sprint_id === bizFilter.key);
-    } else {
+    } else if (bizFilter.kind === 'epic') keep = roots.filter((t) => t.epic_id === bizFilter.key);
+    else if (bizFilter.kind === 'release') keep = roots.filter((t) => t.release_id === bizFilter.key);
+    else {
       const f = BUILTIN_FILTERS.find((b) => b.id === bizFilter.key) || filters.find((x) => String(x.id) === String(bizFilter.key));
       if (f) keep = applyFilter(roots, f.config, { userId: meId, today });
     }
@@ -715,16 +752,18 @@ export default function TodosScreen() {
       return [1, 2, 3, 4].map((p) => ({ key: `p${p}`, title: PRIORITY[p].label, icon: 'flag-outline', items: byBoardPos(openFirst(items.filter((t) => t.priority === p))) }));
     }
     const recentDone = addDays(today, -14);
+    const wip = ws.data?.wip_limits || {};
     return BOARD_STATUSES.map((s) => ({
       key: s,
       title: STATUS[s].label,
       icon: STATUS[s].icon,
+      limit: wip[s],
       canAdd: s === 'todo' && true,
       items: byBoardPos(items.filter((t) => (s === 'done'
         ? t.is_done && (!t.done_at || toYmd(new Date(t.done_at)) >= recentDone)
         : !t.is_done && t.status === s))),
     }));
-  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, openBizToMe, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today, bizTodos, bizSections]);
+  }, [onBoard, sectioned, currentList, placeSections, personal, mine, open, openPersonal, openBizToMe, view, activeFilter, labelName, business, todos, bizId, boardGroup, meId, today, bizTodos, bizSections, ws.data]);
 
   // ---- calendar ------------------------------------------------------------
   const calendarItems = useMemo(() => {
@@ -975,8 +1014,26 @@ export default function TodosScreen() {
               </ProgressRing>
             </AnimatedPressable>
           )}
-          {desktop && layoutSwitch}
-          {desktop && rouletteButton}
+          {!!timer && (
+            <Chip
+              small
+              icon="timer"
+              label={`${Math.max(0, Math.floor((now - new Date(timer.started_at).getTime()) / 60000))} min`}
+              active
+              onPress={() => {
+                if (!timer.business_id) return;
+                setScope('business');
+                if (bizId === timer.business_id) {
+                  setBizTab('time');
+                } else {
+                  nextTab.current = 'time';
+                  setView(`biz:${timer.business_id}`);
+                }
+              }}
+            />
+          )}
+          {desktop && !inTab && layoutSwitch}
+          {desktop && !inTab && rouletteButton}
           <IconButton icon={searching ? 'close' : 'search'} onPress={() => { setSearching((s) => !s); setSearch(''); }} accessibilityLabel="Search" />
           <IconButton icon="ellipsis-horizontal" onPress={() => setMenuOpen(true)} accessibilityLabel="More options" />
         </>
@@ -1056,7 +1113,7 @@ export default function TodosScreen() {
         )}
         </SlideGroup>
       </ScrollView>
-      {!desktop && (layoutSwitch || rouletteButton) && (
+      {!desktop && !inTab && (layoutSwitch || rouletteButton) && (
         <View style={styles.mobileLayout}>
           {layoutSwitch}
           <View style={{ flex: 1 }} />
@@ -1072,6 +1129,9 @@ export default function TodosScreen() {
       {BOARD_GROUPS.map((g) => (
         <Chip key={g.key} small icon={g.icon} label={g.label} active={boardGroup === g.key} onPress={() => setBoardGroup(g.key)} />
       ))}
+      {business.can_manage && boardGroup === 'status' && (
+        <Chip small icon="speedometer-outline" label="Limits" onPress={() => setWipOpen(true)} />
+      )}
     </View>
   ) : null;
 
@@ -1295,15 +1355,50 @@ export default function TodosScreen() {
     </ScrollView>
   );
 
+  // ---- the business workspace ---------------------------------------------------
+  const showSprintBoard = (sprint) => {
+    setBizTab('work');
+    setLayout('board');
+    setBoardGroup('status');
+    setBizFilter({ kind: 'sprint', key: sprint.id });
+  };
+  const showEpicTasks = (epic) => { setBizTab('work'); setBizFilter({ kind: 'epic', key: epic.id, label: epic.name }); };
+  const showReleaseTasks = (release) => { setBizTab('work'); setBizFilter({ kind: 'release', key: release.id, label: release.name }); };
+  const extraFilter = bizFilter && bizFilter.kind !== 'sprint' ? {
+    label: bizFilter.kind === 'epic' ? `Epic: ${bizFilter.label || 'selected'}`
+      : bizFilter.kind === 'release' ? `Release: ${bizFilter.label || 'selected'}`
+        : bizFilter.kind === 'label' ? `+${bizFilter.key}` : 'Filtered',
+    onClear: () => setBizFilter(null),
+  } : null;
+  let tabBody = null;
+  if (inTab) {
+    tabBody = bizTab === 'sprint' ? <SprintTab business={business} onShowBoard={showSprintBoard} />
+      : bizTab === 'epics' ? <EpicsTab business={business} onShowTasks={showEpicTasks} />
+        : bizTab === 'releases' ? <ReleasesTab business={business} onShowTasks={showReleaseTasks} />
+          : bizTab === 'time' ? <TimeTab business={business} onPendingChange={setPendingTime} />
+            : <ReportsTab business={business} />;
+  }
+
   const main = (
     <View style={[styles.main, !desktop && { paddingTop: insets.top }]}>
       {header}
       {searchBox}
       {mobileNav}
-      {business && !onTimeline && <SprintPanel business={business} filter={bizFilter} onFilter={setBizFilter} />}
-      {bizBar}
-      <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>
-      {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
+      {business && !selectMode && <BizTabs value={bizTab} onChange={setBizTab} badges={{ time: pendingTime }} />}
+      {business && !inTab && (
+        <SprintStrip
+          list={sprintList.data}
+          filter={bizFilter}
+          onFilter={setBizFilter}
+          onOpenSprint={() => setBizTab('sprint')}
+          filtersOpen={bizBarOpen}
+          onToggleFilters={() => setBizBarOpen((v) => !v)}
+          extra={extraFilter}
+        />
+      )}
+      {bizBarOpen && !inTab && bizBar}
+      {inTab ? <Reveal key={bizTab} dir={1}>{tabBody}</Reveal> : <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>}
+      {view !== 'done' && !selectMode && !inTab && effectiveLayout !== 'timeline' && (
         <View pointerEvents="box-none" style={[styles.composer, { bottom: desktop ? 20 : 12 }]}>
           <InlineQuickAdd
             ref={inlineAddRef}
@@ -1321,6 +1416,7 @@ export default function TodosScreen() {
           onComplete={bulk.complete}
           onDate={() => setBulkSheet('date')}
           onPriority={() => setBulkSheet('priority')}
+          onPlan={business?.can_manage ? () => setPlanIds([...selected]) : undefined}
           onMove={() => setBulkSheet('move')}
           onDuplicate={bulk.duplicate}
           onDelete={bulk.remove}
@@ -1375,6 +1471,19 @@ export default function TodosScreen() {
         defaults={typeof addOpen === 'object' ? { ...quickAddDefaults, ...addOpen } : quickAddDefaults}
       />
       <TodoDetailSheet todoId={openTodoId} onClose={() => setOpenTodoId(null)} />
+      {!!business && (
+        <>
+          <PlanSheet
+            visible={!!planIds}
+            onClose={() => setPlanIds(null)}
+            businessId={bizId}
+            ids={planIds || []}
+            current={null}
+            onDone={() => { exitSelect(); sprintList.reload(); }}
+          />
+          <WipSheet visible={wipOpen} onClose={() => setWipOpen(false)} businessId={bizId} limits={ws.data?.wip_limits} onSaved={ws.apply} />
+        </>
+      )}
       <ShareToChatSheet
         visible={shareOpen}
         onClose={() => setShareOpen(false)}

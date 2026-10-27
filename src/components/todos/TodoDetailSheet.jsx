@@ -23,6 +23,8 @@ import TodoComments from './TodoComments';
 import TodoTimeline, { AssignSheet } from './TodoTimeline';
 import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
+import PlanSheet, { planSummary } from '../biz/PlanSheet';
+import TimeBox from '../biz/TimeBox';
 import MeetPanel from './MeetPanel';
 import WorkflowSheet from './WorkflowSheet';
 import ClaudePanel from './ClaudePanel';
@@ -119,6 +121,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const [kudosOpen, setKudosOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [deletePrompt, setDeletePrompt] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
@@ -150,6 +153,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const perms = todo?.permissions || {};
   const editable = perms.can_edit !== false;
   const business = !!todo?.business_id;
+  const bizManage = business && !!businesses.find((b) => b.id === todo.business_id)?.can_manage;
 
   const save = (patch) => {
     if (!todo || !editable) return;
@@ -512,6 +516,15 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
               {perms.can_assign && <Ionicons name="swap-horizontal" size={17} color={colors.gray[400]} />}
             </View>
           </Prop>
+          <Prop icon="speedometer-outline" label="Plan" onPress={bizManage ? () => setPlanOpen(true) : undefined}>
+            <View style={styles.valueRow}>
+              <Text style={[planSummary(todo) ? styles.propValue : styles.placeholder, { flex: 1 }]}>
+                {planSummary(todo) || (bizManage ? 'Not planned yet' : 'Not planned')}
+              </Text>
+              {bizManage && <Ionicons name="chevron-forward" size={16} color={colors.gray[400]} />}
+            </View>
+          </Prop>
+          <Prop icon="timer-outline" label="Time"><TimeBox todo={todo} /></Prop>
           {editable && !todo.parent_id && (
             <Prop icon="eye-outline" label="When it is finished">
               <View style={styles.chipRow}>
@@ -680,6 +693,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         onPick={(id) => moveToBusiness(todo, id).catch((err) => showToast({ message: err.response?.data?.error || 'Could not move it', tone: 'error' }))}
       />
       <AssignSheet visible={assignOpen} todo={todo} onClose={() => setAssignOpen(false)} />
+      {business && <PlanSheet visible={planOpen} onClose={() => setPlanOpen(false)} businessId={todo.business_id} ids={[todo.id]} current={todo} />}
       <PromptSheet
         value={deletePrompt}
         onClose={() => setDeletePrompt(null)}

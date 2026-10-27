@@ -184,7 +184,10 @@ export default function BoardView({
             >
               {!!col.icon && <Ionicons name={col.icon} size={15} color={colors.gray[500]} />}
               <Text style={styles.columnTitle} numberOfLines={1}>{col.title}</Text>
-              <Text style={styles.columnCount}>{col.items.length}</Text>
+              <Text style={[styles.columnCount, !!col.limit && col.items.length > col.limit && styles.columnOver]}>
+                {col.items.length}{col.limit ? ` / ${col.limit}` : ''}
+              </Text>
+              {!!col.limit && col.items.length > col.limit && <Text style={styles.columnOver}>Too many</Text>}
               <View style={{ flex: 1 }} />
               {!!col.section && onEditColumn && (
                 <AnimatedPressable onPress={() => onEditColumn(col.section)} hitSlop={8}>
@@ -273,6 +276,17 @@ function Card({ todo: t, colKey, progress, selected, currentUserId, onOpen, onTo
               <Text style={styles.metaText}>{formatDuration(t.duration_minutes)}</Text>
             </View>
           )}
+          {(t.item_type === 'bug' || t.item_type === 'feature') && (
+            <View style={styles.metaItem}>
+              <Ionicons name={t.item_type === 'bug' ? 'bug-outline' : 'sparkles-outline'} size={11} color={colors.gray[500]} />
+              <Text style={styles.metaText}>{t.item_type === 'bug' ? 'Bug' : 'Feature'}</Text>
+            </View>
+          )}
+          {t.story_points !== null && t.story_points !== undefined && (
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{t.story_points} pt{t.story_points === 1 ? '' : 's'}</Text>
+            </View>
+          )}
           {!!progress && progress.total > 0 && (
             <View style={styles.metaItem}>
               <Ionicons name="git-branch-outline" size={11} color={colors.gray[500]} />
@@ -327,6 +341,7 @@ const createStyles = (colors) => StyleSheet.create({
   columnTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[800], maxWidth: 160 },
   columnNote: { fontSize: fontSize.sm, color: colors.gray[500], paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
   columnCount: { fontSize: fontSize.sm, color: colors.gray[400], fontWeight: '600' },
+  columnOver: { color: colors.brand[700], fontWeight: '800', fontSize: fontSize.sm },
   cards: { minHeight: 40 },
   cardWrap: { marginBottom: spacing.sm, borderRadius: radius.lg },
   card: {
