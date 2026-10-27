@@ -29,6 +29,7 @@ import CalendarView from '../components/todos/CalendarView';
 import TimelineChart from '../components/todos/TimelineChart';
 import { openTemplates } from '../utils/events';
 import BulkBar from '../components/todos/BulkBar';
+import SprintPanel from '../components/todos/SprintPanel';
 import WorkSidebar from '../components/todos/WorkSidebar';
 import PromptSheet from '../components/todos/PromptSheet';
 import { useNowTick } from '../components/todos/TimeHealth';
@@ -162,7 +163,11 @@ export default function TodosScreen() {
     const roots = bizAll.filter((t) => !t.parent_id);
     let keep = roots;
     if (bizFilter.kind === 'label') keep = roots.filter((t) => (t.labels || []).includes(bizFilter.key));
-    else {
+    else if (bizFilter.kind === 'sprint') {
+      keep = bizFilter.key === 'backlog'
+        ? roots.filter((t) => !t.sprint_id && !t.is_done)
+        : roots.filter((t) => t.sprint_id === bizFilter.key);
+    } else {
       const f = BUILTIN_FILTERS.find((b) => b.id === bizFilter.key) || filters.find((x) => String(x.id) === String(bizFilter.key));
       if (f) keep = applyFilter(roots, f.config, { userId: meId, today });
     }
@@ -1295,6 +1300,7 @@ export default function TodosScreen() {
       {header}
       {searchBox}
       {mobileNav}
+      {business && !onTimeline && <SprintPanel business={business} filter={bizFilter} onFilter={setBizFilter} />}
       {bizBar}
       <Reveal key={`${effectiveLayout}:${view}`} dir={layoutDir}>{body}</Reveal>
       {view !== 'done' && !selectMode && effectiveLayout !== 'timeline' && (
