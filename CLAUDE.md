@@ -16,6 +16,11 @@ React (react-native-web via Expo) client for TaskHub (JavaScript + JSX; no TypeS
 
 - `npm install`, then `npm run web` (`expo start --web`) for day-to-day work.
 - `npm run build:web` (`expo export -p web`) builds the PWA into `dist/`. With no linter or tests, this is the quickest correctness check (it fails on syntax/import errors).
+- `package.json` still lists native scripts (`android`, `ios`, `prebuild`, `build:android*`, `build:ios*`, `build:all:prod`, `submit:*`, plain `start`). They are stale and out of scope; only `web` and `build:web` are used. There is no test runner, so there is no single-test command.
+- Bump the `CACHE` name (`taskhub-shell-vN`, currently `v6`) in `public/sw.js` whenever the cached shell strategy changes, so installed PWAs drop the old cache.
+- `.github/workflows/claude-task.yml` is dispatched only by TaskHub's "Run with Claude" button (it creates a `claude/task-*` branch and opens a PR); it is not CI. Don't edit it as if it were a build pipeline.
+- `.claude/skills/` (and the `.agents/skills/` copy) hold motion/UI skills, including `liquid-glass-frontend`; consult them for glass and spring work. `scripts/generate-assets.js` generates icon PNGs; `docs/qa` holds QA notes.
+- `README.md` is outdated (describes an Expo native app, `expo-secure-store`, `npx expo start`); trust this file over it.
 - Deploy: the Vercel project `vgrand-task-hub` auto-builds `main` using `vercel.json` (`npm run build:web` → `dist`, SPA rewrite to `index.html`). Add the hosting origin to the backend's `CLIENT_URL` (comma-separated CORS/Socket.IO allowlist).
 
 ## Environment
