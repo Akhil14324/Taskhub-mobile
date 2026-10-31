@@ -11,6 +11,8 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import BackTitle from '../components/BackTitle';
 import BottomSheet from '../components/BottomSheet';
 import useMeetingRecorder from '../hooks/useMeetingRecorder';
+import ConsentOverlay from '../components/meetings/ConsentOverlay';
+import DraftReviewSheet from '../components/drafts/DraftReviewSheet';
 import useBrowserTranscript from '../hooks/useBrowserTranscript';
 import { showToast, confirmDialog } from '../utils/events';
 import { timeAgo } from '../utils/dates';
@@ -142,7 +144,9 @@ function MeetingNoteView({ id, onBack, onDelete }) {
   const [pieces, setPieces] = useState(0);
   const [result, setResult] = useState(null);
   const [withTab, setWithTab] = useState(true);
-  const [auto, setAuto] = useState(true);
+  const [consent, setConsent] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [paste, setPaste] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState('paid');
@@ -163,9 +167,12 @@ function MeetingNoteView({ id, onBack, onDelete }) {
   }, [id]);
 
   const recorder = useMeetingRecorder({
-    send: async (blob) => {
+    send: async (blob, { pieceNo, durationMs } = {}) => {
       const form = new FormData();
       form.append('file', blob, `part.${(blob.type || '').includes('mp4') ? 'mp4' : 'webm'}`);
+      // Numbered: the server keeps each piece once, so a retry after a dropped connection never doubles the text.
+      if (pieceNo !== undefined) form.append('piece_no', String(pieceNo));
+      if (durationMs) form.append('duration_ms', String(durationMs));
       const res = await api.post(`/meeting-notes/${id}/audio`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 });
       setChars(res.data.chars || 0);
       setPieces(res.data.pieces || 0);
@@ -175,9 +182,27 @@ function MeetingNoteView({ id, onBack, onDelete }) {
 
   const free = useBrowserTranscript({ id, lang, onSaved: setChars });
 
-  const startRecording = async () => {
-    const ok = await recorder.start({ withTab });
+  // Every recording starts with the consent notice on screen for 3 seconds (company context, decision 4).
+  const startRecording = () => setConsent(true);
+  const beginAfterConsent = async () => {
+    setConsent(false);
+    const ok = await recorder.start({ withTab, firstPiece: pieces });
     if (!ok) showToast({ message: 'The microphone could not be used. Allow it in the browser and try again.', tone: 'error' });
+  };
+
+  // Every task said in the meeting becomes a draft; nothing is anyone's work until it is reviewed and assigned.
+  const findTasks = async () => {
+    setDrafting(true);
+    try {
+      const res = await api.post(`/meeting-notes/${id}/drafts`, {}, { timeout: 300000 });
+      const n = res.data.drafts?.length || 0;
+      if (n) setReviewing(true);
+      else showToast({ message: 'No tasks were found in what was said', icon: 'information-circle' });
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not read the meeting', tone: 'error' });
+    } finally {
+      setDrafting(false);
+    }
   };
 
   const saveTitle = async () => {
@@ -209,13 +234,8 @@ function MeetingNoteView({ id, onBack, onDelete }) {
   const make = async () => {
     setBusy(true);
     try {
-      const res = await api.post(`/meeting-notes/${id}/extract`, { create: auto }, { timeout: 240000 });
+      const res = await api.post(`/meeting-notes/${id}/extract`, { create: false }, { timeout: 240000 });
       setResult(res.data);
-      if (auto) {
-        const made = res.data.created?.length || 0;
-        const failed = res.data.failed?.length || 0;
-        showToast({ message: `${made} to-do${made === 1 ? '' : 's'} created${failed ? `, ${failed} failed` : ''}`, tone: failed ? 'error' : 'success' });
-      }
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not make the to-dos', tone: 'error' });
     } finally {
@@ -224,7 +244,7 @@ function MeetingNoteView({ id, onBack, onDelete }) {
   };
 
   const busyHere = recorder.recording || recorder.queued > 0 || free.listening;
-  const ready = !busyHere && chars > 40 && !busy;
+  const ready = !busyHere && chars > 40 && !busy && !drafting;
 
   return (
     <ScrollView contentContainerStyle={[styles.page, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
@@ -272,7 +292,7 @@ function MeetingNoteView({ id, onBack, onDelete }) {
                   ? `${Number(chars).toLocaleString()} characters so far, from ${pieces} piece${pieces === 1 ? '' : 's'}.`
                   : 'Not recorded yet.'}
           </Text>
-          <Text style={styles.hint}>Paid: OpenAI Whisper turns the recording into text, in 5 minute pieces. Works in any language it knows, Telugu included, and on any device.</Text>
+          <Text style={styles.hint}>Paid: OpenAI turns the recording into text a minute at a time. English, Telugu and both mixed are understood. Before it starts, the screen shows "Hi everyone, I am starting the recording." for 3 seconds.</Text>
 
           {!recorder.recording && recorder.canShare && (
             <AnimatedPressable style={styles.check} onPress={() => setWithTab((v) => !v)}>
@@ -287,7 +307,7 @@ function MeetingNoteView({ id, onBack, onDelete }) {
               <Text style={styles.primaryText}>{recorder.recording ? `Stop at ${clock(recorder.elapsed)}` : chars ? 'Keep recording' : 'Start recording'}</Text>
             </AnimatedPressable>
           )}
-          {recorder.recording && <Text style={styles.hint}>Keep this page open until you stop. A long meeting is fine: the text arrives every 5 minutes.</Text>}
+          {recorder.recording && <Text style={styles.hint}>Keep this page open until you stop. The screen stays awake; if a phone locks anyway, recording starts again when you come back{recorder.resumed ? ` (restarted ${recorder.resumed} time${recorder.resumed === 1 ? '' : 's'})` : ''}.</Text>}
         </View>
       ) : (
         <View {...glass('card')} style={styles.panel}>
@@ -339,14 +359,14 @@ function MeetingNoteView({ id, onBack, onDelete }) {
         <Text style={styles.secondaryText}>{busy ? 'Saving...' : 'Add the transcript'}</Text>
       </AnimatedPressable>
 
-      <Text style={styles.label}>Notes and to-dos</Text>
-      <AnimatedPressable style={styles.check} onPress={() => setAuto((v) => !v)}>
-        <Ionicons name={auto ? 'checkbox' : 'square-outline'} size={22} color={auto ? colors.brand[600] : colors.gray[400]} />
-        <Text style={styles.checkText}>Create them straight away, each given to the person it is for. Untick to only read the list.</Text>
+      <Text style={styles.label}>Tasks from the meeting</Text>
+      <Text style={styles.hint}>Every task that was said becomes a draft with the person it is for. You check them on one screen and assign them all with one key; nothing reaches anyone before that.</Text>
+      <AnimatedPressable style={[styles.primary, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={findTasks}>
+        {drafting ? <ActivityIndicator color="#fff" /> : <Ionicons name="list" size={18} color="#fff" />}
+        <Text style={styles.primaryText}>{drafting ? 'Reading the whole meeting...' : 'Find the tasks'}</Text>
       </AnimatedPressable>
-      <AnimatedPressable style={[styles.primary, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={make}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Ionicons name="sparkles" size={18} color="#fff" />}
-        <Text style={styles.primaryText}>{busy ? 'Reading the whole meeting...' : 'Make notes and to-dos'}</Text>
+      <AnimatedPressable style={[styles.secondary, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={make}>
+        <Text style={styles.secondaryText}>{busy ? 'Reading...' : 'Summary and decisions'}</Text>
       </AnimatedPressable>
       {busyHere && <Text style={styles.hint}>Finish the recording first.</Text>}
 
@@ -359,7 +379,7 @@ function MeetingNoteView({ id, onBack, onDelete }) {
               {result.decisions.map((d, i) => <Text key={i} style={styles.bullet}>• {d}</Text>)}
             </>
           )}
-          <Text style={styles.label}>{result.created ? 'To-dos created' : 'Action items'}</Text>
+          <Text style={styles.label}>{result.created ? 'To-dos created' : 'Action items mentioned'}</Text>
           {(result.created || result.tasks || []).length === 0 && <Text style={styles.hint}>No action items were found.</Text>}
           {(result.created || result.tasks || []).map((t, i) => (
             <View key={i} style={styles.taskRow}>
@@ -372,6 +392,8 @@ function MeetingNoteView({ id, onBack, onDelete }) {
           {result.parts > 1 && <Text style={styles.hint}>Read in {result.parts} parts.</Text>}
         </View>
       )}
+      <ConsentOverlay visible={consent} onDone={beginAfterConsent} onCancel={() => setConsent(false)} />
+      <DraftReviewSheet open={reviewing} meetingId={id} onClose={() => setReviewing(false)} />
     </ScrollView>
   );
 }

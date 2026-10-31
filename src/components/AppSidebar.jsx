@@ -42,6 +42,7 @@ const SECTION_OF = {
   Leaderboard: 'leaderboard',
   Automations: 'automations',
   Boards: 'boards',
+  MyWork: 'mywork',
   Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',
@@ -126,6 +127,8 @@ export default function AppSidebar({ routeName }) {
 
   useShortcuts({
     'nav.home': () => go('Dashboard'),
+    'nav.mywork': () => go('MyWork'),
+    'nav.boards': () => go('Boards'),
     'nav.progress': () => go('Progress'),
     'nav.todos': () => go('Todos'),
     'nav.chat': () => go('ChatList'),
@@ -157,10 +160,11 @@ export default function AppSidebar({ routeName }) {
       <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
         {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
+        <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
         <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
-        <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} />
+        <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
         <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
         <Entry p={p} icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (

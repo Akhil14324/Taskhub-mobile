@@ -43,6 +43,8 @@ export function openNotificationTarget(data = {}) {
     setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, alarm: true }), 1200);
   }
   if (data.brief) return navigateWhenReady('Reports', { range: 1 });
+  // A batch of tasks from a meeting ("Akhil gave you 34 tasks") opens My work, not one task.
+  if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
   if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('Progress', { tab: 'today' });
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });
