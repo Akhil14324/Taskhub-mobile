@@ -310,7 +310,7 @@ const createStyles = (colors) => StyleSheet.create({
   small: { color: 'rgba(255,255,255,0.7)', fontSize: fontSize.base, textAlign: 'center', maxWidth: 560 },
   doneTitle: { color: '#fff', fontSize: 40, fontWeight: '800' },
   track: { width: '70%', maxWidth: 640, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
-  fill: { height: 6, backgroundColor: '#ef4444' },
+  fill: { height: 6, backgroundColor: '#0073ea' },
   endRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', gap: spacing.md, marginTop: spacing.lg },
   endColumn: { flexDirection: 'column', alignItems: 'stretch', alignSelf: 'center', width: '100%', maxWidth: 320 },
   confirmText: { width: '100%' },
@@ -323,7 +323,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   pillWide: { minWidth: 0, width: '100%' },
   solidLight: { backgroundColor: '#fff' },
-  solidLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#991b1b', fontWeight: '800', fontSize: fontSize.base },
+  solidLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#0060b9', fontWeight: '800', fontSize: fontSize.base },
   ghostLight: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)' },
   ghostLightText: { textAlign: 'center', whiteSpace: 'nowrap', color: '#fff', fontWeight: '700', fontSize: fontSize.base },
 });

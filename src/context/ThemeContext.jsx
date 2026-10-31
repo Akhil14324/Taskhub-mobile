@@ -31,10 +31,10 @@ export function ThemeProvider({ children }) {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
-    document.documentElement.style.backgroundColor = colors.gray[50];
-    document.body.style.backgroundColor = 'transparent'; // the glass atmosphere (body::before) sits between page and app
+    document.documentElement.style.backgroundColor = colors.page;
+    document.body.style.backgroundColor = colors.page;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#dc2626');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? colors.page : '#ffffff');
   }, [theme, colors]);
 
   const value = useMemo(() => ({ theme, setTheme, toggleTheme, colors }), [theme, toggleTheme, colors]);

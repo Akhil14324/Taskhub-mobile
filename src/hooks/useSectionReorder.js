@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
-const MARK_BEFORE = 'inset 0 3px 0 #dc2626';
-const MARK_AFTER = 'inset 0 -3px 0 #dc2626';
+const MARK_BEFORE = 'inset 0 3px 0 #0073ea';
+const MARK_AFTER = 'inset 0 -3px 0 #0073ea';
 
 /**
  * Drag a section by its title to a new place (desktop browsers; on touch use "Move earlier / later").

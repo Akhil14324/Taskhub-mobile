@@ -4,8 +4,8 @@
 
 export const TIER_ICONS = { 1: 'diamond', 2: 'shield', 3: 'star' };
 
-// Darkest red = most senior.
-export const TIER_SHADES = { 1: '#991b1b', 2: '#dc2626', 3: '#f87171' };
+// Darkest purple = most senior.
+export const TIER_SHADES = { 1: '#784bd1', 2: '#a25ddc', 3: '#579bfc' };
 
 export const DESIGNATION_ICONS = {
   head: 'ribbon',

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
-const DROP_MARK = 'inset 0 2px 0 #dc2626';
-const DROP_MARK_AFTER = 'inset 0 -2px 0 #dc2626';
+const DROP_MARK = 'inset 0 2px 0 #0073ea';
+const DROP_MARK_AFTER = 'inset 0 -2px 0 #0073ea';
 
 /**
  * Drag-and-drop reordering for web (desktop browsers; touch screens keep the swipe gestures).

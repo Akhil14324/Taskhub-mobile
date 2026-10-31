@@ -228,8 +228,8 @@ export function deadlineState(todo) {
   if (!todo || todo.is_done || !todo.deadline_date) return null;
   const diff = daysFromToday(todo.deadline_date);
   if (diff < 0) return { level: 'late', label: `Deadline passed ${-diff}d ago`, color: darkestRed(), diff };
-  if (diff === 0) return { level: 'today', label: 'Deadline today', color: '#dc2626', diff };
-  if (diff === 1) return { level: 'soon', label: 'Deadline tomorrow', color: '#dc2626', diff };
-  if (diff <= DEADLINE_SOON_DAYS) return { level: 'soon', label: `Deadline in ${diff} days`, color: '#dc2626', diff };
+  if (diff === 0) return { level: 'today', label: 'Deadline today', color: '#d83a52', diff };
+  if (diff === 1) return { level: 'soon', label: 'Deadline tomorrow', color: '#d83a52', diff };
+  if (diff <= DEADLINE_SOON_DAYS) return { level: 'soon', label: `Deadline in ${diff} days`, color: '#d83a52', diff };
   return null;
 }

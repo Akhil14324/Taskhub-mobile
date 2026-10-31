@@ -26,8 +26,8 @@ export default function BulkBar({ count, onComplete, onDate, onPriority, onPlan,
       <View style={styles.actions}>
         {actions.map((a) => (
           <AnimatedPressable key={a.label} disabled={disabled} onPress={a.onPress} haptic="light" style={[styles.action, disabled && { opacity: 0.4 }]}>
-            <Ionicons name={a.icon} size={20} color={a.danger ? '#fca5a5' : '#fff'} />
-            <Text style={[styles.actionText, a.danger && { color: '#fca5a5' }]}>{a.label}</Text>
+            <Ionicons name={a.icon} size={20} color={a.danger ? '#ff8a9b' : '#fff'} />
+            <Text style={[styles.actionText, a.danger && { color: '#ff8a9b' }]}>{a.label}</Text>
           </AnimatedPressable>
         ))}
       </View>

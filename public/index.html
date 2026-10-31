@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>%WEB_TITLE%</title>
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#dc2626" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="TaskHub" />
@@ -42,212 +42,106 @@
         font-feature-settings: 'cv11', 'ss03'; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
       }
       #root { display: flex; height: 100%; flex: 1; }
-      /* Keyboard users (desktop shortcuts) get a visible focus ring; mouse users do not. */
+      /* Keyboard users get a visible focus ring; mouse users do not. */
       [role="button"]:focus-visible, a:focus-visible, button:focus-visible, [tabindex="0"]:not(input):not(textarea):focus-visible {
-        outline: 2px solid #dc2626; outline-offset: 2px;
+        outline: 2px solid #0073ea; outline-offset: 2px;
       }
       /* Hover words for icon-only buttons (desktop); appears at once, unlike the slow browser tooltip. */
       @media (hover: hover) {
         [data-tip]:hover::after {
           content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 50%; transform: translateX(50%);
-          background: #262626; color: #fafafa; font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
-          padding: 6px 8px; border-radius: 6px; pointer-events: none; z-index: 9999;
+          background: #323338; color: #ffffff; font-size: 12px; font-weight: 500; line-height: 1; white-space: nowrap;
+          padding: 6px 8px; border-radius: 4px; pointer-events: none; z-index: 9999;
         }
       }
       /* ------------------------------------------------------------------------------------------
-         Liquid Glass. One material system, driven by data-glass="<variant>" on any view (see
-         src/theme/glass.js) and by html[data-theme] (set by ThemeProvider). Ingredients, always
-         together: heavy blur, saturation boost, a specular top edge, and a coloured atmosphere behind.
-         Never nest backdrop-filter: inside a blurred panel use data-glass="inset" (tint + sheen only).
-         The UI stays one colour, so the atmosphere is red only.
+         Surfaces (MONDAY_FEATURE_SPEC.md F-DSN-01). Views mark what they are with data-glass="<variant>"
+         (src/theme/glass.js; the attribute name is historical): flat, opaque panels with a hairline border
+         and a soft shadow, in light and dark (html[data-theme], set by ThemeProvider). No blur anywhere.
+           bar      sidebars, headers            card     cards and tiles
+           sheet    dialogs, sheets, palette     capsule  floating input bar, tab bar, toasts
+           button   secondary controls, chips    accent   the primary action (blue, white text)
+           menu     dropdowns                    inset    a tile inside a panel
+           tint     the selected tab / entry     scrim    the dim layer behind a dialog
          ------------------------------------------------------------------------------------------ */
       :root {
         color-scheme: light;
-        --g-panel: 255 246 246;
-        --g-solid: 255 255 255;
-        --g-ink: 24 8 8;
-        --g-edge: 255 255 255;
-        --g-edge-a: 0.85;
-        --g-rim: 255 255 255;
-        --g-rim-a: 0.6;
-        --g-mix-bar: 0.30; --g-mix-card: 0.36; --g-mix-sheet: 0.56; --g-mix-inset: 0.5; --g-mix-menu: 0.88;
-        --g-sat: 230%;
-        --g-gloss: 0.5;
-        --aura-a: 0.5; --aura-b: 0.4; --aura-c: 0.34; --aura-d: 0.3;
+        --s-page: 246 247 251;
+        --s-surface: 255 255 255;
+        --s-alt: 245 246 248;
+        --s-border: 208 212 228;
+        --s-primary: 0 115 234;
+        --s-primary-strong: 0 96 185;
+        --s-primary-soft: 204 229 255;
+        --s-shadow: 0 0 0;
+        --s-shadow-a: 0.08;
       }
       html[data-theme='dark'] {
         color-scheme: dark;
-        --g-panel: 44 30 32;
-        --g-solid: 24 20 20;
-        --g-ink: 0 0 0;
-        --g-edge-a: 0.3;
-        --g-rim-a: 0.14;
-        --g-mix-bar: 0.34; --g-mix-card: 0.4; --g-mix-sheet: 0.6; --g-mix-inset: 0.5; --g-mix-menu: 0.92;
-        --g-sat: 200%;
-        --g-gloss: 0.16;
-        --aura-a: 0.55; --aura-b: 0.42; --aura-c: 0.34; --aura-d: 0.3;
+        --s-page: 24 27 52;
+        --s-surface: 48 50 78;
+        --s-alt: 41 47 76;
+        --s-border: 75 78 105;
+        --s-primary: 0 115 234;
+        --s-primary-strong: 61 140 240;
+        --s-primary-soft: 19 55 116;
+        --s-shadow: 0 0 0;
+        --s-shadow-a: 0.32;
       }
-      /* The atmosphere glass refracts: red light with real colour variation, so a pane over it looks like glass
-         and not like a white card. Static: no full-viewport motion. */
-      body::before {
-        content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-        background:
-          radial-gradient(46vmax 40vmax at 6% -4%, rgb(239 68 68 / var(--aura-a)), transparent 64%),
-          radial-gradient(40vmax 36vmax at 102% 10%, rgb(251 113 133 / var(--aura-b)), transparent 62%),
-          radial-gradient(34vmax 30vmax at 34% 62%, rgb(252 165 165 / var(--aura-d)), transparent 66%),
-          radial-gradient(38vmax 34vmax at 86% 88%, rgb(248 113 113 / var(--aura-c)), transparent 64%),
-          radial-gradient(56vmax 40vmax at 40% 112%, rgb(220 38 38 / var(--aura-c)), transparent 66%);
-      }
-      html[data-theme='dark'] body::before {
-        background:
-          radial-gradient(46vmax 40vmax at 6% -4%, rgb(220 38 38 / var(--aura-a)), transparent 64%),
-          radial-gradient(40vmax 36vmax at 102% 10%, rgb(153 27 27 / var(--aura-b)), transparent 62%),
-          radial-gradient(34vmax 30vmax at 34% 62%, rgb(127 29 29 / var(--aura-d)), transparent 66%),
-          radial-gradient(38vmax 34vmax at 86% 88%, rgb(185 28 28 / var(--aura-c)), transparent 64%),
-          radial-gradient(56vmax 40vmax at 40% 112%, rgb(153 27 27 / var(--aura-c)), transparent 66%);
-      }
+      html, body { background-color: rgb(var(--s-page)); }
 
-      /* Aqua: the gel highlight. A bright band across the upper half that fades out, over a faint
-         cooler-to-warmer body tint, plus an inner glow and a lit lower lip. All of it is on the element itself
-         (no pseudo-elements, no nested blur), so any view can wear it. */
-      [data-glass] {
-        -webkit-backdrop-filter: blur(var(--g-blur, 28px)) saturate(var(--g-sat)) brightness(1.04);
-        backdrop-filter: blur(var(--g-blur, 28px)) saturate(var(--g-sat)) brightness(1.04);
-        border-color: transparent !important;
-        --g-sheen: linear-gradient(180deg, rgb(255 255 255 / calc(var(--g-gloss) * var(--g-sheen-k, 1))) 0%, rgb(255 255 255 / calc(var(--g-gloss) * 0.22 * var(--g-sheen-k, 1))) 42%, rgb(255 255 255 / 0) 56%);
-        --g-lip: inset 0 -1px 0 rgb(255 255 255 / calc(var(--g-rim-a) * 0.55));
-        --g-glow: inset 0 0 22px rgb(255 255 255 / calc(var(--g-gloss) * 0.34));
-      }
-      /* bar: navigation chrome (sidebar, headers): a tall pane, so the sheen is a soft wash, not a band */
+      [data-glass] { -webkit-backdrop-filter: none; backdrop-filter: none; background-image: none !important; }
       [data-glass='bar'] {
-        --g-blur: 36px; --g-sheen-k: 0.5;
-        background-color: rgb(var(--g-panel) / var(--g-mix-bar)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)), var(--g-lip), var(--g-glow),
-          0 10px 36px -14px rgb(var(--g-ink) / 0.22) !important;
+        background-color: rgb(var(--s-surface)) !important;
+        box-shadow: 0 0 0 1px rgb(var(--s-border) / 0.6) !important;
       }
-      /* card: task cards and content tiles */
       [data-glass='card'] {
-        --g-blur: 24px; --g-sheen-k: 0.8;
-        background-color: rgb(var(--g-panel) / var(--g-mix-card)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)), var(--g-lip), var(--g-glow),
-          0 8px 22px -10px rgb(var(--g-ink) / 0.2) !important;
+        background-color: rgb(var(--s-surface)) !important;
+        box-shadow: 0 0 0 1px rgb(var(--s-border) / 0.7), 0 1px 2px rgb(var(--s-shadow) / var(--s-shadow-a)) !important;
       }
-      /* sheet: modals, bottom sheets, dialogs, palette: thickest material, deepest shadow */
       [data-glass='sheet'] {
-        --g-blur: 46px; --g-sheen-k: 0.9;
-        background-color: rgb(var(--g-panel) / var(--g-mix-sheet)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) + 0.1)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)), var(--g-lip), var(--g-glow),
-          0 34px 90px -22px rgb(var(--g-ink) / 0.46), 0 10px 28px -8px rgb(var(--g-ink) / 0.22) !important;
+        background-color: rgb(var(--s-surface)) !important;
+        box-shadow: 0 0 0 1px rgb(var(--s-border) / 0.5), 0 24px 64px -12px rgb(var(--s-shadow) / calc(var(--s-shadow-a) * 3)),
+          0 6px 16px -6px rgb(var(--s-shadow) / calc(var(--s-shadow-a) * 1.5)) !important;
       }
-      /* capsule: the floating input bar and the tab bar island: a full-height gel highlight */
       [data-glass='capsule'] {
-        --g-blur: 42px; --g-sheen-k: 1.15;
-        background-color: rgb(var(--g-panel) / var(--g-mix-bar)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) + 0.1)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)),
-          inset 0 -12px 22px rgb(var(--g-ink) / 0.05), var(--g-lip), var(--g-glow), 0 20px 48px -14px rgb(var(--g-ink) / 0.42), 0 3px 10px rgb(var(--g-ink) / 0.1) !important;
+        background-color: rgb(var(--s-surface)) !important;
+        box-shadow: 0 0 0 1px rgb(var(--s-border) / 0.7), 0 8px 24px -8px rgb(var(--s-shadow) / calc(var(--s-shadow-a) * 2.5)) !important;
       }
-      /* button: light frost for secondary controls and chips */
       [data-glass='button'] {
-        --g-blur: 22px; --g-sheen-k: 1;
-        background-color: rgb(var(--g-panel) / 0.42) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)), var(--g-lip),
-          0 5px 16px -6px rgb(var(--g-ink) / 0.26) !important;
+        background-color: rgb(var(--s-alt)) !important;
+        box-shadow: inset 0 0 0 1px rgb(var(--s-border) / 0.8) !important;
       }
-      /* accent: the one coloured glass: translucent brand red, a gel highlight, a lit lip and a glow */
       [data-glass='accent'] {
-        -webkit-backdrop-filter: none; backdrop-filter: none;
-        background:
-          linear-gradient(180deg, rgb(255 255 255 / 0.42) 0%, rgb(255 255 255 / 0.1) 46%, rgb(255 255 255 / 0) 54%),
-          linear-gradient(180deg, rgb(248 113 113 / 0.96), rgb(220 38 38 / 0.9) 60%, rgb(185 28 28 / 0.92)) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 0 0 1px rgb(255 255 255 / 0.2), inset 0 -8px 16px rgb(127 29 29 / 0.28), inset 0 -1px 0 rgb(255 255 255 / 0.22),
-          0 10px 26px -8px rgb(220 38 38 / 0.6), 0 2px 6px rgb(127 29 29 / 0.3) !important;
+        background-color: rgb(var(--s-primary)) !important;
+        box-shadow: 0 1px 2px rgb(var(--s-shadow) / var(--s-shadow-a)) !important;
       }
       [data-glass='accent-deep'] {
-        -webkit-backdrop-filter: none; backdrop-filter: none;
-        background:
-          linear-gradient(180deg, rgb(255 255 255 / 0.3) 0%, rgb(255 255 255 / 0.06) 46%, rgb(255 255 255 / 0) 54%),
-          linear-gradient(180deg, rgb(220 38 38 / 0.96), rgb(185 28 28 / 0.94) 55%, rgb(127 29 29 / 0.96)) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14), inset 0 -8px 16px rgb(69 10 10 / 0.35),
-          0 10px 26px -8px rgb(153 27 27 / 0.65), 0 2px 6px rgb(69 10 10 / 0.35) !important;
+        background-color: rgb(var(--s-primary-strong)) !important;
+        box-shadow: 0 1px 2px rgb(var(--s-shadow) / var(--s-shadow-a)) !important;
       }
-      /* Phones: a lighter blur and no brightness pass on every pane. Backdrop blur is the most expensive thing the
-         GPU does here, and every pane re-blurs while a screen slides or a sheet flies. */
-      @media (pointer: coarse), (max-width: 1023px) {
-        [data-glass] {
-          -webkit-backdrop-filter: blur(min(var(--g-blur, 28px), 16px)) saturate(170%);
-          backdrop-filter: blur(min(var(--g-blur, 28px), 16px)) saturate(170%);
-        }
-      }
-      /* tint: the light-red highlight that slides under the selected tab / segment / entry */
       [data-glass='tint'] {
-        -webkit-backdrop-filter: none; backdrop-filter: none;
-        background:
-          linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0.1) 50%, rgb(255 255 255 / 0) 60%),
-          rgb(239 68 68 / 0.15) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 0 0 1px rgb(220 38 38 / 0.2), inset 0 -1px 0 rgb(255 255 255 / 0.3),
-          0 6px 16px -8px rgb(220 38 38 / 0.5) !important;
+        background-color: rgb(var(--s-primary-soft)) !important;
+        box-shadow: none !important;
       }
-      html[data-theme='dark'] [data-glass='tint'] {
-        background:
-          linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.04) 50%, rgb(255 255 255 / 0) 60%),
-          rgb(248 113 113 / 0.2) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(248 113 113 / 0.3), 0 6px 16px -8px rgb(0 0 0 / 0.5) !important;
-      }
-      /* menu: dropdowns over busy content stay near-opaque so small text is readable */
       [data-glass='menu'] {
-        --g-blur: 30px; --g-sheen-k: 0.5;
-        background-color: rgb(var(--g-panel) / var(--g-mix-menu)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / var(--g-edge-a)), inset 0 0 0 1px rgb(255 255 255 / var(--g-rim-a)), var(--g-lip),
-          0 22px 54px -14px rgb(var(--g-ink) / 0.42) !important;
+        background-color: rgb(var(--s-surface)) !important;
+        box-shadow: 0 0 0 1px rgb(var(--s-border) / 0.6), 0 12px 32px -8px rgb(var(--s-shadow) / calc(var(--s-shadow-a) * 2.5)) !important;
       }
-      /* inset: tiles inside a glass panel. NO backdrop-filter (nesting breaks compositing). */
       [data-glass='inset'] {
-        -webkit-backdrop-filter: none; backdrop-filter: none; --g-sheen-k: 0.7;
-        background-color: rgb(var(--g-panel) / var(--g-mix-inset)) !important;
-        background-image: var(--g-sheen) !important;
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--g-edge-a) * 0.8)), inset 0 0 0 1px rgb(255 255 255 / calc(var(--g-rim-a) * 0.8)),
-          0 1px 3px rgb(var(--g-ink) / 0.1) !important;
+        background-color: rgb(var(--s-alt)) !important;
+        box-shadow: none !important;
       }
-      /* scrim behind sheets: dims and softens the page (a modal pushes the world back). */
-      [data-glass='scrim'] {
-        -webkit-backdrop-filter: blur(10px) saturate(130%); backdrop-filter: blur(10px) saturate(130%);
-      }
-      /* Phones only. Cards and small controls sit on the soft atmosphere (nothing scrolls under them), so their blur is
-         invisible but costs a GPU pass each; a list of them re-blurs every frame while a screen slides. Keep the blur
-         for the chrome (tab island, capsule, bars, sheets). A dialog in flight (data-morphing) drops its blur too and
-         gets it back once it has landed. */
-      @media (pointer: coarse), (max-width: 1023px) {
-        [data-glass='card'], [data-glass='button'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
-      }
-      /* Every width: a dialog in flight repaints its whole blurred backdrop each frame, which is what made the
-         capsule-to-dialog move (and back) stutter on desktop. It lands, then the blur returns. */
-      [data-glass='sheet'][data-morphing] {
-        -webkit-backdrop-filter: none; backdrop-filter: none;
-        background-color: rgb(var(--g-panel) / 0.95) !important;
-        will-change: left, top, width, height;
-      }
-      /* The scrim fades while the dialog moves; a blurred full-screen layer re-blurred every frame is the heaviest thing on screen. */
-      [data-glass='scrim'] { -webkit-backdrop-filter: none; backdrop-filter: none; }
-      /* Typography: SF-like tracking (large text tightens in JS; this is the body default). */
-      #root { letter-spacing: -0.011em; font-synthesis: none; text-rendering: optimizeLegibility; }
-      @media (prefers-reduced-transparency: reduce) {
-        [data-glass]:not([data-glass='accent']) { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgb(var(--g-solid)) !important; background-image: none !important; }
-      }
+      [data-glass='scrim'] { background-color: rgb(16 18 40 / 0.36) !important; }
+      html[data-theme='dark'] [data-glass='scrim'] { background-color: rgb(0 0 0 / 0.55) !important; }
+      [data-glass='sheet'][data-morphing] { will-change: left, top, width, height; }
       @media (prefers-contrast: more) {
-        [data-glass]:not([data-glass='accent']) { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgb(var(--g-solid)) !important; background-image: none !important; box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.6) !important; }
+        [data-glass] { box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.8) !important; }
       }
-      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-        [data-glass]:not([data-glass='accent']):not([data-glass='inset']) { background-color: rgb(var(--g-solid) / 0.94) !important; }
-      }
-      * { scrollbar-width: thin; scrollbar-color: rgba(120, 120, 130, 0.35) transparent; }
+      #root { letter-spacing: -0.006em; font-synthesis: none; text-rendering: optimizeLegibility; }
+      * { scrollbar-width: thin; scrollbar-color: rgb(150 153 166 / 0.45) transparent; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
-      *::-webkit-scrollbar-thumb { background: rgba(120, 120, 130, 0.35); border-radius: 8px; }
+      *::-webkit-scrollbar-thumb { background: rgb(150 153 166 / 0.45); border-radius: 8px; }
     </style>
   </head>
   <body>
