@@ -113,7 +113,7 @@ export default function BoardCards({ board, items, people, collapsed, onToggleGr
           <View key={b.group.id ?? 'none'} style={{ gap: spacing.sm }}>
             <Pressable onPress={() => onToggleGroup(b.group.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}>
               <Ionicons name={shut ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: paletteHex(b.group.color) }}>{b.group.name}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
               <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length}</Text>
             </Pressable>
             {!shut && b.top.map((t) => (

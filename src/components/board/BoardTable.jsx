@@ -252,7 +252,7 @@ export default function BoardTable({
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
                 </Pressable>
                 <Pressable disabled={!b.group.id || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
-                  <Text style={{ fontSize: 17, fontWeight: '600', color: paletteHex(b.group.color) }}>{b.group.name}</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
                 </Pressable>
                 <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? board.board.item_word.toLowerCase() : `${board.board.item_word.toLowerCase()}s`}</Text>
               </View>

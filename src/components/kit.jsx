@@ -42,6 +42,7 @@ export function tint(hex, alpha = 0.14) {
 // so it stays readable as text (set by ThemeProvider). darkestRed() is that red, kept by name for callers.
 let darkMode = false;
 export function setDarkMode(value) { darkMode = !!value; }
+export const isDarkMode = () => darkMode;
 export const darkestRed = () => (darkMode ? '#f0697f' : '#d83a52');
 export const PRIORITY = {
   1: { label: 'Priority 1', short: 'P1', get color() { return darkestRed(); } },
