@@ -99,6 +99,7 @@ export function BoardCalendar({ board, items, onOpenItem, onAddOnDay }) {
           );
         })}
       </View>
+      <StatusLegend board={board} items={items} />
     </ScrollView>
   );
 }
@@ -106,139 +107,231 @@ export function BoardCalendar({ board, items, onOpenItem, onAddOnDay }) {
 // ---------------------------------------------------------------------------------------------------
 // Timeline and Gantt (F-VIW-03, F-VIW-05): bars from start to due, by group; Gantt adds dependency arrows.
 // ---------------------------------------------------------------------------------------------------
-const ZOOMS = { week: 44, month: 20, quarter: 7 };
-const ROW_H = 34;
-const LABEL_W = 240;
+const ZOOMS = [['days', 'Days', 64], ['weeks', 'Weeks', 22], ['months', 'Months', 7]];
+const ROW_H = 38;
+const LABEL_W = 300;
+const HEAD_H = 56;
+const DAY_MS = 86400000;
+const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / DAY_MS);
+const shortDay = (d) => `${MONTHS_SHORT[parseYmd(d).getMonth()]} ${parseYmd(d).getDate()}`;
+const rangeText = (a, b) => `${MONTHS_SHORT[parseYmd(a).getMonth()]} ${parseYmd(a).getDate()} - ${MONTHS_SHORT[parseYmd(b).getMonth()]} ${parseYmd(b).getDate()}`;
+
+/** The status colours in use on a board, as a row of dots under a view (Gantt and Calendar). */
+export function StatusLegend({ board, items }) {
+  const colors = useColors();
+  const col = statusColumnOf(board);
+  const used = useMemo(() => {
+    if (!col) return [];
+    const seen = new Map();
+    for (const t of items) {
+      const l = statusLabelOf(t, col, board.values);
+      if (l) seen.set(l.id || l.maps_to, l);
+    }
+    return [...seen.values()];
+  }, [items, col, board.values]);
+  if (!used.length) return null;
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xl, paddingVertical: spacing.md, borderTopWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white, flexWrap: 'wrap' }}>
+      {used.map((l) => (
+        <View key={l.id || l.maps_to} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: paletteHex(l.color) }} />
+          <Text style={{ fontSize: 13, color: colors.gray[800] }}>{l.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export function BoardTimeline({ board, items, onOpenItem, gantt }) {
   const colors = useColors();
-  const [zoom, setZoom] = useState('month');
+  const [zoomIdx, setZoomIdx] = useState(0);
+  const [width, setWidth] = useState(0);
+  const [fit, setFit] = useState(false);
+  const [shut, setShut] = useState(() => new Set());
   const [links, setLinks] = useState([]);
   useEffect(() => {
     if (!gantt) return undefined;
     let live = true;
     api.get(`/boards/${board.board.id}/dependencies`, { __skipOops: true }).then((r) => live && setLinks(r.data.links || [])).catch(() => {});
     return () => { live = false; };
-  }, [gantt, board.board.id, items.length]);
+  }, [gantt, board.board.id, items.length, items.map((t) => `${t.due_date}${t.start_date}`).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const px = ZOOMS[zoom];
   const today = todayYmd();
-  const rows = useMemo(() => {
-    const out = [];
-    for (const b of groupBlocks(board.groups, items)) {
-      const dated = b.top.filter((t) => t.start_date || dueOf(t));
-      if (!dated.length) continue;
-      out.push({ group: b.group });
-      for (const t of dated) out.push({ item: t });
-    }
-    return out;
-  }, [board.groups, items]);
+  const statusCol = statusColumnOf(board);
+  const blocks = useMemo(() => groupBlocks(board.groups, items).map((b) => ({ ...b, dated: b.top.filter((t) => t.start_date || dueOf(t)) })).filter((b) => b.dated.length), [board.groups, items]);
   const span = useMemo(() => {
-    const dates = rows.filter((r) => r.item).flatMap((r) => [r.item.start_date, dueOf(r.item)]).filter(Boolean).sort();
+    const dates = blocks.flatMap((b) => b.dated.flatMap((t) => [t.start_date, dueOf(t)])).filter(Boolean).sort();
     const first = dates[0] && dates[0] < today ? dates[0] : today;
     const last = dates[dates.length - 1] && dates[dates.length - 1] > today ? dates[dates.length - 1] : today;
-    const start = addDays(first, -3);
-    const days = Math.max(30, Math.round((parseYmd(addDays(last, 7)) - parseYmd(start)) / 86400000));
-    return { start, days };
-  }, [rows, today]);
-  const x = (ymd) => Math.round((parseYmd(ymd) - parseYmd(span.start)) / 86400000) * px;
-  const y = new Map();
-  rows.forEach((r, i) => { if (r.item) y.set(r.item.id, i * ROW_H + ROW_H / 2); });
-  const width = span.days * px;
-  const statusCol = statusColumnOf(board);
+    // Start on a Monday so the week headers line up.
+    let start = addDays(first, -2);
+    start = addDays(start, -((parseYmd(start).getDay() + 6) % 7));
+    return { start, days: Math.max(21, daysBetween(start, addDays(last, 9))) };
+  }, [blocks, today]);
 
-  if (!rows.length) {
-    return <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>No item has a date yet. Give items a Timeline or a Date and they show here.</Text>;
+  const px = fit && width > 0 ? Math.max(4, Math.min(96, Math.floor((width - LABEL_W - 24) / span.days))) : ZOOMS[zoomIdx][2];
+  const x = (ymd) => daysBetween(span.start, ymd) * px;
+  const gridW = span.days * px;
+
+  // One row per group (its summary bar) and per task.
+  const rows = useMemo(() => {
+    const out = [];
+    for (const b of blocks) {
+      out.push({ group: b.group, dated: b.dated });
+      if (!shut.has(b.group.id)) for (const t of b.dated) out.push({ item: t, group: b.group });
+    }
+    return out;
+  }, [blocks, shut]);
+  const rowIdx = new Map();
+  rows.forEach((r, i) => { if (r.item) rowIdx.set(r.item.id, i); });
+
+  if (!blocks.length) {
+    return <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>No task has a date yet. Give tasks a Due date or a Timeline and they show here.</Text>;
   }
+
+  const barOf = (t) => {
+    const end = dueOf(t) || t.start_date;
+    const start = t.start_date && t.start_date <= end ? t.start_date : end;
+    return { start, end, left: x(start), w: Math.max(px, (daysBetween(start, end) + 1) * px) };
+  };
+  const showDays = px >= 40;
+  const weeks = Array.from({ length: Math.ceil(span.days / 7) }, (_, i) => addDays(span.start, i * 7));
+
   return (
-    <View style={{ flex: 1, padding: spacing.md, gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {Object.keys(ZOOMS).map((z) => (
-          <Pressable key={z} onPress={() => setZoom(z)} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.md, backgroundColor: zoom === z ? colors.brand[100] : colors.gray[100] }}>
-            <Text style={{ fontSize: 13, color: colors.gray[800], textTransform: 'capitalize' }}>{z}</Text>
+    <View style={{ flex: 1, padding: spacing.md }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <View style={{ flex: 1, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+          <Text style={{ fontSize: 20, fontWeight: '600', color: colors.gray[900], flex: 1 }}>{gantt ? 'Gantt' : 'Timeline'}</Text>
+          <Pressable onPress={() => setFit((f) => !f)} accessibilityLabel="Fit everything on the screen" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, borderWidth: 1, borderColor: fit ? BRAND : colors.gray[300], backgroundColor: fit ? colors.brand[50] : 'transparent' }}>
+            <Ionicons name="calendar-outline" size={16} color={fit ? BRAND : colors.gray[700]} />
+            <Text style={{ fontSize: 14, color: fit ? BRAND : colors.gray[800] }}>Auto Fit</Text>
           </Pressable>
-        ))}
-      </View>
-      <ScrollView style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row' }}>
-          <View style={{ width: LABEL_W }}>
-            <View style={{ height: 28 }} />
-            {rows.map((r, i) => (
-              <View key={i} style={{ height: ROW_H, justifyContent: 'center', paddingRight: spacing.sm }}>
-                {r.group
-                  ? <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: paletteHex(r.group.color) }}>{r.group.name}</Text>
-                  : <Pressable onPress={() => onOpenItem(r.item.id)}><Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], paddingLeft: spacing.sm }}>{r.item.title}</Text></Pressable>}
-              </View>
+          <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, overflow: 'hidden' }}>
+            {ZOOMS.map(([k, label], i) => (
+              <Pressable key={k} onPress={() => { setFit(false); setZoomIdx(i); }} style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: !fit && zoomIdx === i ? colors.brand[50] : 'transparent' }}>
+                <Text style={{ fontSize: 14, color: !fit && zoomIdx === i ? BRAND : colors.gray[800] }}>{label}</Text>
+              </Pressable>
             ))}
           </View>
-          <ScrollView horizontal style={{ flex: 1 }}>
-            <View style={{ width }}>
-              <View style={{ height: 28, flexDirection: 'row' }}>
-                {Array.from({ length: span.days }, (_, i) => {
-                  const d = addDays(span.start, i);
-                  const date = parseYmd(d);
-                  const mark = zoom === 'week' || date.getDay() === 1;
-                  return (
-                    <View key={d} style={{ width: px, borderLeftWidth: date.getDate() === 1 ? 1 : 0, borderColor: colors.gray[300] }}>
-                      {mark && (
-                        // Floats over the next days' columns: a day column is narrower than its label.
-                        <Text numberOfLines={1} style={{ position: 'absolute', left: 2, top: 6, width: 64, fontSize: 10, color: colors.gray[500] }}>
-                          {date.getDate() === 1 || zoom !== 'quarter' ? `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}` : ''}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-              <View style={{ height: rows.length * ROW_H }}>
-                <View style={{ position: 'absolute', left: x(today), top: 0, bottom: 0, width: 2, backgroundColor: colors.red[500], opacity: 0.6 }} />
-                {rows.map((r, i) => {
-                  if (!r.item) return null;
-                  const t = r.item;
-                  const end = dueOf(t) || t.start_date;
-                  const start = t.start_date && t.start_date <= end ? t.start_date : end;
-                  const label = statusCol ? statusLabelOf(t, statusCol, board.values) : null;
-                  const left = x(start);
-                  const w = Math.max(px, x(end) - left + px);
-                  return (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => onOpenItem(t.id)}
-                      accessibilityLabel={`${t.title}, ${formatDue(start)} to ${formatDue(end)}`}
-                      style={{ position: 'absolute', top: i * ROW_H + 6, left, width: w, height: ROW_H - 12, borderRadius: 11, backgroundColor: paletteHex(label?.color || 'blue'), justifyContent: 'center', paddingHorizontal: 8 }}
-                    >
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: paletteInk(label?.color || 'blue') }}>{w > 80 ? t.title : ''}</Text>
+          <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, overflow: 'hidden' }}>
+            <Pressable onPress={() => { setFit(false); setZoomIdx((i) => Math.min(ZOOMS.length - 1, i + 1)); }} accessibilityLabel="Zoom out" style={{ paddingHorizontal: 10, paddingVertical: 7 }}><Ionicons name="remove" size={16} color={colors.gray[700]} /></Pressable>
+            <Pressable onPress={() => { setFit(false); setZoomIdx((i) => Math.max(0, i - 1)); }} accessibilityLabel="Zoom in" style={{ paddingHorizontal: 10, paddingVertical: 7, borderLeftWidth: 1, borderColor: colors.gray[300] }}><Ionicons name="add" size={16} color={colors.gray[700]} /></Pressable>
+          </View>
+        </View>
+        <ScrollView style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row' }}>
+            <View style={{ width: LABEL_W, borderRightWidth: 1, borderColor: colors.gray[200] }}>
+              <View style={{ height: HEAD_H, borderBottomWidth: 1, borderColor: colors.gray[200] }} />
+              {rows.map((r, i) => (
+                <View key={i} style={{ height: ROW_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, gap: 8 }}>
+                  {r.group && !r.item ? (
+                    <Pressable onPress={() => setShut((cur) => { const n = new Set(cur); if (n.has(r.group.id)) n.delete(r.group.id); else n.add(r.group.id); return n; })} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Ionicons name={shut.has(r.group.id) ? 'chevron-forward' : 'chevron-down'} size={14} color={colors.gray[500]} />
+                      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: paletteHex(r.group.color) }} />
+                      <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: colors.gray[900], flex: 1 }}>{r.group.name}</Text>
                     </Pressable>
-                  );
-                })}
-                {gantt && links.length > 0 && (
-                  <Svg width={width} height={rows.length * ROW_H} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
-                    {links.map((l, i) => {
-                      const a = rows.find((r) => r.item?.id === l.from)?.item;
-                      const b = rows.find((r) => r.item?.id === l.to)?.item;
-                      if (!a || !b) return null;
-                      const x1 = x(dueOf(a) || a.start_date) + px;
-                      const y1 = y.get(a.id);
-                      const x2 = x(b.start_date && b.start_date <= (dueOf(b) || b.start_date) ? b.start_date : (dueOf(b) || b.start_date));
-                      const y2 = y.get(b.id);
-                      const mid = Math.max(x1 + 8, x2 - 8);
+                  ) : (
+                    <Pressable onPress={() => onOpenItem(r.item.id)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingLeft: 22 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[800], flex: 1 }}>{r.item.title}</Text>
+                      <Text style={{ fontSize: 13, color: colors.gray[600] }}>{shortDay(dueOf(r.item) || r.item.start_date)}</Text>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </View>
+            <ScrollView horizontal style={{ flex: 1 }}>
+              <View style={{ width: gridW }}>
+                {/* Header: week ranges over day cells */}
+                <View style={{ height: HEAD_H, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+                  <View style={{ height: 28, flexDirection: 'row' }}>
+                    {weeks.map((w) => (
+                      <View key={w} style={{ width: 7 * px, borderLeftWidth: 1, borderColor: colors.gray[200], justifyContent: 'center', paddingLeft: 4 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{px * 7 >= 90 ? rangeText(w, addDays(w, 6)) : ''}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{ height: 28, flexDirection: 'row' }}>
+                    {Array.from({ length: span.days }, (_, i) => {
+                      const d = addDays(span.start, i);
+                      const date = parseYmd(d);
+                      const isToday = d === today;
+                      const weekend = date.getDay() === 0 || date.getDay() === 6;
                       return (
-                        <Path
-                          key={i}
-                          d={`M ${x1} ${y1} H ${mid} V ${y2} H ${x2} M ${x2 - 5} ${y2 - 4} L ${x2} ${y2} L ${x2 - 5} ${y2 + 4}`}
-                          stroke={l.resolved ? colors.gray[400] : colors.red[500]}
-                          strokeWidth={1.6}
-                          fill="none"
-                        />
+                        <View key={d} style={{ width: px, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], backgroundColor: isToday ? BRAND : weekend ? colors.gray[100] : 'transparent' }}>
+                          {showDays ? <Text style={{ fontSize: 11, color: isToday ? '#fff' : colors.gray[600] }}>{WEEKDAYS_SHORT[date.getDay()].slice(0, 2)} {date.getDate()}</Text>
+                            : px >= 14 && date.getDay() === 1 ? <Text numberOfLines={1} style={{ fontSize: 10, color: colors.gray[500], width: px * 3 }}>{date.getDate()}</Text> : null}
+                        </View>
                       );
                     })}
-                  </Svg>
-                )}
+                  </View>
+                </View>
+                <View style={{ height: rows.length * ROW_H }}>
+                  {/* weekend shading and the today line */}
+                  {Array.from({ length: span.days }, (_, i) => {
+                    const d = parseYmd(addDays(span.start, i));
+                    return (d.getDay() === 0 || d.getDay() === 6) ? <View key={i} style={{ position: 'absolute', left: i * px, top: 0, bottom: 0, width: px, backgroundColor: colors.gray[50] }} /> : null;
+                  })}
+                  <View style={{ position: 'absolute', left: x(today) + px / 2 - 1, top: 0, bottom: 0, width: 2, backgroundColor: BRAND }} />
+                  {rows.map((r, i) => {
+                    if (r.item) {
+                      const t = r.item;
+                      const bar = barOf(t);
+                      const label = statusCol ? statusLabelOf(t, statusCol, board.values) : null;
+                      return (
+                        <View key={`t${t.id}`} style={{ position: 'absolute', top: i * ROW_H + 8, left: bar.left, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Pressable
+                            onPress={() => onOpenItem(t.id)}
+                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}`}
+                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 3, backgroundColor: paletteHex(label?.color || 'blue') }}
+                          />
+                          <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], width: 160 }}>{t.title}</Text>
+                        </View>
+                      );
+                    }
+                    // The group's summary: a thin bar from its first to its last day, with its range above.
+                    const days = r.dated.flatMap((t) => [t.start_date, dueOf(t)]).filter(Boolean).sort();
+                    const a = days[0];
+                    const z = days[days.length - 1];
+                    const len = daysBetween(a, z) + 1;
+                    return (
+                      <View key={`g${i}`} style={{ position: 'absolute', top: i * ROW_H + 4, left: x(a) }}>
+                        <Text numberOfLines={1} style={{ fontSize: 11, color: colors.gray[600], width: 320 }}>{r.group.name} · {rangeText(a, z)} · {len} day{len === 1 ? '' : 's'}</Text>
+                        <View style={{ width: Math.max(px, len * px), height: 4, borderRadius: 2, marginTop: 2, backgroundColor: paletteHex(r.group.color), opacity: 0.85 }} />
+                      </View>
+                    );
+                  })}
+                  {gantt && links.length > 0 && (
+                    <Svg width={gridW} height={rows.length * ROW_H} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+                      {links.map((l, i) => {
+                        const ia = rowIdx.get(l.from);
+                        const ib = rowIdx.get(l.to);
+                        if (ia === undefined || ib === undefined) return null;
+                        const a = barOf(rows[ia].item);
+                        const b = barOf(rows[ib].item);
+                        const x1 = a.left + a.w;
+                        const y1 = ia * ROW_H + ROW_H / 2;
+                        const x2 = b.left;
+                        const y2 = ib * ROW_H + ROW_H / 2;
+                        const mid = Math.max(x1 + 10, x2 - 10);
+                        return (
+                          <Path
+                            key={i}
+                            d={`M ${x1} ${y1} H ${mid} V ${y2} H ${x2} M ${x2 - 5} ${y2 - 4} L ${x2} ${y2} L ${x2 - 5} ${y2 + 4}`}
+                            stroke={l.resolved ? colors.gray[400] : colors.gray[700]}
+                            strokeWidth={1.4}
+                            fill="none"
+                          />
+                        );
+                      })}
+                    </Svg>
+                  )}
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </View>
-      </ScrollView>
+            </ScrollView>
+          </View>
+        </ScrollView>
+        <StatusLegend board={board} items={items} />
+      </View>
     </View>
   );
 }

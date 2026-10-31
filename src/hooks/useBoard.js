@@ -82,6 +82,24 @@ export default function useBoard(boardId) {
     } catch (err) { fail(err); }
   }, [patchItem, putItem, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Set what an item waits for. The server moves it (and what waits for it) when it would start too early. */
+  const setDepends = useCallback(async (item, ids) => {
+    const before = item.depends_on || [];
+    remember(item.title, () => setDepends(item, before.map((d) => d.id)));
+    patchItem(item.id, { depends_on: ids.map((id) => { const t = dataRef.current?.items.find((x) => x.id === id); return { id, title: t?.title || '', due_date: t?.due_date || null }; }) });
+    try {
+      const res = await api.put(`/boards/${boardId}/items/${item.id}/depends-on`, { ids });
+      putItem(res.data.todo);
+      if (res.data.moved?.length) {
+        showToast({ message: `${res.data.moved.length === 1 ? 'Dates moved' : `${res.data.moved.length} tasks moved`} to come after what it waits for`, icon: 'calendar' });
+        reloadSoon(0);
+      }
+    } catch (err) {
+      patchItem(item.id, { depends_on: before });
+      fail(err, 'Could not set that');
+    }
+  }, [boardId, patchItem, putItem, fail, remember, reloadSoon]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** Move an item to the stage a status label stands for, through the endpoint that owns that stage. */
   const setStatus = useCallback(async (item, target, { note } = {}) => {
     if (!target || target === item.status) return;
@@ -196,6 +214,7 @@ export default function useBoard(boardId) {
     canUndo: () => history.current.length > 0,
     updateFields,
     setStatus,
+    setDepends,
     assign,
     setValue,
     vote,

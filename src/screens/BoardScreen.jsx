@@ -23,10 +23,13 @@ import { useAuth } from '../context/AuthContext';
 import { AddColumnMenu, ColumnMenu, GroupMenu, BoardMoreMenu } from '../components/board/BoardMenus';
 import BoardAutomate from '../components/board/BoardAutomate';
 import BoardImport from '../components/board/BoardImport';
-import { matchesSearch, cellText } from '../components/board/model';
+import { matchesSearch, cellText, itemWordOf, statusLabelOf } from '../components/board/model';
+import BoardTabs from '../components/board/BoardTabs';
+import BoardToolbar from '../components/board/BoardToolbar';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
+import BoardItemSheet from '../components/board/BoardItemSheet';
 import useShortcuts from '../hooks/useShortcuts';
-import { showToast } from '../utils/events';
+import { showToast, confirmDialog } from '../utils/events';
 import { toCsv, downloadText } from '../utils/csv';
 
 // The views a board can show (F-VIW-00 .. F-VIW-13). Map, form and gallery come with their own steps.
@@ -39,13 +42,13 @@ const DRAWN_VIEWS = new Set(VIEW_KINDS.map((v) => v[0]));
 const VIEW_ICONS = Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i]));
 
 // Quick filters, saved with the view (F-FLT-04).
-const QUICK = [['mine', 'Mine'], ['overdue', 'Overdue'], ['week', 'This week'], ['hide_done', 'Hide done']];
 function applyQuick(items, f, meId) {
   if (!f) return items;
   const today = todayYmd();
   const week = addDays(today, 7);
   const due = (t) => t.due_date || t.deadline_date;
   const keep = (t) => (!f.mine || t.assignee_id === meId || (t.members || []).some((m) => m.id === meId))
+    && (!f.people?.length || f.people.includes(t.assignee_id) || (t.members || []).some((m) => f.people.includes(m.id)))
     && (!f.overdue || (!t.is_done && due(t) && due(t) < today))
     && (!f.week || (due(t) && due(t) >= today && due(t) <= week))
     && (!f.hide_done || !t.is_done);
@@ -80,6 +83,9 @@ export default function BoardScreen({ route }) {
   const [openTodoId, setOpenTodoId] = useState(null);
   const [automate, setAutomate] = useState(false);
   const [importing, setImporting] = useState(false);
+  // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
+  // tab when they may change it, otherwise it lasts until they leave.
+  const [localVs, setLocalVs] = useState({});
 
   // Ctrl+Z puts back the last cell change; inside a text box the box keeps its own undo.
   useShortcuts({
@@ -96,7 +102,7 @@ export default function BoardScreen({ route }) {
     if (!data) return;
     const groupName = new Map(data.groups.map((g) => [g.id, g.name]));
     const byId = new Map(data.items.map((t) => [t.id, t]));
-    const rows = [['Name', 'Group', 'Sub-item of', ...data.columns.map((c) => c.title)]];
+    const rows = [['Name', 'Group', 'Subtask of', ...data.columns.map((c) => c.title)]];
     for (const t of data.items) {
       rows.push([t.title, groupName.get(t.business_section_id) || '', t.parent_id ? byId.get(t.parent_id)?.title || '' : '',
         ...data.columns.map((c) => cellText(t, c, data.values, people))]);
@@ -106,15 +112,79 @@ export default function BoardScreen({ route }) {
 
   const views = useMemo(() => (data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), [data]);
   const view = views.find((v) => v.id === viewId) || views[0] || { kind: 'table' };
+  const word = itemWordOf(data);
+  const canSaveView = !!view.id && !!(view.owner_id || data?.access?.manage);
 
-  const filters = view.settings?.filters || null;
+  const vs = useMemo(() => {
+    const st = { ...(view.settings || {}), ...(localVs[view.id] || {}) };
+    return {
+      filters: st.filters || {},
+      people: st.filters?.people || [],
+      sort: st.sort?.column_id ? st.sort : null,
+      hidden: st.hidden_columns || [],
+      group_by: st.group_by || null,
+    };
+  }, [view, localVs]);
+
+  const changeVs = useCallback((patch) => {
+    const set = {};
+    if ('filters' in patch) set.filters = { ...patch.filters, people: vs.people };
+    if ('people' in patch) set.filters = { ...vs.filters, people: patch.people };
+    if ('sort' in patch) set.sort = patch.sort || {};
+    if ('hidden' in patch) set.hidden_columns = patch.hidden;
+    if ('group_by' in patch) set.group_by = patch.group_by || '';
+    setLocalVs((cur) => ({ ...cur, [view.id]: { ...(cur[view.id] || {}), ...set } }));
+    if (canSaveView) board.updateView(view, { settings: set });
+  }, [view, vs, canSaveView, board]);
+
+  const filters = vs.filters;
   const items = useMemo(() => {
     if (!data) return [];
-    const base = applyQuick(data.items, filters, user?.id);
-    if (!search.trim()) return base;
-    const hit = new Set(base.filter((t) => matchesSearch(t, search, data.columns, data.values, people)).map((t) => t.id));
-    return base.filter((t) => hit.has(t.id) || (t.parent_id && hit.has(t.parent_id)) || base.some((c) => c.parent_id === t.id && hit.has(c.id)));
-  }, [data, search, people, filters, user]);
+    let base = applyQuick(data.items, filters, user?.id);
+    if (search.trim()) {
+      const hit = new Set(base.filter((t) => matchesSearch(t, search, data.columns, data.values, people)).map((t) => t.id));
+      base = base.filter((t) => hit.has(t.id) || (t.parent_id && hit.has(t.parent_id)) || base.some((c) => c.parent_id === t.id && hit.has(c.id)));
+    }
+    const col = vs.sort && data.columns.find((c) => c.id === vs.sort.column_id);
+    if (col) {
+      const dir = vs.sort.dir === 'desc' ? -1 : 1;
+      const key = (t) => cellText(t, col, data.values, people);
+      base = [...base].sort((a, b) => {
+        const x = key(a);
+        const y = key(b);
+        if (!x && !y) return 0;
+        if (!x) return 1; // empty cells always last
+        if (!y) return -1;
+        return dir * (col.kind === 'numbers' ? Number(x) - Number(y) : x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' }));
+      });
+    }
+    return base;
+  }, [data, search, people, filters, user, vs.sort]);
+
+  // The table can show the tasks grouped by status or owner instead of by the board's own groups. Those
+  // groups only exist on screen (their ids are text), so they cannot be renamed, moved or added to.
+  const shown = useMemo(() => {
+    if (!data) return null;
+    const columns = data.columns.filter((c) => !vs.hidden.includes(c.id));
+    const statusCol = data.columns.find((c) => c.system_key === 'status') || data.columns.find((c) => c.kind === 'status');
+    if (vs.group_by === 'status' && statusCol) {
+      const groups = (statusCol.labels || []).map((l) => ({ id: `s:${l.id}`, name: l.label, color: l.color }));
+      const rows = items.map((t) => {
+        const l = !t.parent_id ? statusLabelOf(t, statusCol, data.values) : null;
+        return !t.parent_id ? { ...t, business_section_id: l?.id ? `s:${l.id}` : null } : t;
+      });
+      return { data: { ...data, columns, groups }, items: rows };
+    }
+    if (vs.group_by === 'owner') {
+      const seen = new Map();
+      for (const t of items) if (!t.parent_id && t.assignee_id && !seen.has(t.assignee_id)) seen.set(t.assignee_id, t.assignee_name || 'Someone');
+      const palette = ['blue', 'green', 'orange', 'purple', 'pink', 'aquamarine', 'red', 'yellow'];
+      const groups = [...seen].map(([id, name], i) => ({ id: `o:${id}`, name, color: palette[i % palette.length] }));
+      const rows = items.map((t) => (!t.parent_id ? { ...t, business_section_id: t.assignee_id ? `o:${t.assignee_id}` : null } : t));
+      return { data: { ...data, columns, groups }, items: rows };
+    }
+    return { data: { ...data, columns }, items };
+  }, [data, items, vs.hidden, vs.group_by]);
 
   const toggleGroup = useCallback((id) => setCollapsed((cur) => {
     const next = new Set(cur);
@@ -124,17 +194,24 @@ export default function BoardScreen({ route }) {
 
   const openCell = useCallback((anchor, item, column) => setEditing({ item, column, anchor }), []);
   const openName = useCallback((anchor, item) => setEditing({ item, column: null, anchor }), []);
-  const openItem = useCallback((id) => {
-    if (todos.some((t) => t.id === id)) setOpenTodoId(id);
+  // A task opens in the board's own task window; "More options" there opens the full to-do window.
+  const [sheetId, setSheetId] = useState(null);
+  const openItem = useCallback((id) => setSheetId(id), []);
+  const openFull = useCallback((id) => {
+    if (todos.some((t) => t.id === id)) { setSheetId(null); setOpenTodoId(id); }
     else showToast({ message: 'Open it from To-do: it is not in your lists yet', icon: 'information-circle' });
   }, [todos]);
   const toggleValue = useCallback((item, column, value) => (column.kind === 'vote' ? board.vote(item, column, value) : board.setValue(item, column, value)), [board]);
-  const addItem = useCallback((title, groupId, fields) => board.addItem(title, { groupId, fields }), [board]);
+  // A group made up on screen (grouped by status or owner) has a text id: the task goes to no group.
+  const addItem = useCallback((title, groupId, fields) => board.addItem(title, { groupId: typeof groupId === 'number' ? groupId : null, fields }), [board]);
   // A view's quick filters: saved with the view when the person may change it (their own view, or they run the board).
-  const toggleQuick = useCallback((key) => {
-    const next = { ...(view.settings?.filters || {}), [key]: !view.settings?.filters?.[key] };
-    if (view.id && (view.owner_id || data?.access?.manage)) board.updateView(view, { settings: { filters: next } });
-  }, [view, data, board]);
+  const newTask = useCallback((anchor) => setMenu({ type: 'newItem', anchor: anchor && 'x' in anchor ? anchor : anchorOf(anchor) }), []);
+  const closeView = useCallback(async (v) => {
+    const ok = await confirmDialog({ title: `Close the ${v.name} tab?`, message: 'Only this view goes. The tasks are not touched, and you can add the tab again with +.', confirmLabel: 'Close tab', destructive: true });
+    if (!ok) return;
+    await board.removeView(v);
+    if (v.id === view.id) setViewId(null);
+  }, [board, view]);
 
   if (!data) {
     return (
@@ -152,7 +229,7 @@ export default function BoardScreen({ route }) {
     <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
       {/* Header */}
-      <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.sm }}>
+      <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           {navigation.canGoBack() && (
             <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Back" hitSlop={8}>
@@ -162,20 +239,15 @@ export default function BoardScreen({ route }) {
           <Pressable
             disabled={!data.access.manage}
             onPress={(e) => setMenu({ type: 'rename', anchor: anchorOf(e) })}
-            style={{ flexShrink: 1 }}
+            accessibilityLabel={data.access.manage ? 'Rename this board' : undefined}
+            style={{ flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}
           >
             <Text numberOfLines={1} style={{ fontSize: desktop ? 24 : 20, fontWeight: '700', color: colors.gray[900] }}>{b.name}</Text>
+            {data.access.manage && <Ionicons name="chevron-down" size={16} color={colors.gray[500]} />}
           </Pressable>
           <View style={{ flex: 1 }} />
           {desktop && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, width: 240 }}>
-              <Ionicons name="search" size={15} color={colors.gray[500]} />
-              <TextInput value={search} onChangeText={setSearch} placeholder="Search this board" placeholderTextColor={colors.gray[400]}
-                style={{ flex: 1, paddingVertical: 6, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
-            </View>
-          )}
-          {desktop && (
-            <Pressable onPress={() => setAutomate(true)} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Pressable onPress={() => setAutomate(true)} accessibilityLabel="Automate. Rules that act for you, like notifying someone when a task is late." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="flash-outline" size={16} color={colors.gray[700]} />
               <Text style={{ fontSize: 14, color: colors.gray[800] }}>Automate</Text>
             </Pressable>
@@ -183,56 +255,34 @@ export default function BoardScreen({ route }) {
           <Pressable onPress={(e) => setMenu({ type: 'more', anchor: anchorOf(e) })} accessibilityLabel="More board actions" hitSlop={6} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
             <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[700]} />
           </Pressable>
-          {data.access.add && (
-            <Pressable
-              {...glass('accent')}
-              onPress={(e) => setMenu({ type: 'newItem', anchor: anchorOf(e) })}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BRAND, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md }}
-            >
-              <Ionicons name="add" size={17} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>New {b.item_word.toLowerCase()}</Text>
-            </Pressable>
-          )}
         </View>
         {!!b.description && <Text numberOfLines={2} style={{ fontSize: 13, color: colors.gray[600] }}>{b.description}</Text>}
-        {!desktop && (
-          <TextInput value={search} onChangeText={setSearch} placeholder="Search this board" placeholderTextColor={colors.gray[400]}
-            style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 7, fontSize: 15, color: colors.gray[900], outlineStyle: 'none' }} />
-        )}
-        {/* View tabs */}
-        <View style={{ flexDirection: 'row', gap: 2 }}>
-          {views.map((v) => {
-            const active = v.id === view.id;
-            return (
-              <Pressable key={v.id} onPress={() => setViewId(v.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: spacing.md, borderBottomWidth: 2, borderBottomColor: active ? BRAND : 'transparent' }}>
-                <Ionicons name={VIEW_ICONS[v.kind]} size={15} color={active ? BRAND : colors.gray[500]} />
-                <Text style={{ fontSize: 14, color: active ? colors.gray[900] : colors.gray[600], fontWeight: active ? '600' : '400' }}>{v.name}</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable onPress={(e) => setMenu({ type: 'addView', anchor: anchorOf(e) })} accessibilityLabel="Add a view" style={{ paddingVertical: 8, paddingHorizontal: spacing.sm }}>
-            <Ionicons name="add" size={18} color={colors.gray[600]} />
-          </Pressable>
-        </View>
-        {view.kind !== 'activity' && (
-          <View style={{ flexDirection: 'row', gap: 6, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
-            {QUICK.map(([k, l]) => {
-              const on = !!filters?.[k];
-              return (
-                <Pressable key={k} onPress={() => toggleQuick(k)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: on ? BRAND : colors.gray[300], backgroundColor: on ? colors.brand[50] : 'transparent' }}>
-                  {on && <Ionicons name="checkmark" size={13} color={BRAND} />}
-                  <Text style={{ fontSize: 13, color: on ? BRAND : colors.gray[700] }}>{l}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        <BoardTabs
+          views={views} activeId={view.id} icons={VIEW_ICONS}
+          onSelect={setViewId}
+          onAdd={(anchor) => setMenu({ type: 'addView', anchor })}
+          onRename={(v, name) => board.updateView(v, { name })}
+          onClose={closeView}
+          canChange={(v) => !!(v.owner_id || data.access.manage)}
+          canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id).length > 1}
+        />
       </View>
+      {view.kind !== 'activity' && (
+        <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
+          <BoardToolbar
+            data={data} vs={vs} onChange={changeVs} people={people} search={search} onSearch={setSearch} word={word} desktop={desktop}
+            canAdd={data.access.add} kind={view.kind}
+            onNew={newTask}
+            onNewGroup={() => setMenu({ type: 'newGroup', anchor: null })}
+            onImport={() => setImporting(true)}
+          />
+        </View>
+      )}
 
       {/* Body */}
       <View style={{ flex: 1, paddingHorizontal: desktop && view.kind === 'table' ? spacing.xl : 0, paddingTop: desktop ? spacing.lg : 0 }}>
         {view.kind === 'kanban' ? (
-          <BoardKanban board={data} items={items} people={people} onOpenItem={openItem} onOpenCell={openCell} />
+          <BoardKanban board={data} items={items} onMove={board.setStatus} onSetValue={board.setValue} people={people} onOpenItem={openItem} onOpenCell={openCell} />
         ) : view.kind === 'calendar' ? (
           <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => setMenu({ type: 'newItem', anchor: anchorOf(e), fields: { due_date: day } }) : null} />
         ) : view.kind === 'timeline' || view.kind === 'gantt' ? (
@@ -247,7 +297,7 @@ export default function BoardScreen({ route }) {
           <BoardActivity board={data} onOpenItem={openItem} />
         ) : desktop ? (
           <BoardTable
-            board={data} items={items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
+            board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}
             onAddColumn={(anchor) => setMenu({ type: 'addColumn', anchor })}
@@ -258,7 +308,7 @@ export default function BoardScreen({ route }) {
           />
         ) : (
           <BoardCards
-            board={data} items={items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
+            board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenItem={openItem} onOpenCell={openCell} onAddItem={addItem}
             onAddGroup={() => setMenu({ type: 'newGroup', anchor: null })}
           />
@@ -336,7 +386,7 @@ export default function BoardScreen({ route }) {
       )}
       {menu?.type === 'newItem' && (
         <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={340}>
-          <TextEditor initial="" placeholder={`New ${b.item_word.toLowerCase()} name`} onDone={(t) => { if (t.trim()) addItem(t, firstGroup, menu.fields); setMenu(null); }} />
+          <TextEditor initial="" placeholder={`New ${word.toLowerCase()} name`} onDone={(t) => { if (t.trim()) addItem(t, firstGroup, menu.fields); setMenu(null); }} />
         </Popover>
       )}
       {menu?.type === 'newGroup' && (
@@ -348,6 +398,11 @@ export default function BoardScreen({ route }) {
         </Popover>
       )}
 
+      <BoardItemSheet
+        item={sheetId ? data.items.find((t) => t.id === sheetId) : null}
+        board={data} people={people} actions={board}
+        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull}
+      />
       <TodoDetailSheet todoId={openTodoId} onClose={() => { setOpenTodoId(null); board.reload(); }} />
     </View>
     </BoardMeta.Provider>

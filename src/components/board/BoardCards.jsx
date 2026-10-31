@@ -5,7 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
 import { spacing, radius } from '../../theme/theme';
 import { CellView } from './Cells';
-import { groupBlocks, paletteHex, canEditColumn, statusLabelOf, cellValue } from './model';
+import { groupBlocks, paletteHex, canEditColumn, statusLabelOf, cellValue, itemWordOf } from './model';
 import { mayEdit } from './CellEditorHost';
 import { anchorOf } from './BoardTable';
 
@@ -104,7 +104,7 @@ function AddLine({ word, onAdd }) {
 export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup }) {
   const colors = useColors();
   const blocks = useMemo(() => groupBlocks(board.groups, items), [board.groups, items]);
-  const word = board.board.item_word;
+  const word = itemWordOf(board);
   // Speed (M14): a phone draws 40 cards per group, then "Show more".
   const [shown, setShown] = useState(() => new Map());
   const limitOf = (gid) => shown.get(gid ?? 'none') || 40;

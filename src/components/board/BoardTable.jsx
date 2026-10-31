@@ -5,23 +5,22 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
 import { CellView } from './Cells';
 import {
-  groupBlocks, statusBreakdown, numberSummary, formatNumber, paletteHex, canEditColumn, IN_CELL_KINDS,
+  groupBlocks, statusBreakdown, numberSummary, formatNumber, paletteHex, canEditColumn, IN_CELL_KINDS, dateRange, itemWordOf,
 } from './model';
 import { mayEdit } from './CellEditorHost';
+import Hint from './Hint';
+import { anchorOf } from './Popover';
+import { formatDue } from '../../utils/dates';
 
-const NAME_W = 380;
+export { anchorOf };
+
+const NAME_W = 340;
+const UPD_W = 46; // the "updates" column next to the name: opens the task window
 const ADD_W = 44;
 const ROW_H = 38;
 const PAGE = 100; // rows drawn per group before "Show more"
 // "entry" -> "entries", "task" -> "tasks"
 const plural = (w) => (/[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /(s|x|ch|sh)$/.test(w) ? `${w}es` : `${w}s`);
-
-/** Where a pressed cell is on screen, so its editor opens right there. */
-export function anchorOf(e) {
-  const el = e?.currentTarget || e?.target;
-  const r = el?.getBoundingClientRect?.();
-  return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
-}
 
 const Cell = memo(function Cell({ item, column, values, people, focused, onOpen, onToggle, width }) {
   const colors = useColors();
@@ -47,37 +46,48 @@ const Cell = memo(function Cell({ item, column, values, people, focused, onOpen,
   );
 });
 
+// What a column is for, shown behind its "?" (a column's own description wins).
+const COLUMN_HINTS = {
+  status: 'Where the task stands. Click a status to change it. Done counts the task as finished.',
+  date: 'When the task is due. A task that is late shows in red.',
+  timeline: 'The first and last day of the work. It draws the bar on the Gantt and the Calendar.',
+  dependency: 'Tasks that must be done first. If a date there moves, this task moves by the same days.',
+  files: 'Documents and pictures for this task.',
+  long_text: 'Free notes for this task.',
+};
+
 function HeaderCell({ column, canManage, onMenu, width }) {
   const colors = useColors();
+  const hint = column.description || COLUMN_HINTS[column.kind];
   return (
-    <Pressable
-      disabled={!canManage}
-      onPress={(e) => onMenu(e, column)}
-      accessibilityLabel={`${column.title} column`}
-      style={({ hovered }) => ({
-        width, height: 34, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.sm,
-        borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent',
-      })}
-    >
-      <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{column.title}</Text>
-    </Pressable>
+    <View style={{ width, height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+      <Pressable
+        disabled={!canManage}
+        onPress={(e) => onMenu(e, column)}
+        accessibilityLabel={`${column.title} column`}
+        style={({ hovered }) => ({ flexShrink: 1, height: 34, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent' })}
+      >
+        <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{column.title}</Text>
+      </Pressable>
+      {!!hint && <Hint text={hint} size={14} style={{ marginRight: 6 }} />}
+    </View>
   );
 }
 
-function AddItemRow({ color, onAdd, word, width }) {
+function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
   const colors = useColors();
   const [text, setText] = useState('');
   return (
     <View style={{ flexDirection: 'row', height: ROW_H, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
       <View style={{ width: 6, backgroundColor: paletteHex(color), opacity: 0.5 }} />
-      <TextInput
+      <TextInput accessibilityLabel={`Add ${word.toLowerCase()}`}
         value={text}
         onChangeText={setText}
         placeholder={`+ Add ${word.toLowerCase()}`}
         placeholderTextColor={colors.gray[400]}
         onSubmitEditing={() => { if (text.trim()) { onAdd(text); setText(''); } }}
         blurOnSubmit={false}
-        style={{ width: width - 6, paddingHorizontal: spacing.lg + 18, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+        style={{ width: width - 6, paddingLeft: spacing.lg + 18 + indent, paddingRight: spacing.sm, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
       />
     </View>
   );
@@ -89,6 +99,18 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
       <View style={{ width: nameWidth }} />
       {columns.map((c) => {
         let inner = null;
+        if (c.kind === 'date' || c.kind === 'timeline') {
+          const r = dateRange(items, c, values);
+          if (r) {
+            inner = (
+              <View style={{ backgroundColor: BRAND, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 2, minWidth: 90, alignItems: 'center' }}>
+                <Text numberOfLines={1} style={{ color: '#fff', fontSize: 12 }}>{r[0] === r[1] ? formatDue(r[0]) : `${formatDue(r[0])} - ${formatDue(r[1])}`}</Text>
+              </View>
+            );
+          } else {
+            inner = <View style={{ backgroundColor: colors.gray[300], borderRadius: 12, width: 90, height: 18 }} />;
+          }
+        }
         if (c.kind === 'status' && items.length) {
           const parts = statusBreakdown(items, c, values);
           inner = (
@@ -96,7 +118,8 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
               {parts.map((p, i) => <View key={i} style={{ flex: p.count, backgroundColor: paletteHex(p.color) }} accessibilityLabel={`${p.label}: ${p.count}`} />)}
             </View>
           );
-        } else if (c.kind === 'numbers') {
+        }
+        if (c.kind === 'numbers') {
           const n = numberSummary(items, c, values);
           inner = n !== null ? <Text style={{ fontSize: 12, color: colors.gray[700], fontWeight: '600' }}>{formatNumber(n, c.settings || {})}</Text> : null;
         }
@@ -118,7 +141,8 @@ export default function BoardTable({
   const { columns, groups, values, access } = board;
   const canManage = !!access?.manage;
   const canAdd = !!access?.add;
-  const tableWidth = NAME_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
+  const word = itemWordOf(board);
+  const tableWidth = NAME_W + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
   const [shown, setShown] = useState(() => new Map());
@@ -186,10 +210,60 @@ export default function BoardTable({
     return next;
   });
 
+  // The sub-tasks of a task: their own small table under it (name, owner, status, date), with an add line.
+  const subColumns = useMemo(() => {
+    const first = (pred) => columns.find(pred);
+    return [first((c) => c.kind === 'person'), first((c) => c.kind === 'status'), first((c) => c.kind === 'date' || c.kind === 'timeline')].filter(Boolean);
+  }, [columns]);
+  const SUB_NAME_W = NAME_W + UPD_W - 6 - 30;
+
+  const renderSubTasks = (parent, kids, block) => (
+    <View style={{ flexDirection: 'row', backgroundColor: colors.gray[50], paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+      <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
+      <View style={{ marginLeft: 24, borderLeftWidth: 3, borderLeftColor: BRAND, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }}>
+        <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
+          <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subtask</Text></View>
+          {subColumns.map((c) => <View key={c.id} style={{ width: c.width, alignItems: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], height: 30, justifyContent: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>{c.title}</Text></View>)}
+        </View>
+        {kids.map((k) => (
+          <View key={k.id} style={{ flexDirection: 'row', height: 34, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
+            <Pressable
+              onPress={() => onOpenItem(k.id)}
+              style={({ hovered }) => ({ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.sm, backgroundColor: hovered ? colors.gray[50] : 'transparent' })}
+            >
+              <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+            </Pressable>
+            {subColumns.map((c) => (
+              <View key={c.id} style={{ borderLeftWidth: 1, borderColor: colors.gray[200] }}>
+                <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
+                  onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
+              </View>
+            ))}
+          </View>
+        ))}
+        {canAdd && (
+          <TextInput
+            placeholder="+ Add subtask"
+            placeholderTextColor={colors.gray[400]}
+            accessibilityLabel="Add a subtask"
+            onSubmitEditing={(e) => {
+              const text = e.nativeEvent.text;
+              if (text?.trim()) { onAddItem(text, block.group.id, { parent_id: parent.id }); e.target.clear?.(); }
+            }}
+            blurOnSubmit={false}
+            style={{ height: 34, paddingHorizontal: spacing.md, fontSize: 13, color: colors.gray[900], outlineStyle: 'none', width: SUB_NAME_W + subColumns.reduce((n, c) => n + c.width, 0) }}
+          />
+        )}
+      </View>
+    </View>
+  );
+
   const renderRow = (t, block, depth) => {
     const kids = block.children.get(t.id) || [];
     const open = openParents.has(t.id);
     const focusedHere = focus?.itemId === t.id;
+    const hasKids = kids.length > 0;
     return (
       <View key={t.id}>
         <View style={{ flexDirection: 'row', height: ROW_H, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
@@ -199,35 +273,36 @@ export default function BoardTable({
             onPress={() => setFocus({ itemId: t.id, col: -1 })}
             onLongPress={(e) => mayEdit(t) && onOpenName(anchorOf(e), t)}
             style={({ hovered }) => ({
-              width: NAME_W - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm + depth * 22,
+              width: NAME_W - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
               paddingRight: spacing.xs, borderRightWidth: 1, borderColor: colors.gray[200],
               backgroundColor: hovered ? colors.gray[50] : 'transparent',
               outlineStyle: focusedHere && focus.col === -1 ? 'solid' : 'none', outlineWidth: 2, outlineColor: BRAND, outlineOffset: -2,
             })}
           >
-            {kids.length ? (
-              <Pressable onPress={() => toggleParent(t.id)} hitSlop={6} accessibilityLabel={open ? 'Hide sub-items' : 'Show sub-items'}>
-                <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.gray[500]} />
-              </Pressable>
-            ) : <View style={{ width: 14 }} />}
+            <Pressable onPress={() => toggleParent(t.id)} hitSlop={6} accessibilityLabel={open ? 'Hide subtasks' : 'Show subtasks'}>
+              <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={hasKids ? colors.gray[600] : colors.gray[300]} />
+            </Pressable>
             <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>
               {t.title}
             </Text>
-            {kids.length > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{t.subtask_done_count}/{kids.length}</Text>}
-            {t.comment_count > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Ionicons name="chatbubble-outline" size={13} color={colors.gray[500]} />
-                <Text style={{ fontSize: 11, color: colors.gray[500] }}>{t.comment_count}</Text>
-              </View>
-            )}
+            {hasKids && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{t.subtask_done_count}/{kids.length}</Text>}
             {mayEdit(t) && (
-              <Pressable onPress={(e) => onOpenName(anchorOf(e), t)} hitSlop={4} accessibilityLabel="Rename" style={({ hovered }) => ({ opacity: hovered ? 1 : 0.55 })}>
-                <Ionicons name="pencil-outline" size={14} color={colors.gray[500]} />
+              <Pressable onPress={(e) => onOpenName(anchorOf(e), t)} hitSlop={4} accessibilityLabel="Rename" style={({ hovered }) => ({ opacity: hovered ? 1 : 0.4 })}>
+                <Ionicons name="pencil-outline" size={13} color={colors.gray[500]} />
               </Pressable>
             )}
-            <Pressable onPress={() => onOpenItem(t.id)} hitSlop={4} accessibilityLabel="Open" style={({ hovered }) => ({ paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: hovered ? colors.brand[50] : 'transparent' })}>
-              <Ionicons name="open-outline" size={15} color={colors.brand[600]} />
-            </Pressable>
+          </Pressable>
+          <Pressable
+            onPress={() => onOpenItem(t.id)}
+            accessibilityLabel={`Updates and details of ${t.title}`}
+            style={({ hovered }) => ({ width: UPD_W, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.brand[50] : 'transparent' })}
+          >
+            <Ionicons name={t.comment_count > 0 ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={19} color={t.comment_count > 0 ? BRAND : colors.gray[400]} />
+            {t.comment_count > 0 && (
+              <View style={{ position: 'absolute', top: 5, right: 6, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: BRAND, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{t.comment_count}</Text>
+              </View>
+            )}
           </Pressable>
           {columns.map((c, ci) => (
             <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }}>
@@ -241,7 +316,7 @@ export default function BoardTable({
           ))}
           <View style={{ width: ADD_W }} />
         </View>
-        {open && kids.map((k) => renderRow(k, block, depth + 1))}
+        {open && renderSubTasks(t, kids, block)}
       </View>
     );
   };
@@ -257,17 +332,17 @@ export default function BoardTable({
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
                 </Pressable>
-                <Pressable disabled={!b.group.id || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
+                <Pressable disabled={typeof b.group.id !== 'number' || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
                   <Text style={{ fontSize: 17, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
                 </Pressable>
-                <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? board.board.item_word.toLowerCase() : plural(board.board.item_word.toLowerCase())}</Text>
+                <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? word.toLowerCase() : plural(word.toLowerCase())}</Text>
               </View>
               {!isCollapsed && (
                 <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden', backgroundColor: colors.white }}>
                   <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }}>
                     <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
-                    <View style={{ width: NAME_W - 6, height: 34, justifyContent: 'center', paddingLeft: spacing.lg + 18, borderRightWidth: 1, borderColor: colors.gray[200] }}>
-                      <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{board.board.item_word}</Text>
+                    <View style={{ width: NAME_W - 6 + UPD_W, height: 34, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+                      <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{word}</Text>
                     </View>
                     {columns.map((c) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
                     <Pressable
@@ -288,8 +363,8 @@ export default function BoardTable({
                       <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Show {Math.min(PAGE, b.top.length - limitOf(b.group.id))} more of {b.top.length - limitOf(b.group.id)}</Text>
                     </Pressable>
                   )}
-                  {canAdd && <AddItemRow color={b.group.color} word={board.board.item_word} width={NAME_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
-                  <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={NAME_W} />
+                  {canAdd && <AddItemRow color={b.group.color} word={word} width={NAME_W + UPD_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
+                  <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={NAME_W + UPD_W} />
                 </View>
               )}
             </View>
@@ -299,6 +374,7 @@ export default function BoardTable({
           <Pressable onPress={onAddGroup} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : colors.white })}>
             <Ionicons name="add" size={16} color={colors.gray[700]} />
             <Text style={{ fontSize: 14, color: colors.gray[700] }}>Add new group</Text>
+            <Hint text="A group is a section of the board, like To-Do or Completed. Tasks live inside groups. You can rename, colour, move or duplicate a group from its name." size={14} />
           </Pressable>
         )}
       </ScrollView>
