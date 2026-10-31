@@ -16,6 +16,8 @@ export const ACTIONS = [
   { id: 'app.sidebar', group: 'Search and commands', label: 'Collapse or expand the main sidebar', scope: 'global', combos: ['mod+b'] },
   { id: 'app.help', group: 'Search and commands', label: 'Show the keyboard shortcuts', scope: 'global', combos: ['?'] },
   { id: 'nav.home', group: 'Go to', label: 'Home', scope: 'global', combos: ['g h'] },
+  { id: 'nav.mywork', group: 'Go to', label: 'My work', scope: 'global', combos: ['g w'] },
+  { id: 'nav.boards', group: 'Go to', label: 'Boards', scope: 'global', combos: ['g b'] },
   { id: 'nav.progress', group: 'Go to', label: 'Progress', scope: 'global', combos: ['g d'] },
   { id: 'nav.todos', group: 'Go to', label: 'To-do and business tasks', scope: 'global', combos: ['g t'] },
   { id: 'nav.chat', group: 'Go to', label: 'Chat', scope: 'global', combos: ['g c'] },
