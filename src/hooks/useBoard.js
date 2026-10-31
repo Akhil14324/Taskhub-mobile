@@ -64,14 +64,23 @@ export default function useBoard(boardId) {
     reloadSoon(0);
   }, [reloadSoon]);
 
+  // ---- undo (Ctrl+Z, F-BRD-12): each cell change remembers how to put the old value back -------------
+  const history = useRef([]);
+  const undoing = useRef(false);
+  const remember = useCallback((label, run) => {
+    if (undoing.current) return;
+    history.current = [...history.current.slice(-29), { label, run }];
+  }, []);
+
   // ---- items ---------------------------------------------------------------------------------------
   const updateFields = useCallback(async (item, patch) => {
+    remember(item.title, () => updateFields(item, Object.fromEntries(Object.keys(patch).map((k) => [k, item[k] ?? null]))));
     patchItem(item.id, patch);
     try {
       const res = await api.put(`/todos/${item.id}`, patch);
       putItem(res.data.todo);
     } catch (err) { fail(err); }
-  }, [patchItem, putItem, fail]);
+  }, [patchItem, putItem, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Move an item to the stage a status label stands for, through the endpoint that owns that stage. */
   const setStatus = useCallback(async (item, target, { note } = {}) => {
@@ -81,6 +90,7 @@ export default function useBoard(boardId) {
       return;
     }
     const previous = { status: item.status, is_done: item.is_done };
+    remember(item.title, () => setStatus({ ...item, status: target, is_done: target === 'done' }, previous.status));
     patchItem(item.id, { status: target, is_done: target === 'done' });
     try {
       if (target === 'done') {
@@ -98,9 +108,10 @@ export default function useBoard(boardId) {
       patchItem(item.id, previous);
       fail(err);
     }
-  }, [patchItem, reloadSoon, fail]);
+  }, [patchItem, reloadSoon, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const assign = useCallback(async (item, userId) => {
+    remember(item.title, () => assign({ ...item, assignee_id: userId }, item.assignee_id || null));
     patchItem(item.id, { assignee_id: userId });
     try {
       if (userId) {
@@ -111,10 +122,11 @@ export default function useBoard(boardId) {
         putItem(res.data.todo);
       }
     } catch (err) { fail(err); }
-  }, [patchItem, putItem, fail]);
+  }, [patchItem, putItem, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setValue = useCallback(async (item, column, value) => {
     const before = dataRef.current?.values?.[item.id]?.[column.id];
+    remember(`${column.title} of ${item.title}`, () => setValue(item, column, before ?? null));
     setData((d) => d && { ...d, values: { ...d.values, [item.id]: { ...(d.values[item.id] || {}), [column.id]: value } } });
     try {
       const res = await api.put(`/boards/${boardId}/items/${item.id}/values/${column.id}`, { value });
@@ -123,7 +135,16 @@ export default function useBoard(boardId) {
       setData((d) => d && { ...d, values: { ...d.values, [item.id]: { ...(d.values[item.id] || {}), [column.id]: before } } });
       fail(err);
     }
-  }, [boardId, fail]);
+  }, [boardId, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Put back the last change made on this board from this screen. */
+  const undo = useCallback(async () => {
+    const last = history.current.pop();
+    if (!last) { showToast({ message: 'Nothing to undo', icon: 'arrow-undo-outline' }); return; }
+    undoing.current = true;
+    try { await last.run(); } finally { undoing.current = false; }
+    showToast({ message: `Undone: ${last.label}`, icon: 'arrow-undo' });
+  }, []);
 
   /** Add or take back the current person's vote (the server only ever changes their own). */
   const vote = useCallback(async (item, column, on) => {
@@ -171,6 +192,8 @@ export default function useBoard(boardId) {
 
   const actions = {
     reload: load,
+    undo,
+    canUndo: () => history.current.length > 0,
     updateFields,
     setStatus,
     assign,
@@ -189,6 +212,7 @@ export default function useBoard(boardId) {
     removeLabel: (col, label) => shape('delete', `/columns/${col.id}/labels/${label.id}`),
     addGroup: (group) => shape('post', '/groups', group),
     updateGroup: (group, patch) => shape('patch', `/groups/${group.id}`, patch),
+    duplicateGroup: (group) => shape('post', `/groups/${group.id}/duplicate`, { with_items: true }),
     orderGroups: (ids) => shape('put', '/groups/order', { ids }),
     addView: (view) => shape('post', '/views', view),
     updateView: (view, patch) => shape('patch', `/views/${view.id}`, patch),

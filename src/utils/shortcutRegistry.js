@@ -56,6 +56,8 @@ export const ACTIONS = [
   { id: 'cal.day', group: 'Calendar', label: 'Day view', scope: 'calendar', combos: ['c d'] },
   { id: 'cal.agenda', group: 'Calendar', label: 'Agenda view', scope: 'calendar', combos: ['c a'] },
 
+  { id: 'board.undo', group: 'Boards', label: 'Undo the last change on the board', scope: 'board', combos: ['mod+z'] },
+
   { id: 'chat.next', group: 'Chat', label: 'Next conversation', scope: 'chat', combos: ['ArrowDown'] },
   { id: 'chat.prev', group: 'Chat', label: 'Previous conversation', scope: 'chat', combos: ['ArrowUp'] },
 

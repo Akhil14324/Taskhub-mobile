@@ -56,6 +56,8 @@ import BoardScreen from '../screens/BoardScreen';
 import BoardsHomeScreen from '../screens/BoardsHomeScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
 import TimeboxScreen from '../screens/TimeboxScreen';
+import DashboardsScreen from '../screens/DashboardsScreen';
+import RecycleBinScreen from '../screens/RecycleBinScreen';
 import MeetingNotesScreen from '../screens/MeetingNotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
@@ -111,6 +113,7 @@ const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
+const FramedRecycleBin = framed(RecycleBinScreen, 920);
 const FramedAccess = framed(AccessScreen, 1100);
 const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
@@ -138,6 +141,8 @@ const PushBoards = T(BoardsHomeScreen);
 const PushBoard = T(BoardScreen);
 const PushMyWork = T(MyWorkScreen);
 const PushTimebox = T(TimeboxScreen);
+const PushDashboards = T(DashboardsScreen);
+const PushRecycleBin = T(FramedRecycleBin);
 const PushMeetingNotes = T(FramedMeetingNotes);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
@@ -318,6 +323,8 @@ function MainTabs() {
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
     { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
+    { group: 'Work', label: 'Dashboards', icon: 'speedometer-outline', route: 'Dashboards' },
+    { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: 'Meetings', icon: 'mic-outline', route: 'MeetingNotes' },
@@ -581,6 +588,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Board" component={PushBoard} />
             <Stack.Screen name="MyWork" component={PushMyWork} />
             <Stack.Screen name="Timebox" component={PushTimebox} />
+            <Stack.Screen name="Dashboards" component={PushDashboards} />
+            <Stack.Screen name="RecycleBin" component={PushRecycleBin} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />

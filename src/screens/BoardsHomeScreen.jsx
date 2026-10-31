@@ -54,7 +54,13 @@ function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
   const [where, setWhere] = useState({ scope: 'personal' });
   const [privacy, setPrivacy] = useState('main');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (visible) { setName(''); setWhere({ scope: 'personal' }); setPrivacy('main'); } }, [visible]);
+  const [templates, setTemplates] = useState(null);
+  const [from, setFrom] = useState(null); // null = blank, { key } ready-made, { template_id } saved
+  useEffect(() => {
+    if (!visible) return;
+    setName(''); setWhere({ scope: 'personal' }); setPrivacy('main'); setFrom(null);
+    api.get('/boards/templates', { __skipOops: true }).then((r) => setTemplates(r.data)).catch(() => setTemplates({ ready_made: [], saved: [] }));
+  }, [visible]);
 
   const places = useMemo(() => {
     const out = [{ key: 'personal', label: 'Just me', icon: 'person-outline', value: { scope: 'personal' } }];
@@ -67,10 +73,11 @@ function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
   }, [tree, isLeader]);
 
   const create = async () => {
-    if (!name.trim() || busy) return;
+    if ((!name.trim() && !from) || busy) return;
     setBusy(true);
     try {
-      const res = await api.post('/boards', { ...where, name: name.trim(), privacy: where.scope === 'personal' ? 'private' : privacy });
+      const body = { ...where, name: name.trim(), privacy: where.scope === 'personal' ? 'private' : privacy };
+      const res = from ? await api.post('/boards/from-template', { ...body, ...from }) : await api.post('/boards', body);
       await refreshBoards();
       onCreated(res.data.board);
     } catch (err) {
@@ -82,13 +89,31 @@ function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
 
   const same = (a, b) => a.scope === b.scope && a.business_id === b.business_id && a.site_id === b.site_id;
   return (
-    <Modal open={visible} onClose={onClose} title="New board">
+    <Modal open={visible} onClose={onClose} title="New board" width={600}>
       <View style={{ gap: spacing.md }}>
         <TextInput
-          autoFocus value={name} onChangeText={setName} placeholder="Board name, e.g. Tripura construction" placeholderTextColor={colors.gray[400]}
+          autoFocus value={name} onChangeText={setName} placeholder={from ? 'Board name (or keep the template name)' : 'Board name, e.g. Tripura construction'} placeholderTextColor={colors.gray[400]}
           onSubmitEditing={create}
           style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, padding: spacing.sm, fontSize: 15, color: colors.gray[900], outlineStyle: 'none' }}
         />
+        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray[600] }}>Start from</Text>
+        <ScrollView style={{ maxHeight: 214 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {[{ id: 'blank', name: 'Blank board', description: 'Status, person and date to start with.', value: null },
+            ...(templates?.ready_made || []).map((t) => ({ id: `k${t.key}`, name: t.name, description: t.description, icon: SECTOR_ICONS[t.sector], value: { key: t.key } })),
+            ...(templates?.saved || []).map((t) => ({ id: `t${t.id}`, name: t.name, description: t.business_name ? `Saved for ${t.business_name}` : 'Your template', icon: 'albums-outline', value: { template_id: t.id } })),
+          ].map((t) => {
+            const on = JSON.stringify(t.value) === JSON.stringify(from);
+            return (
+              <Pressable key={t.id} onPress={() => setFrom(t.value)} style={{ width: '31.5%', minWidth: 150, flexGrow: 1, padding: spacing.sm, gap: 4, borderRadius: radius.md, borderWidth: 1, borderColor: on ? BRAND : colors.gray[300], backgroundColor: on ? colors.brand[50] : 'transparent' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name={t.icon || 'grid-outline'} size={15} color={on ? BRAND : colors.gray[600]} />
+                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.gray[900] }}>{t.name}</Text>
+                </View>
+                <Text numberOfLines={3} style={{ fontSize: 12, color: colors.gray[600] }}>{t.description}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray[600] }}>Where it lives</Text>
         <ScrollView style={{ maxHeight: 260 }}>
           {places.map((p) => {
@@ -111,7 +136,7 @@ function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
             ))}
           </View>
         )}
-        <Pressable {...glass('accent')} onPress={create} disabled={!name.trim() || busy} style={{ backgroundColor: BRAND, opacity: !name.trim() ? 0.5 : 1, borderRadius: radius.md, paddingVertical: 10, alignItems: 'center' }}>
+        <Pressable {...glass('accent')} onPress={create} disabled={(!name.trim() && !from) || busy} style={{ backgroundColor: BRAND, opacity: !name.trim() && !from ? 0.5 : 1, borderRadius: radius.md, paddingVertical: 10, alignItems: 'center' }}>
           <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>{busy ? 'Creating…' : 'Create board'}</Text>
         </Pressable>
       </View>
@@ -129,7 +154,19 @@ export default function BoardsHomeScreen() {
   const { boards, loading } = useBoards();
   const [tree, setTree] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
   const isLeader = !!user?.is_leader;
+  const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards)).catch(() => setArchived([]));
+  const restore = async (b) => {
+    try {
+      await api.patch(`/boards/${b.id}`, { archived: false });
+      setArchived((list) => list.filter((x) => x.id !== b.id));
+      refreshBoards();
+      showToast({ message: `${b.name} is back`, tone: 'success', icon: 'arrow-undo' });
+    } catch (e) {
+      showToast({ message: e?.response?.data?.error || 'Could not bring it back', tone: 'error' });
+    }
+  };
 
   useEffect(() => {
     api.get('/org/tree', { __skipOops: true }).then((r) => setTree(r.data)).catch(() => {});
@@ -186,6 +223,23 @@ export default function BoardsHomeScreen() {
               ))}
             </Section>
           ))}
+          {archived === null ? (
+            <Pressable onPress={loadArchived} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 }}>
+              <Ionicons name="archive-outline" size={15} color={colors.gray[600]} />
+              <Text style={{ fontSize: 13, color: colors.gray[600] }}>Archived boards</Text>
+            </Pressable>
+          ) : (
+            <Section icon="archive-outline" title="Archived boards">
+              {!archived.length && <Text style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, color: colors.gray[500] }}>No archived boards that you run.</Text>}
+              {archived.map((b) => (
+                <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8, paddingHorizontal: spacing.md }}>
+                  <Ionicons name={b.icon || 'grid-outline'} size={17} color={colors.gray[500]} />
+                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, color: colors.gray[700] }}>{b.name}{b.business_name ? ` · ${b.business_name}` : ''}</Text>
+                  <Pressable onPress={() => restore(b)}><Text style={{ color: BRAND, fontWeight: '600' }}>Bring back</Text></Pressable>
+                </View>
+              ))}
+            </Section>
+          )}
         </ScrollView>
       )}
       <NewBoardDialog

@@ -11,6 +11,7 @@ import { navigationRef, openNotificationTarget } from '../navigation/navigationR
 import { openQuickAdd, openTemplates, openShortcuts } from '../utils/events';
 import { formatDue } from '../utils/dates';
 import useBackClose from '../hooks/useBackClose';
+import api from '../api/client';
 
 const go = (name, params) => {
   if (!navigationRef.isReady()) return;
@@ -47,6 +48,19 @@ export default function CommandPalette({ visible, onClose }) {
 
   useEffect(() => { if (visible) { setQuery(''); setIndex(0); } }, [visible]);
 
+  // Search everywhere (F-SRC-01): boards, and items found by their notes or comments, from the server.
+  const [found, setFound] = useState({ q: '', items: [], boards: [] });
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return undefined;
+    const t = setTimeout(() => {
+      api.get('/work/search', { params: { q }, __skipOops: true })
+        .then((r) => setFound({ q, items: r.data.items || [], boards: r.data.boards || [] }))
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
   const commands = useMemo(() => [
     { id: 'new', group: 'Actions', icon: 'add-circle-outline', label: 'New to-do', hint: hint('todo.quickAdd'), run: () => openQuickAdd() },
     { id: 'template', group: 'Actions', icon: 'copy-outline', label: 'New from template', run: () => openTemplates() },
@@ -54,6 +68,8 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'mywork', group: 'Go to', icon: 'briefcase-outline', label: 'My work: overdue, today and waiting on you', run: () => go('MyWork') },
     { id: 'timebox', group: 'Go to', icon: 'hourglass-outline', label: 'Timebox: plan the day in half hours, send it at night', hint: hint('nav.timebox'), run: () => go('Timebox') },
     { id: 'boards', group: 'Go to', icon: 'grid-outline', label: 'Boards: every board you can open', run: () => go('Boards') },
+    { id: 'dashboards', group: 'Go to', icon: 'speedometer-outline', label: 'Dashboards: numbers from your boards', run: () => go('Dashboards') },
+    { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
     { id: 'automations', group: 'Go to', icon: 'flash-outline', label: 'Automations: rules that do things for you', run: () => go('Automations') },
     { id: 'meetings', group: 'Go to', icon: 'mic-outline', label: 'Meetings: record a whole meeting', run: () => go('MeetingNotes') },
     { id: 'progress', group: 'Go to', icon: 'sunny-outline', label: 'Progress: today, stand-up, wins, goals', hint: hint('nav.progress'), run: () => go('Progress') },
@@ -87,9 +103,20 @@ export default function CommandPalette({ visible, onClose }) {
         detail: [t.business_name, t.due_date ? `due ${formatDue(t.due_date)}` : null, t.is_done ? 'done' : null].filter(Boolean).join(' · '),
         run: () => openNotificationTarget({ todoId: t.id }),
       }));
+    const fresh = found.q === query.trim();
+    const boards = fresh ? found.boards.map((b) => ({
+      id: `board-${b.id}`, group: 'Boards', icon: 'grid-outline', label: b.name, detail: b.business_name || (b.scope === 'personal' ? 'Mine' : ''),
+      run: () => go('Board', { id: b.id }),
+    })) : [];
+    const shown = new Set(tasks.map((x) => x.id));
+    const more = fresh ? found.items.filter((t) => !shown.has(`todo-${t.id}`)).slice(0, 8).map((t) => ({
+      id: `todo-${t.id}`, group: 'Found in notes and comments', icon: t.is_done ? 'checkmark-circle' : 'search-outline', label: t.title,
+      detail: [t.business_name, t.assignee_name, t.due_date ? `due ${formatDue(t.due_date)}` : null].filter(Boolean).join(' · '),
+      run: () => (t.board_id ? go('Board', { id: t.board_id }) : openNotificationTarget({ todoId: t.id })),
+    })) : [];
     const add = [{ id: 'add-typed', group: 'Actions', icon: 'add', label: `Add "${query.trim()}" as a to-do`, run: () => openQuickAdd({ text: query.trim() }) }];
-    return [...cmds, ...tasks, ...add];
-  }, [query, commands, todos]);
+    return [...cmds, ...boards, ...tasks, ...more, ...add];
+  }, [query, commands, todos, found]);
 
   useEffect(() => { setIndex(0); }, [query]);
 
@@ -165,7 +192,7 @@ const createStyles = (colors) => StyleSheet.create({
   esc: { fontSize: 11, fontWeight: '700', color: colors.gray[400], borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[300], borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   group: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.gray[400], paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 4 },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 10 },
-  itemOn: { backgroundColor: 'rgba(220, 38, 38, 0.12)', borderRadius: 14, marginHorizontal: 8 },
+  itemOn: { backgroundColor: colors.brand[50], borderRadius: 14, marginHorizontal: 8 },
   itemLabel: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
   itemDetail: { fontSize: 11, color: colors.gray[500], marginTop: 1 },
   hint: { fontSize: 11, color: colors.gray[400], fontWeight: '700' },
