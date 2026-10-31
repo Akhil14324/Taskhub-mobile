@@ -54,6 +54,7 @@ import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
 import BoardsHomeScreen from '../screens/BoardsHomeScreen';
+import MyWorkScreen from '../screens/MyWorkScreen';
 import MeetingNotesScreen from '../screens/MeetingNotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
@@ -134,6 +135,7 @@ const PushAutomation = T(FramedAutomation);
 // Boards fill the window (the table is wide); the Boards home centres itself.
 const PushBoards = T(BoardsHomeScreen);
 const PushBoard = T(BoardScreen);
+const PushMyWork = T(MyWorkScreen);
 const PushMeetingNotes = T(FramedMeetingNotes);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
@@ -311,6 +313,7 @@ function MainTabs() {
   const ai = useAi();
   const moreItems = [
     ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
+    { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
@@ -573,6 +576,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Boards" component={PushBoards} />
             <Stack.Screen name="Board" component={PushBoard} />
+            <Stack.Screen name="MyWork" component={PushMyWork} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />
