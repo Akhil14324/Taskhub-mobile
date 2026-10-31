@@ -180,7 +180,8 @@ export function TodoProvider({ children }) {
     const temp = {
       status: 'todo', priority: 4, labels: [], members: [], comment_count: 0, subtask_count: 0, recurrence: null,
       ...payload, id: tempId, is_done: false, saving: true, created_at: new Date().toISOString(),
-      assignee_id: user?.id ?? null, user_id: user?.id ?? null, sort_order: 0,
+      assignee_id: user?.id ?? null, assignee_name: user?.name || '', created_by: user?.id ?? null, created_by_name: user?.name || '',
+      is_member: true, sort_order: 0,
     };
     setTodos((prev) => sortTodos([...prev, temp]));
     createQueue.current = createQueue.current.then(() => createRemote(payload, { ...opts, tempId })).catch((err) => {
