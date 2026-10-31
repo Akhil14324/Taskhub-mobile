@@ -41,6 +41,8 @@ const SECTION_OF = {
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
+  Boards: 'boards',
+  Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',
   Everything: 'everything',
@@ -158,6 +160,7 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
         <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
+        <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} />
         <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
         <Entry p={p} icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (
