@@ -125,6 +125,28 @@ export default function useBoard(boardId) {
     }
   }, [boardId, fail]);
 
+  /** Add or take back the current person's vote (the server only ever changes their own). */
+  const vote = useCallback(async (item, column, on) => {
+    try {
+      const res = await api.put(`/boards/${boardId}/items/${item.id}/values/${column.id}`, { vote: !!on });
+      setData((d) => d && { ...d, values: { ...d.values, [item.id]: { ...(d.values[item.id] || {}), [column.id]: res.data.value } } });
+    } catch (err) { fail(err); }
+  }, [boardId, fail]);
+
+  /** Fill an AI column for some items (OpenAI on the server). */
+  const aiFill = useCallback(async (column, itemIds) => {
+    try {
+      showToast({ message: `Filling ${column.title} for ${itemIds.length} item${itemIds.length === 1 ? '' : 's'}…`, icon: 'sparkles' });
+      const res = await api.post(`/boards/${boardId}/columns/${column.id}/ai-fill`, { item_ids: itemIds }, { timeout: 180000 });
+      setData((d) => {
+        if (!d) return d;
+        const values = { ...d.values };
+        for (const [id, v] of Object.entries(res.data.values || {})) values[id] = { ...(values[id] || {}), [column.id]: v };
+        return { ...d, values };
+      });
+    } catch (err) { fail(err, 'Could not fill it'); }
+  }, [boardId, fail]);
+
   const addItem = useCallback(async (title, { groupId = null, parentId = null, values = undefined, fields = {} } = {}) => {
     const clean = String(title || '').trim();
     if (!clean) return null;
@@ -153,6 +175,8 @@ export default function useBoard(boardId) {
     setStatus,
     assign,
     setValue,
+    vote,
+    aiFill,
     addItem,
     rename: (name) => shape('patch', '', { name }, { refreshList: true }),
     updateBoard: (patch) => shape('patch', '', patch, { refreshList: true }),

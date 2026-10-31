@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput, Linking, ActivityIndicator } from 'react-native';
+import api from '../../api/client';
+import { showToast } from '../../utils/events';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Popover from './Popover';
 import DueDatePicker from '../DueDatePicker';
 import {
-  StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, TextEditor, PriorityEditor, PaletteGrid,
+  StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, TextEditor, PriorityEditor, PaletteGrid, BoardMeta,
 } from './Cells';
 import { cellValue } from './model';
 import { formatDue } from '../../utils/dates';
@@ -19,6 +21,97 @@ export function mayEdit(item, column) {
   if (column.system_key === 'person') return !!p.can_assign;
   if (column.system_key) return !!p.can_edit;
   return !!(p.can_change_status || p.can_edit);
+}
+
+/** Files of one cell: open, take out of the cell (the file stays on the item), or add a new one. */
+function FilesEditor({ item, ids, files, onSave }) {
+  const colors = useColors();
+  const [busy, setBusy] = useState(false);
+  const [extra, setExtra] = useState({});
+  const pick = () => {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setBusy(true);
+      try {
+        const form = new FormData();
+        form.append('file', file, file.name);
+        const res = await api.post(`/collab/todos/${item.id}/attachments?for=task`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 });
+        const a = res.data.attachment;
+        setExtra((x) => ({ ...x, [a.id]: a }));
+        onSave([...ids, a.id]);
+      } catch (err) {
+        showToast({ message: err.response?.data?.error || 'Upload failed', tone: 'error' });
+      } finally {
+        setBusy(false);
+      }
+    };
+    input.click();
+  };
+  const list = ids.map((id) => files[id] || extra[id]).filter(Boolean);
+  return (
+    <View style={{ gap: 6 }}>
+      {list.map((a) => (
+        <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="document-outline" size={16} color={colors.gray[600]} />
+          <Pressable style={{ flex: 1 }} onPress={() => Linking.openURL(a.url)}>
+            <Text numberOfLines={1} style={{ color: colors.brand[600], fontSize: 14 }}>{a.filename}</Text>
+          </Pressable>
+          <Pressable onPress={() => onSave(ids.filter((x) => x !== a.id))} accessibilityLabel="Take out of this cell" hitSlop={6}>
+            <Ionicons name="close" size={16} color={colors.gray[500]} />
+          </Pressable>
+        </View>
+      ))}
+      {!list.length && <Text style={{ color: colors.gray[500], fontSize: 13 }}>No files yet.</Text>}
+      <Pressable onPress={pick} disabled={busy} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.gray[100] }}>
+        {busy ? <ActivityIndicator size="small" /> : <Ionicons name="cloud-upload-outline" size={16} color={colors.gray[700]} />}
+        <Text style={{ color: colors.gray[800] }}>{busy ? 'Uploading…' : 'Add a file'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Pick items of the linked board (Connect boards). */
+function LinkEditor({ boardId, selfId, ids, onDone }) {
+  const colors = useColors();
+  const [items, setItems] = useState(null);
+  const [q, setQ] = useState('');
+  const [picked, setPicked] = useState(ids);
+  useEffect(() => {
+    let live = true;
+    api.get(`/boards/${boardId}`, { __skipOops: true })
+      .then((r) => live && setItems(r.data.items.filter((t) => t.id !== selfId && !t.parent_id)))
+      .catch(() => live && setItems([]));
+    return () => { live = false; };
+  }, [boardId, selfId]);
+  const shown = (items || []).filter((t) => !q || t.title.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
+  return (
+    <View style={{ gap: 6 }}>
+      <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Find an item" placeholderTextColor={colors.gray[400]}
+        style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 7, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
+      {!items ? <ActivityIndicator /> : (
+        <ScrollView style={{ maxHeight: 260 }}>
+          {shown.map((t) => {
+            const on = picked.includes(t.id);
+            return (
+              <Pressable key={t.id} onPress={() => setPicked((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))}
+                style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
+                <Ionicons name={on ? 'checkbox' : 'square-outline'} size={17} color={on ? colors.brand[600] : colors.gray[400]} />
+                <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+              </Pressable>
+            );
+          })}
+          {!shown.length && <Text style={{ color: colors.gray[500], padding: 6 }}>Nothing matches.</Text>}
+        </ScrollView>
+      )}
+      <Pressable onPress={() => onDone(picked)} style={{ backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 8, alignItems: 'center' }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Done</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 /** What the date picker edits for a date or week column, and how its answer is saved. */
@@ -43,6 +136,7 @@ function dateSpecFor(item, column, v, actions) {
  */
 export default function CellEditorHost({ editing, onClose, board, people, actions }) {
   const colors = useColors();
+  const meta = useContext(BoardMeta);
   const [stage, setStage] = useState('main');
   const [picker, setPicker] = useState(null);
   const item = editing?.item;
@@ -175,6 +269,24 @@ export default function CellEditorHost({ editing, onClose, board, people, action
       else actions.setValue(item, column, tags.length ? tags : null);
     };
     body = <TextEditor initial={initial} placeholder="site, urgent, client" onDone={done(save)} />;
+  } else if (column.kind === 'files') {
+    body = <FilesEditor item={item} ids={v || []} files={meta.attachments || {}} onSave={(ids) => actions.setValue(item, column, ids.length ? ids : null)} />;
+  } else if (column.kind === 'board_relation') {
+    body = <LinkEditor boardId={column.settings?.board_id || board.board.id} selfId={item.id} ids={v || []} onDone={done((ids) => actions.setValue(item, column, ids.length ? ids : null))} />;
+  } else if (column.kind === 'world_clock') {
+    body = <TextEditor initial={v || column.settings?.timezone || 'Asia/Kolkata'} placeholder="Asia/Kolkata, Asia/Dubai, Europe/London" onDone={done((t) => actions.setValue(item, column, t.trim() || null))} />;
+  } else if (column.kind === 'ai') {
+    body = (
+      <View style={{ gap: 8 }}>
+        <TextEditor initial={v || ''} multiline placeholder="Write it, or let AI fill it" onDone={done((t) => actions.setValue(item, column, t.trim() || null))} />
+        {meta.aiEnabled && (column.settings?.source_column_ids || []).length > 0 && (
+          <Pressable onPress={() => { actions.aiFill(column, [item.id]); close(); }} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.purple[50] }}>
+            <Ionicons name="sparkles" size={15} color={colors.purple[600]} />
+            <Text style={{ color: colors.purple[600], fontWeight: '600' }}>Fill with AI</Text>
+          </Pressable>
+        )}
+      </View>
+    );
   } else if (column.system_key === 'estimate') {
     body = <TextEditor initial={v ? String(v) : ''} placeholder="Minutes" keyboardType="numeric" onDone={done((t) => actions.updateFields(item, { duration_minutes: t.trim() ? Number(t) : null }))} />;
   } else if (['text', 'long_text', 'numbers', 'link', 'email', 'phone', 'hour', 'country', 'location', 'progress'].includes(column.kind)) {

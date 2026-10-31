@@ -5,7 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
 import { CellView } from './Cells';
 import {
-  groupBlocks, statusBreakdown, numberSummary, formatNumber, paletteHex, canEditColumn,
+  groupBlocks, statusBreakdown, numberSummary, formatNumber, paletteHex, canEditColumn, IN_CELL_KINDS,
 } from './model';
 import { mayEdit } from './CellEditorHost';
 
@@ -38,7 +38,7 @@ const Cell = memo(function Cell({ item, column, values, people, focused, onOpen,
       })}
     >
       <CellView item={item} column={column} values={values} people={people}
-        onToggle={editable && (column.kind === 'checkbox' || column.kind === 'rating') ? (val) => onToggle(item, column, val) : undefined}
+        onToggle={IN_CELL_KINDS.has(column.kind) && (editable || column.kind === 'vote') ? (val) => onToggle(item, column, val) : undefined}
       />
     </Pressable>
   );

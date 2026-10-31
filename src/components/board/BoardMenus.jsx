@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import api from '../../api/client';
+import useBoards from '../../hooks/useBoards';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Popover from './Popover';
 import { TextEditor, PaletteGrid } from './Cells';
@@ -10,7 +12,8 @@ import { confirmDialog } from '../../utils/events';
 // Column types offered in "+ Add column", in the order people reach for them. Built-in ones (a to-do field)
 // are listed separately and only while the board does not show them yet.
 const COMMON = ['status', 'person', 'date', 'timeline', 'text', 'numbers', 'dropdown', 'tags', 'checkbox', 'long_text',
-  'link', 'email', 'phone', 'rating', 'progress', 'color', 'location', 'country', 'hour', 'week'];
+  'formula', 'board_relation', 'mirror', 'files', 'vote', 'ai', 'link', 'email', 'phone', 'rating', 'progress', 'color',
+  'location', 'country', 'hour', 'week', 'world_clock'];
 const BUILT_IN = ['priority', 'deadline', 'timeline', 'estimate', 'labels', 'created', 'updated', 'item_id', 'dependency', 'sprint', 'points', 'item_type'];
 
 function MenuRow({ icon, label, onPress, danger, sub }) {
@@ -74,16 +77,21 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
   );
 }
 
-export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove, onToggleMobile, onClose }) {
+export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove, onToggleMobile, onSettings, onAiFillAll, aiEnabled, onClose }) {
   const [renaming, setRenaming] = useState(false);
+  const [settings, setSettings] = useState(false);
   const idx = columns.findIndex((c) => c.id === column.id);
   return (
     <Popover visible anchor={anchor} onClose={onClose} width={240}>
-      {renaming ? (
+      {settings ? (
+        <ColumnSettings column={column} columns={columns} onSave={(patch) => { onSettings(patch); onClose(); }} />
+      ) : renaming ? (
         <TextEditor initial={column.title} placeholder="Column name" onDone={(t) => { if (t.trim()) onRename(t.trim()); onClose(); }} />
       ) : (
         <View>
           <MenuRow icon="create-outline" label="Rename" onPress={() => setRenaming(true)} />
+          {!column.system_key && <MenuRow icon="options-outline" label="Settings" onPress={() => setSettings(true)} />}
+          {column.kind === 'ai' && aiEnabled && <MenuRow icon="sparkles-outline" label="Fill every item with AI" onPress={() => { onAiFillAll(); onClose(); }} />}
           {idx > 0 && <MenuRow icon="arrow-back" label="Move left" onPress={() => { onMove(-1); onClose(); }} />}
           {idx < columns.length - 1 && <MenuRow icon="arrow-forward" label="Move right" onPress={() => { onMove(1); onClose(); }} />}
           <MenuRow icon="phone-portrait-outline" label={column.settings?.show_on_mobile ? 'Hide on phone cards' : 'Show on phone cards'} onPress={() => { onToggleMobile(); onClose(); }} />
@@ -100,6 +108,119 @@ export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove
         </View>
       )}
     </Popover>
+  );
+}
+
+const AI_ACTIONS = [['summarize', 'Summarise'], ['categorize', 'Categorise'], ['extract', 'Pull out a detail'], ['translate', 'Translate'], ['sentiment', 'Mood'], ['reply', 'Draft a reply'], ['custom', 'Your own']];
+
+function Toggle({ on, label, onPress }) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 }}>
+      <Ionicons name={on ? 'checkbox' : 'square-outline'} size={18} color={on ? colors.brand[600] : colors.gray[400]} />
+      <Text style={{ fontSize: 14, color: colors.gray[800], flex: 1 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * A column's settings: who may see / change it, whether an item needs it before it is Done, and what the
+ * self-filling kinds need (formula expression, linked board, mirrored column, AI action and sources).
+ */
+function ColumnSettings({ column, columns, onSave }) {
+  const colors = useColors();
+  const { boards } = useBoards();
+  const s0 = column.settings || {};
+  const [s, setS] = useState(s0);
+  const [targetCols, setTargetCols] = useState([]);
+  const set = (patch) => setS((cur) => ({ ...cur, ...patch }));
+  const relationCols = columns.filter((c) => c.kind === 'board_relation');
+  const relation = relationCols.find((c) => c.id === s.relation_column_id);
+
+  useEffect(() => {
+    const boardId = relation?.settings?.board_id;
+    if (column.kind !== 'mirror' || !boardId) return undefined;
+    let live = true;
+    api.get(`/boards/${boardId}`, { __skipOops: true }).then((r) => live && setTargetCols(r.data.columns)).catch(() => {});
+    return () => { live = false; };
+  }, [column.kind, relation]);
+
+  const label = (t) => <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], marginTop: 8 }}>{t}</Text>;
+  const chip = (on, text, onPress, key) => (
+    <Pressable key={key || text} onPress={onPress} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: on ? colors.brand[100] : colors.gray[100] }}>
+      <Text style={{ fontSize: 12, color: colors.gray[800] }}>{text}</Text>
+    </Pressable>
+  );
+  return (
+    <ScrollView style={{ maxHeight: 460 }}>
+      {column.kind === 'formula' && (
+        <>
+          {label('FORMULA')}
+          <TextInput
+            value={s.expression || ''}
+            onChangeText={(t) => set({ expression: t })}
+            placeholder="{Qty} * {Rate}"
+            placeholderTextColor={colors.gray[400]}
+            multiline
+            style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, padding: spacing.sm, fontSize: 14, minHeight: 60, color: colors.gray[900], outlineStyle: 'none' }}
+          />
+          <Text style={{ fontSize: 11, color: colors.gray[500], marginTop: 4 }}>
+            {'Name columns in braces. + - * /, round(x, 2), if(a, b, c), days({Start}, {Due date}), today(), addDays(d, n), upper(), contains().'}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+            {columns.filter((c) => c.id !== column.id).map((c) => chip(false, `{${c.title}}`, () => set({ expression: `${s.expression || ''}{${c.title}}` }), c.id))}
+          </View>
+        </>
+      )}
+      {column.kind === 'board_relation' && (
+        <>
+          {label('LINK TO ITEMS ON')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {boards.map((b) => chip(s.board_id === b.id, b.name, () => set({ board_id: b.id }), b.id))}
+          </View>
+        </>
+      )}
+      {column.kind === 'mirror' && (
+        <>
+          {label('THROUGH THE LINK IN')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {relationCols.map((c) => chip(s.relation_column_id === c.id, c.title, () => set({ relation_column_id: c.id, target_column_id: undefined }), c.id))}
+            {!relationCols.length && <Text style={{ fontSize: 13, color: colors.gray[500] }}>Add a Connect boards column first.</Text>}
+          </View>
+          {!!relation && label('SHOW THEIR')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {targetCols.map((c) => chip(s.target_column_id === c.id, c.title, () => set({ target_column_id: c.id }), c.id))}
+          </View>
+        </>
+      )}
+      {column.kind === 'ai' && (
+        <>
+          {label('WHAT AI DOES')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {AI_ACTIONS.map(([k, t]) => chip((s.action || 'summarize') === k, t, () => set({ action: k }), k))}
+          </View>
+          {label('FROM THESE COLUMNS')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {columns.filter((c) => c.id !== column.id).map((c) => {
+              const on = (s.source_column_ids || []).includes(c.id);
+              return chip(on, c.title, () => set({ source_column_ids: on ? s.source_column_ids.filter((x) => x !== c.id) : [...(s.source_column_ids || []), c.id] }), c.id);
+            })}
+          </View>
+          {label('INSTRUCTION (OPTIONAL)')}
+          <TextInput value={s.instruction || ''} onChangeText={(t) => set({ instruction: t })} placeholder="e.g. the invoice amount in rupees" placeholderTextColor={colors.gray[400]}
+            style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, padding: spacing.sm, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
+        </>
+      )}
+      {label('WHO')}
+      <Toggle on={s.view === 'managers'} label="Only the people who run this board see it" onPress={() => set({ view: s.view === 'managers' ? 'everyone' : 'managers' })} />
+      <Toggle on={s.edit === 'managers'} label="Only they can change it" onPress={() => set({ edit: s.edit === 'managers' ? 'everyone' : 'managers' })} />
+      {!['formula', 'mirror', 'vote', 'ai'].includes(column.kind) && (
+        <Toggle on={!!s.required} label="Needed before an item can be Done" onPress={() => set({ required: !s.required })} />
+      )}
+      <Pressable onPress={() => onSave(s)} style={{ marginTop: spacing.md, backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 

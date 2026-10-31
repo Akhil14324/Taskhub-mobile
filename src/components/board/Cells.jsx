@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { createContext, memo, useContext, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -8,6 +8,20 @@ import { formatDue, daysFromToday, timeAgo } from '../../utils/dates';
 import {
   cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn,
 } from './model';
+
+/**
+ * What a board's cells may need besides their own value: titles of linked items (Connect boards), the files of
+ * Files cells, who is looking (votes) and whether AI is set up. Provided by BoardScreen.
+ */
+export const BoardMeta = createContext({ linked: {}, attachments: {}, meId: null, aiEnabled: false });
+
+function clockIn(zone) {
+  try {
+    return new Intl.DateTimeFormat('en-IN', { timeZone: zone, hour: '2-digit', minute: '2-digit' }).format(new Date());
+  } catch {
+    return '';
+  }
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Display: what a cell looks like in the table (desktop) and on a card (phone).
@@ -87,9 +101,69 @@ function Stars({ value, max = 5, onSet }) {
  */
 export const CellView = memo(function CellView({ item, column, values, people, compact, onToggle }) {
   const colors = useColors();
+  const meta = useContext(BoardMeta);
   const v = cellValue(item, column, values);
   const s = column.settings || {};
   const key = column.system_key;
+
+  // Columns that fill themselves or hold references.
+  if (column.kind === 'formula') {
+    if (v && typeof v === 'object' && v.error) {
+      return <View accessibilityLabel={v.error} dataSet={{ tip: v.error }}><Ionicons name="warning-outline" size={15} color={colors.amber[600]} /></View>;
+    }
+    if (v === null || v === undefined || v === '') return <Empty />;
+    return <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], textAlign: typeof v === 'number' ? 'right' : 'left', alignSelf: 'stretch' }}>{typeof v === 'number' ? formatNumber(v, s) : String(v)}</Text>;
+  }
+  if (column.kind === 'mirror') {
+    return Array.isArray(v) && v.length ? <Chips chips={v.slice(0, 3).map((x, i) => ({ key: `${i}`, label: String(x) }))} /> : <Empty />;
+  }
+  if (column.kind === 'board_relation') {
+    const titles = (v || []).map((id) => meta.linked?.[id]).filter(Boolean);
+    return titles.length ? <Chips chips={titles.slice(0, 2).map((t) => ({ key: String(t.id), label: t.title }))} /> : <Empty />;
+  }
+  if (column.kind === 'vote') {
+    const mine = (v || []).includes(meta.meId);
+    return (
+      <Pressable onPress={onToggle && (() => onToggle(!mine))} disabled={!onToggle} accessibilityLabel={mine ? 'Take back your vote' : 'Vote'} hitSlop={6}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Ionicons name={mine ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={mine ? colors.brand[600] : colors.gray[500]} />
+        <Text style={{ fontSize: 13, color: colors.gray[700] }}>{(v || []).length || ''}</Text>
+      </Pressable>
+    );
+  }
+  if (column.kind === 'files') {
+    const files = (v || []).map((id) => meta.attachments?.[id]).filter(Boolean);
+    if (!files.length) return <Empty />;
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
+        <Ionicons name="attach" size={15} color={colors.gray[600]} />
+        <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[700], flexShrink: 1 }}>{files.length === 1 ? files[0].filename : `${files.length} files`}</Text>
+      </View>
+    );
+  }
+  if (column.kind === 'world_clock') {
+    const zone = v || s.timezone;
+    return zone ? <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800] }}>{clockIn(zone)} <Text style={{ color: colors.gray[500], fontSize: 11 }}>{String(zone).split('/').pop().replace('_', ' ')}</Text></Text> : <Empty />;
+  }
+  if (column.kind === 'ai') {
+    return v ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' }}>
+        <Ionicons name="sparkles-outline" size={12} color={colors.purple[600]} />
+        <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[700], flex: 1 }}>{String(v)}</Text>
+      </View>
+    ) : <Empty />;
+  }
+  if (column.kind === 'approval') {
+    const state = item.status === 'in_review' ? ['Waiting', 'orange'] : item.approved_at ? ['Approved', 'green'] : null;
+    return state ? <StatusPill compact label={{ label: state[0], color: state[1] }} /> : <Empty />;
+  }
+  if (column.kind === 'item_type') {
+    const t = { task: ['Task', 'checkbox-outline'], feature: ['Feature', 'star-outline'], bug: ['Bug', 'bug-outline'] }[item.item_type];
+    return t ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name={t[1]} size={13} color={colors.gray[600]} /><Text style={{ fontSize: 13, color: colors.gray[800] }}>{t[0]}</Text></View> : <Empty />;
+  }
+  if (column.kind === 'time_tracking') {
+    return <Ionicons name="stopwatch-outline" size={15} color={colors.gray[500]} />;
+  }
 
   if (column.kind === 'status') return <StatusPill compact={compact} label={statusLabelOf(item, column, values)} />;
   if (column.kind === 'person') return <People ids={key ? (v ? [v] : []) : v} item={item} people={people} size={compact ? 22 : 26} />;

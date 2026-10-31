@@ -16,7 +16,8 @@ import BoardCards from '../components/board/BoardCards';
 import BoardKanban from '../components/board/BoardKanban';
 import CellEditorHost from '../components/board/CellEditorHost';
 import Popover from '../components/board/Popover';
-import { TextEditor } from '../components/board/Cells';
+import { TextEditor, BoardMeta } from '../components/board/Cells';
+import { useAuth } from '../context/AuthContext';
 import { AddColumnMenu, ColumnMenu, GroupMenu } from '../components/board/BoardMenus';
 import { matchesSearch } from '../components/board/model';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
@@ -41,6 +42,7 @@ export default function BoardScreen({ route }) {
   const { todos } = useTodos();
   const board = useBoard(boardId);
   const { data } = board;
+  const { user } = useAuth();
 
   const [viewId, setViewId] = useState(null);
   const [search, setSearch] = useState('');
@@ -72,7 +74,7 @@ export default function BoardScreen({ route }) {
     if (todos.some((t) => t.id === id)) setOpenTodoId(id);
     else showToast({ message: 'Open it from To-do: it is not in your lists yet', icon: 'information-circle' });
   }, [todos]);
-  const toggleValue = useCallback((item, column, value) => board.setValue(item, column, value), [board]);
+  const toggleValue = useCallback((item, column, value) => (column.kind === 'vote' ? board.vote(item, column, value) : board.setValue(item, column, value)), [board]);
   const addItem = useCallback((title, groupId) => board.addItem(title, { groupId }), [board]);
 
   if (!data) {
@@ -88,6 +90,7 @@ export default function BoardScreen({ route }) {
   const columnsById = data.columns;
 
   return (
+    <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
       {/* Header */}
       <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.sm }}>
@@ -177,6 +180,9 @@ export default function BoardScreen({ route }) {
           onRename={(title) => board.updateColumn(menu.column, { title })}
           onRemove={() => board.removeColumn(menu.column)}
           onToggleMobile={() => board.updateColumn(menu.column, { settings: { show_on_mobile: !menu.column.settings?.show_on_mobile } })}
+          onSettings={(settings) => board.updateColumn(menu.column, { settings })}
+          aiEnabled={!!data.ai_enabled}
+          onAiFillAll={() => board.aiFill(menu.column, data.items.filter((t) => !t.parent_id).map((t) => t.id).slice(0, 50))}
           onMove={(dir) => {
             const ids = columnsById.map((c) => c.id);
             const i = ids.indexOf(menu.column.id);
@@ -216,5 +222,6 @@ export default function BoardScreen({ route }) {
 
       <TodoDetailSheet todoId={openTodoId} onClose={() => { setOpenTodoId(null); board.reload(); }} />
     </View>
+    </BoardMeta.Provider>
   );
 }

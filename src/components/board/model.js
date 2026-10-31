@@ -31,7 +31,11 @@ export const EDITABLE_SYSTEM = new Set(['status', 'person', 'date', 'deadline', 
 export const EDITABLE_KINDS = new Set([
   'status', 'person', 'date', 'timeline', 'dropdown', 'tags', 'text', 'long_text', 'numbers', 'checkbox', 'link',
   'email', 'phone', 'rating', 'progress', 'hour', 'week', 'location', 'country', 'color',
+  'files', 'board_relation', 'world_clock', 'ai',
 ]);
+
+/** Kinds that change in the cell itself (no editor): a tick, stars, a vote. */
+export const IN_CELL_KINDS = new Set(['checkbox', 'rating', 'vote']);
 
 export function canEditColumn(column) {
   return column.system_key ? EDITABLE_SYSTEM.has(column.system_key) : EDITABLE_KINDS.has(column.kind);
