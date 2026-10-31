@@ -92,7 +92,6 @@ export default function TodosScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { on: feature } = useFeature();
-  const { approvalCount } = useNotifications();
   const desktop = useIsDesktop();
   const wide = useIsWide();
   const { width: windowWidth } = useWindowDimensions();
@@ -1444,11 +1443,9 @@ export default function TodosScreen() {
           labels={labels}
           businesses={businesses}
           bizCounts={bizCounts}
-          approvalCount={approvalCount}
           canMonitor={!!user?.can_monitor}
           onAdd={() => setAddOpen(true)}
           onNewList={() => setListEditor({ name: '', color: 'red', emoji: 'list' })}
-          onApprovals={() => navigation.navigate('Approvals')}
           onMonitor={() => navigation.navigate('TeamMonitor')}
           onFilters={() => setFiltersOpen(true)}
           simple={simpleView}

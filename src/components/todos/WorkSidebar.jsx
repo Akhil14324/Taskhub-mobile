@@ -56,8 +56,8 @@ function Heading({ children, right }) {
  * business (the business to-dos everyone in it can see).
  */
 export default function WorkSidebar({
-  view, onView, counts, lists, filters, labels, businesses, bizCounts, approvalCount, canMonitor,
-  onAdd, onNewList, onApprovals, onMonitor, onFilters, simple = false, favorites = [], onItemMenu, extraLinks = [],
+  view, onView, counts, lists, filters, labels, businesses, bizCounts, canMonitor,
+  onAdd, onNewList, onMonitor, onFilters, simple = false, favorites = [], onItemMenu, extraLinks = [],
 }) {
   // Filters and labels are for people who already use the app a lot, so they start folded away.
   const [showMore, setShowMore] = useState(false);
@@ -183,7 +183,6 @@ export default function WorkSidebar({
         )}
 
         <Heading>Oversight</Heading>
-        <Item icon="shield-checkmark-outline" label="Approvals" count={approvalCount} urgent onPress={onApprovals} />
         {canMonitor && <Item icon="speedometer-outline" label="Team monitor" onPress={onMonitor} />}
         {extraLinks.map((l) => <Item key={l.key} icon={l.icon} label={l.label} onPress={l.onPress} />)}
         </SlideGroup>

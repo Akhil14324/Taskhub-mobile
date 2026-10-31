@@ -51,12 +51,20 @@ export default function useBoard(boardId) {
   }, [subscribe, boardId, reloadSoon]);
 
   // ---- local patching -------------------------------------------------------------------------------
+  // On "My to-dos" a group is one of the person's lists, so an item's group is its list_id.
   const patchItem = useCallback((id, patch) => {
-    setData((d) => d && { ...d, items: d.items.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
+    setData((d) => d && {
+      ...d,
+      items: d.items.map((t) => (t.id === id ? { ...t, ...patch, ...(d.board.kind === 'my_todos' && 'list_id' in patch ? { business_section_id: patch.list_id || null } : {}) } : t)),
+    });
   }, []);
   const putItem = useCallback((todo) => {
     if (!todo) return;
-    setData((d) => d && { ...d, items: d.items.some((t) => t.id === todo.id) ? d.items.map((t) => (t.id === todo.id ? todo : t)) : [...d.items, todo] });
+    setData((d) => {
+      if (!d) return d;
+      const next = d.board.kind === 'my_todos' && !todo.parent_id ? { ...todo, business_section_id: todo.list_id || null } : todo;
+      return { ...d, items: d.items.some((t) => t.id === todo.id) ? d.items.map((t) => (t.id === todo.id ? next : t)) : [...d.items, next] };
+    });
   }, []);
 
   const fail = useCallback((err, fallback = 'That did not work') => {
@@ -81,6 +89,24 @@ export default function useBoard(boardId) {
       putItem(res.data.todo);
     } catch (err) { fail(err); }
   }, [patchItem, putItem, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Set what an item waits for. The server moves it (and what waits for it) when it would start too early. */
+  const setDepends = useCallback(async (item, ids) => {
+    const before = item.depends_on || [];
+    remember(item.title, () => setDepends(item, before.map((d) => d.id)));
+    patchItem(item.id, { depends_on: ids.map((id) => { const t = dataRef.current?.items.find((x) => x.id === id); return { id, title: t?.title || '', due_date: t?.due_date || null }; }) });
+    try {
+      const res = await api.put(`/boards/${boardId}/items/${item.id}/depends-on`, { ids });
+      putItem(res.data.todo);
+      if (res.data.moved?.length) {
+        showToast({ message: `${res.data.moved.length === 1 ? 'Dates moved' : `${res.data.moved.length} tasks moved`} to come after what it waits for`, icon: 'calendar' });
+        reloadSoon(0);
+      }
+    } catch (err) {
+      patchItem(item.id, { depends_on: before });
+      fail(err, 'Could not set that');
+    }
+  }, [boardId, patchItem, putItem, fail, remember, reloadSoon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Move an item to the stage a status label stands for, through the endpoint that owns that stage. */
   const setStatus = useCallback(async (item, target, { note } = {}) => {
@@ -196,6 +222,7 @@ export default function useBoard(boardId) {
     canUndo: () => history.current.length > 0,
     updateFields,
     setStatus,
+    setDepends,
     assign,
     setValue,
     vote,

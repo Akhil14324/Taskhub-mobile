@@ -8,7 +8,7 @@ import DueDatePicker from '../DueDatePicker';
 import {
   StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, TextEditor, PriorityEditor, PaletteGrid, BoardMeta,
 } from './Cells';
-import { cellValue } from './model';
+import { cellValue, itemWordOf } from './model';
 import { formatDue } from '../../utils/dates';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
@@ -114,6 +114,54 @@ function LinkEditor({ boardId, selfId, ids, onDone }) {
   );
 }
 
+/**
+ * "Dependent on": pick the tasks this one waits for. When one of them moves, this task moves by the same days
+ * (the server does it). Tasks that already wait for this one are left out, they would make a loop.
+ */
+function DependsEditor({ board, item, ids, onDone }) {
+  const colors = useColors();
+  const word = itemWordOf(board).toLowerCase();
+  const [q, setQ] = useState('');
+  const [picked, setPicked] = useState(ids);
+  const below = useMemo(() => {
+    // Everything that (directly or not) waits for this item.
+    const waits = new Map();
+    for (const t of board.items) for (const d of t.depends_on || []) waits.set(d.id, [...(waits.get(d.id) || []), t.id]);
+    const out = new Set();
+    const walk = (id) => { for (const next of waits.get(id) || []) if (!out.has(next)) { out.add(next); walk(next); } };
+    walk(item.id);
+    return out;
+  }, [board.items, item.id]);
+  const shown = board.items
+    .filter((t) => !t.parent_id && t.id !== item.id && !below.has(t.id) && (!q || t.title.toLowerCase().includes(q.toLowerCase())))
+    .slice(0, 80);
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, color: colors.gray[700], paddingHorizontal: 2 }}>Choose the {word} your {word} will be dependent on</Text>
+      <TextInput autoFocus value={q} onChangeText={setQ} placeholder={`Find a ${word}`} placeholderTextColor={colors.gray[400]}
+        style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 7, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
+      <ScrollView style={{ maxHeight: 240 }}>
+        {shown.map((t) => {
+          const on = picked.includes(t.id);
+          return (
+            <Pressable key={t.id} onPress={() => setPicked((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))}
+              style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name={on ? 'checkbox' : 'square-outline'} size={17} color={on ? colors.brand[600] : colors.gray[400]} />
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+              {!!t.due_date && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{formatDue(t.due_date)}</Text>}
+            </Pressable>
+          );
+        })}
+        {!shown.length && <Text style={{ color: colors.gray[500], padding: 6 }}>No other {word} to pick.</Text>}
+      </ScrollView>
+      <Text style={{ fontSize: 11, color: colors.gray[500], paddingHorizontal: 2 }}>If a {word} you pick changes its date, this one moves by the same days.</Text>
+      <Pressable onPress={() => onDone(picked)} style={{ backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 8, alignItems: 'center' }}>
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Done</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** What the date picker edits for a date or week column, and how its answer is saved. */
 function dateSpecFor(item, column, v, actions) {
   if (column.system_key === 'date') {
@@ -176,7 +224,7 @@ export default function CellEditorHost({ editing, onClose, board, people, action
   let body = null;
 
   if (!column) {
-    body = <TextEditor initial={item.title} placeholder="Item name" onDone={done((t) => t.trim() && t.trim() !== item.title && actions.updateFields(item, { title: t.trim() }))} />;
+    body = <TextEditor initial={item.title} placeholder={`${itemWordOf(board)} name`} onDone={done((t) => t.trim() && t.trim() !== item.title && actions.updateFields(item, { title: t.trim() }))} />;
   } else if (column.kind === 'status') {
     if (stage === 'labels') {
       body = (
@@ -242,6 +290,8 @@ export default function CellEditorHost({ editing, onClose, board, people, action
         <Line label="End" value={end} onPress={() => openDate({ date: end }, (p) => save(start && p.date && p.date < start ? p.date : start, p.date))} />
       </View>
     );
+  } else if (column.kind === 'dependency') {
+    body = <DependsEditor board={board} item={item} ids={(v || []).map((d) => d.id)} onDone={done((ids) => actions.setDepends(item, ids))} />;
   } else if (column.kind === 'priority') {
     body = <PriorityEditor value={item.priority} onDone={done((p) => actions.updateFields(item, { priority: p }))} />;
   } else if (column.kind === 'dropdown') {
@@ -313,7 +363,7 @@ export default function CellEditorHost({ editing, onClose, board, people, action
   }
 
   return (
-    <Popover visible anchor={editing.anchor} onClose={close} width={column?.kind === 'long_text' ? 360 : 280}>
+    <Popover visible anchor={editing.anchor} onClose={close} width={column?.kind === 'long_text' ? 360 : column?.kind === 'dependency' ? 340 : 280}>
       {column && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingBottom: 6 }}>
           <Ionicons name="create-outline" size={13} color={colors.gray[500]} />

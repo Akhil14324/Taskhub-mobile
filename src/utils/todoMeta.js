@@ -1,3 +1,4 @@
+import { progressOf } from './progress';
 // Helpers shared by the to-do screens: durations, reminders, saved filters, sub-task grouping.
 import { addDays, daysFromToday } from './dates';
 import { darkestRed } from '../components/kit';
@@ -105,9 +106,9 @@ export function depthOf(todo, byId) {
 
 /** Progress over everything below a to-do (falls back to the server's direct counts). */
 export function subtaskProgress(todo, allTodos) {
-  const below = descendantsOf(todo.id, allTodos);
-  if (below.length) return { done: below.filter((c) => c.is_done).length, total: below.length };
-  return { done: todo.subtask_done_count || 0, total: todo.subtask_count || 0 };
+  // Counted from the lowest-level sub-tasks (see utils/progress.js), so a list row, a card and a monitor agree.
+  const p = progressOf(todo, allTodos);
+  return p ? { done: p.done, total: p.total, pct: p.pct, stalled: p.stalled, idleDays: p.idleDays } : { done: 0, total: 0 };
 }
 
 /**

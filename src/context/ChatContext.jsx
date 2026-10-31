@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import * as SecureStore from '../utils/secureStorage';
 import { AppState, Platform } from 'react-native';
@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 const ChatContext = createContext(null);
 
 // Non-chat realtime events other parts of the app can subscribe to (see `subscribe`).
-const RELAYED_EVENTS = ['todo:changed', 'board:changed', 'notification:new', 'kudos:new', 'automation:effect', 'automation:run', 'buddy:visit', 'erp:approvals', 'timebox:changed'];
+const RELAYED_EVENTS = ['todo:changed', 'board:changed', 'notification:new', 'kudos:new', 'automation:effect', 'automation:run', 'buddy:visit', 'timebox:changed'];
 
 function previewFromMeta(meta) {
   if (meta?.kind === 'task') return `Task: ${meta.task?.title || ''}`;
@@ -52,8 +52,9 @@ export function ChatProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
   const [onlineUsers, setOnlineUsers] = useState(new Set());
-  const [totalUnread, setTotalUnread] = useState(0);
   const [connected, setConnected] = useState(false);
+  // Always the sum of what the list shows, so the badge can never disagree with the conversations.
+  const totalUnread = useMemo(() => conversations.reduce((n, c) => n + (c.unread_count || 0), 0), [conversations]);
   const [pinnedMessage, setPinnedMessage] = useState(null);
   const socketRef = useRef(null);
   const messagesRef = useRef([]);
@@ -78,7 +79,6 @@ export function ChatProvider({ children }) {
     try {
       const res = await api.get('/chat/conversations');
       setConversations(res.data.conversations);
-      setTotalUnread(res.data.total_unread);
     } catch (err) {
       console.error('[chat] fetchConversations error:', err.response?.status, err.message);
     }
@@ -166,10 +166,6 @@ export function ChatProvider({ children }) {
               : c
           )
         );
-
-        if (normalized.senderId !== user.id && !isActive) {
-          setTotalUnread((prev) => prev + 1);
-        }
       });
 
       socket.on('message:read', (data) => {
@@ -271,7 +267,6 @@ export function ChatProvider({ children }) {
               : c
           )
         );
-        if (!isActive) setTotalUnread((prev) => prev + 1);
       });
 
       socket.on('message:reaction', (data) => {
@@ -419,10 +414,6 @@ export function ChatProvider({ children }) {
           : c
       )
     );
-    setTotalUnread((prev) => {
-      const conv = conversationsRef.current.find((c) => c.id === conversationId);
-      return Math.max(0, prev - (conv?.unread_count || 0));
-    });
   }, []);
 
   const sendTypingStart = useCallback((conversationId) => {
@@ -551,10 +542,6 @@ export function ChatProvider({ children }) {
   const deleteConversation = useCallback(async (conversationId) => {
     await api.delete(`/chat/conversations/${conversationId}`);
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
-    setTotalUnread((prev) => {
-      const conv = conversationsRef.current.find((c) => c.id === conversationId);
-      return Math.max(0, prev - (conv?.unread_count || 0));
-    });
     if (activeConversationId === conversationId) {
       setActiveConversationId(null);
       setMessages([]);

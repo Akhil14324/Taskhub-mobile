@@ -58,6 +58,7 @@ const TYPE_ICONS = {
   todo_added: 'add-circle',
   task_rejected: 'arrow-undo',
   task_deleted: 'trash',
+  process_stalled: 'hourglass',
   chat: 'chatbubble',
 };
 
@@ -65,19 +66,14 @@ export function NotificationProvider({ children }) {
   const { user } = useAuth();
   const { subscribe, activeConversationId, totalUnread: chatUnread } = useChat();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [approvalCount, setApprovalCount] = useState(0);
   const [pushState, setPushState] = useState('unsupported');
   const activeConvRef = useRef(activeConversationId);
   useEffect(() => { activeConvRef.current = activeConversationId; }, [activeConversationId]);
 
   const refreshCounts = useCallback(async () => {
     try {
-      const [n, a] = await Promise.all([
-        api.get('/notifications/unread-count', { __skipOops: true }),
-        api.get('/approvals', { __skipOops: true }),
-      ]);
+      const n = await api.get('/notifications/unread-count', { __skipOops: true });
       setUnreadCount(n.data.unread_count || 0);
-      setApprovalCount(a.data.count || 0);
     } catch {
       // offline — keep last known counts
     }
@@ -94,7 +90,6 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (!user) {
       setUnreadCount(0);
-      setApprovalCount(0);
       return;
     }
     refreshCounts();
@@ -112,12 +107,6 @@ export function NotificationProvider({ children }) {
     });
     return () => sub?.remove();
   }, [user, refreshCounts, refreshPushState]);
-
-  // Hospital ERP approvals changed (one approved in the ERP, or a new one): the Approvals badge follows.
-  useEffect(() => {
-    if (!user) return undefined;
-    return subscribe('erp:approvals', () => refreshCounts());
-  }, [user, subscribe, refreshCounts]);
 
   // Live notifications from the socket → badge + in-app banner.
   useEffect(() => {
@@ -228,13 +217,12 @@ export function NotificationProvider({ children }) {
 
   const value = useMemo(() => ({
     unreadCount,
-    approvalCount,
     pushState,
     refreshCounts,
     enablePush,
     markAllRead,
     decrementUnread,
-  }), [unreadCount, approvalCount, pushState, refreshCounts, enablePush, markAllRead, decrementUnread]);
+  }), [unreadCount, pushState, refreshCounts, enablePush, markAllRead, decrementUnread]);
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }

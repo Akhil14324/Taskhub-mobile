@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as SecureStore from '../utils/secureStorage';
 import { showToast } from '../utils/events';
 import { API_URL } from '../config';
+import { busyStart, busyEnd } from '../utils/busy';
 
 const MAX_RETRIES = 2;
 const NETWORK_TOAST_GAP_MS = 10000;
@@ -12,7 +13,19 @@ const api = axios.create({
   timeout: 20000,
 });
 
+/** A request counts as "busy" for the loading bar until it finally settles (retries do not count twice). */
+function settle(config) {
+  if (config?.__busy) {
+    config.__busy = false;
+    busyEnd();
+  }
+}
+
 api.interceptors.request.use(async (config) => {
+  if (!config.__skipOops && !config.__busy) {
+    config.__busy = true;
+    busyStart();
+  }
   try {
     const token = await SecureStore.getItemAsync('token');
     if (token) {
@@ -25,7 +38,10 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    settle(response.config);
+    return response;
+  },
   async (error) => {
     if (error.response?.status === 401) {
       try {
@@ -51,6 +67,7 @@ api.interceptors.response.use(
         return api(config);
       }
     }
+    settle(config);
 
     // Never throw the user onto a full-screen error page; callers handle their own errors.
     // For user-initiated requests show one throttled toast instead.

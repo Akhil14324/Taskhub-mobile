@@ -11,9 +11,8 @@ import { useChat } from '../context/ChatContext';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LanguageContext';
 import useAi from '../hooks/useAi';
-import AtRiskCard from '../components/engage/AtRiskCard';
-import DailyReportCard from '../components/engage/DailyReportCard';
-import TeamBoard from '../components/engage/TeamBoard';
+import HomeGrid from '../components/home/HomeGrid';
+import { useHomeStats } from '../components/home/HomeWidgets';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
@@ -40,7 +39,7 @@ export default function HomeScreen() {
   const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
   const { todos, businesses, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
-  const { unreadCount, approvalCount, pushState, enablePush, refreshCounts } = useNotifications();
+  const { unreadCount, pushState, enablePush, refreshCounts } = useNotifications();
   const { totalUnread } = useChat();
   const { myDay } = useEngage();
   const ai = useAi();
@@ -156,6 +155,15 @@ export default function HomeScreen() {
     </View>
   ) : null;
 
+  const stats = useHomeStats(todos, meId);
+  const ctx = {
+    stats, todos, insights, myDay, reportKey, assignedToMe, toggleTodo,
+    doneToday, totalToday, dueNow, overduePersonal,
+    go: (name, params) => navigation.navigate(name, params),
+    openAdd: () => setAddOpen(true),
+    openTodo: (id) => setOpenTodoId(id),
+  };
+
   return (
     <View style={[styles.container, { paddingTop: desktop ? spacing.lg : insets.top }]}>
       <ScrollView
@@ -205,46 +213,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {approvalCount > 0 && (
-          <AnimatedPressable onPress={() => navigation.navigate('Approvals')}>
-            <View {...glass('card')} style={[styles.banner, styles.bannerLink]}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.brand[700]} />
-              <Text style={[styles.bannerText, { fontWeight: '700' }]}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your decision</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.brand[700]} />
-            </View>
-          </AnimatedPressable>
-        )}
 
-        <DailyReportCard refreshKey={reportKey} />
-        <TeamBoard refreshKey={reportKey} />
-
-        <AnimatedPressable onPress={() => navigation.navigate('Progress')}>
-          <View {...glass('accent')} style={styles.dayCard}>
-            <View style={styles.dayIcon}><Ionicons name="sunny" size={22} color="#fff" /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.dayTitle}>My Day</Text>
-              <Text style={styles.dayText}>
-                {myDay?.all_clear ? 'Day complete. Everything due is done.'
-                  : myDay?.waiting_on_you?.length ? `${myDay.waiting_on_you.length} waiting on you · ${myDay.remaining_today} left today`
-                    : myDay ? `${myDay.remaining_today} left today` : 'What to do next, and who is waiting on you'}
-              </Text>
-            </View>
-            {!!myDay?.streak && (
-              <View style={styles.dayStreak}>
-                <Ionicons name="flame" size={14} color="#fff" />
-                <Text style={styles.dayStreakText}>{myDay.streak}</Text>
-              </View>
-            )}
-            <Ionicons name="chevron-forward" size={18} color="#fff" />
-          </View>
-        </AnimatedPressable>
-
-        <AtRiskCard onOpen={(id) => navigation.navigate('Main', { screen: 'Todos', params: { highlightId: id } })} />
-
-        <View style={[styles.panels, desktop && styles.panelsDesktop]}>
-          <View style={desktop ? styles.col : undefined}>{personalPanel}</View>
-          {assignedPanel && <View style={desktop ? styles.col : undefined}>{assignedPanel}</View>}
-        </View>
+        <HomeGrid ctx={ctx} desktop={desktop} userId={meId} />
 
         {!desktop && (
           <View style={styles.quickGrid}>
@@ -283,7 +253,7 @@ function Quick({ icon, label, onPress }) {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg },
-  contentDesktop: { paddingHorizontal: spacing.xxxl, maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  contentDesktop: { paddingHorizontal: spacing.xl, maxWidth: 2200, width: '100%', alignSelf: 'center' },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, marginBottom: spacing.xl },
   date: { fontSize: fontSize.sm, color: colors.gray[500], fontWeight: '600' },
   greeting: { fontSize: fontSize.md, color: colors.gray[500], fontWeight: '500', marginTop: 6 },

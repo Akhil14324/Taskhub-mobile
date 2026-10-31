@@ -42,7 +42,6 @@ export function openNotificationTarget(data = {}) {
   if ((data.type === 'todo_reminder' || data.type === 'todo_deadline') && !data.noAlert && data.alarm !== '0') {
     setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, alarm: true }), 1200);
   }
-  if (data.brief) return navigateWhenReady('Reports', { range: 1 });
   // A batch of tasks from a meeting ("Akhil gave you 34 tasks") opens My work, not one task.
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
   if (data.screen === 'Timebox' || data.type === 'timebox') return navigateWhenReady('Timebox', data.date ? { date: data.date } : undefined);
@@ -50,7 +49,6 @@ export function openNotificationTarget(data = {}) {
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
-  if (data.approvalId || data.type === 'approval_request' || data.type === 'erp_approval') return navigateWhenReady('Approvals');
   if (todoId) return navigateWhenReady('Main', { screen: 'Todos', params: { highlightId: todoId } });
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');

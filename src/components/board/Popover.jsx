@@ -6,6 +6,13 @@ import { glass } from '../../theme/glass';
 import { useColors } from '../../context/ThemeContext';
 import { radius, spacing } from '../../theme/theme';
 
+/** Where a pressed element is on screen, so its editor opens right there. */
+export function anchorOf(e) {
+  const el = e?.currentTarget || e?.target;
+  const r = el?.getBoundingClientRect?.();
+  return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+}
+
 /**
  * A small floating panel for picking a cell's value. On desktop it opens next to the cell it belongs to
  * (`anchor` = { x, y, width, height } from measureInWindow), flipping above when there is no room below;

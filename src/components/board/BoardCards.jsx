@@ -5,7 +5,9 @@ import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
 import { spacing, radius } from '../../theme/theme';
 import { CellView } from './Cells';
-import { groupBlocks, paletteHex, canEditColumn, statusLabelOf, cellValue } from './model';
+import ProgressDot from '../ProgressDot';
+import { progressOf } from '../../utils/progress';
+import { groupBlocks, paletteHex, canEditColumn, statusLabelOf, cellValue, itemWordOf } from './model';
 import { mayEdit } from './CellEditorHost';
 import { anchorOf } from './BoardTable';
 
@@ -23,9 +25,10 @@ export function cardColumns(columns) {
 }
 
 /** One item as a card (phone list and Kanban). Tapping the card opens it; tapping a field edits that field. */
-export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem, onOpenCell, groupColor, showStatus = true }) {
+export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem, onOpenCell, groupColor, showStatus = true, trailing }) {
   const colors = useColors();
   const cols = useMemo(() => cardColumns(board.columns), [board.columns]);
+  const progress = useMemo(() => progressOf(item, board.items), [item, board.items]);
   const tap = (column) => (e) => {
     if (canEditColumn(column) && mayEdit(item, column)) onOpenCell(anchorOf(e), item, column);
   };
@@ -60,14 +63,14 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
         )}
         {cols.extra.filter((c) => { const v = cellValue(item, c, board.values); return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.every((x) => x === null)); }).map((c) => (
           <Pressable key={c.id} onPress={tap(c)} hitSlop={4} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 180 }}>
-            <Text style={{ fontSize: 11, color: colors.gray[500] }}>{c.title}</Text>
+            {c.kind !== 'dependency' && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{c.title}</Text>}
             <CellView item={item} column={c} values={board.values} people={people} compact />
           </Pressable>
         ))}
-        {item.subtask_count > 0 && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            <Ionicons name="git-branch-outline" size={12} color={colors.gray[500]} />
-            <Text style={{ fontSize: 12, color: colors.gray[500] }}>{item.subtask_done_count}/{item.subtask_count}</Text>
+        {progress && (
+          <View accessibilityLabel={`${progress.done} of ${progress.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <ProgressDot pct={progress.pct} size={18} />
+            <Text style={{ fontSize: 12, color: colors.gray[600] }}>{progress.done}/{progress.total}</Text>
           </View>
         )}
         {item.comment_count > 0 && (
@@ -76,7 +79,14 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
             <Text style={{ fontSize: 12, color: colors.gray[500] }}>{item.comment_count}</Text>
           </View>
         )}
+        {!!trailing && <View style={{ marginLeft: 'auto' }}>{trailing}</View>}
       </View>
+      {progress?.stalled && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="hourglass-outline" size={12} color={colors.red[600]} />
+          <Text style={{ fontSize: 11, color: colors.red[600], fontWeight: '600' }}>No step finished in {progress.idleDays} days</Text>
+        </View>
+      )}
     </Pressable>
   );
 });
@@ -104,7 +114,7 @@ function AddLine({ word, onAdd }) {
 export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup }) {
   const colors = useColors();
   const blocks = useMemo(() => groupBlocks(board.groups, items), [board.groups, items]);
-  const word = board.board.item_word;
+  const word = itemWordOf(board);
   // Speed (M14): a phone draws 40 cards per group, then "Show more".
   const [shown, setShown] = useState(() => new Map());
   const limitOf = (gid) => shown.get(gid ?? 'none') || 40;

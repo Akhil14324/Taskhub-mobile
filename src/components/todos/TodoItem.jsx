@@ -20,6 +20,7 @@ import { spacing, fontSize, radius } from '../../theme/theme';
 import { glass } from '../../theme/glass';
 import { SPRING, project, rubberband } from '../../theme/motion';
 import { haptic as webHaptic } from '../../utils/feedback';
+import ProgressDot from '../ProgressDot';
 import { TodoCheckbox, DueChip, AvatarStack, Avatar, ListGlyph, MentionText } from '../kit';
 import { daysFromToday, formatDue, timeAgo } from '../../utils/dates';
 import { deadlineState } from '../../utils/todoMeta';
@@ -153,7 +154,8 @@ function TodoItem({
 
   return (
     <View
-      style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }]}
+      style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }, todo.saving && { opacity: 0.55 }]}
+      pointerEvents={todo.saving ? 'none' : 'auto'}
       dataSet={{ todoRow: String(todo.id) }}
       onLayout={(e) => { width.value = e.nativeEvent.layout.width; }}
     >
@@ -237,8 +239,9 @@ function TodoItem({
               )}
               {hasSubtasks && (
                 <View style={styles.metaItem}>
-                  <Ionicons name="git-branch-outline" size={12} color={progress.done === progress.total ? colors.brand[600] : colors.gray[500]} />
-                  <Text style={styles.metaText}>{progress.done}/{progress.total} · {Math.round((progress.done / progress.total) * 100)}%</Text>
+                  <ProgressDot pct={progress.pct ?? Math.round((progress.done / progress.total) * 100)} size={16} stroke={2.5} />
+                  <Text style={styles.metaText}>{progress.done}/{progress.total} · {progress.pct ?? Math.round((progress.done / progress.total) * 100)}%</Text>
+                  {progress.stalled && <Text style={[styles.metaText, { color: colors.red[600], fontWeight: '600' }]}>no step in {progress.idleDays}d</Text>}
                 </View>
               )}
               {!simple && todo.business_id && (todo.item_type === 'bug' || todo.item_type === 'feature') && (

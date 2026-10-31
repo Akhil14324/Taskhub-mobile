@@ -62,8 +62,10 @@ function DateText({ ymd, time, done }) {
   const diff = daysFromToday(ymd);
   const late = !done && diff < 0;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      {late && <Ionicons name="alert-circle" size={13} color={colors.red[600]} />}
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      {done ? <Ionicons name="checkmark" size={14} color={colors.green[600]} />
+        : late ? <Ionicons name="alert-circle" size={13} color={colors.red[600]} />
+          : <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.gray[500] }} />}
       <Text numberOfLines={1} style={{ fontSize: 13, color: late ? colors.red[600] : done ? colors.gray[400] : colors.gray[800], textDecorationLine: done ? 'line-through' : 'none' }}>
         {formatDue(ymd)}{time ? ` ${time}` : ''}
       </Text>
@@ -231,10 +233,11 @@ export const CellView = memo(function CellView({ item, column, values, people, c
     case 'auto_number':
       return <Text style={{ fontSize: 12, color: colors.gray[500] }}>#{v}</Text>;
     case 'dependency':
-      return v ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="git-network-outline" size={13} color={colors.red[600]} />
-          <Text style={{ fontSize: 13, color: colors.red[600] }}>{v} open</Text>
+      return Array.isArray(v) && v.length ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch', paddingHorizontal: 2 }}>
+          <Ionicons name="return-down-forward-outline" size={13} color={colors.gray[500]} />
+          <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], flex: 1 }}>{v[0].title}</Text>
+          {v.length > 1 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>+{v.length - 1}</Text>}
         </View>
       ) : <Empty />;
     case 'sprint':

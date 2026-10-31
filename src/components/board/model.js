@@ -19,14 +19,14 @@ export const SYSTEM_FIELDS = {
   points: 'story_points',
   sprint: 'sprint_id',
   item_type: 'item_type',
-  dependency: 'open_blocker_count',
+  dependency: 'depends_on',
   item_id: 'id',
   created: 'created_at',
   updated: 'updated_at',
 };
 
 /** Built-in columns people can edit straight in the cell (the rest show, and change in the item window). */
-export const EDITABLE_SYSTEM = new Set(['status', 'person', 'date', 'deadline', 'timeline', 'priority', 'estimate', 'labels']);
+export const EDITABLE_SYSTEM = new Set(['status', 'person', 'date', 'deadline', 'timeline', 'priority', 'estimate', 'labels', 'dependency']);
 
 /** Custom column kinds that can be typed or picked in a cell today. */
 export const EDITABLE_KINDS = new Set([
@@ -47,6 +47,31 @@ const DARK_GREY = { hex: '#797e93', ink: '#ffffff' };
 const swatch = (name) => (isDarkMode() && (name === 'grey' || !PALETTE[name]) ? DARK_GREY : PALETTE[name] || PALETTE.grey);
 export const paletteHex = (name) => swatch(name).hex;
 export const paletteInk = (name) => swatch(name).ink;
+
+/** What a board calls one of its rows. Boards made before the rename still say "Item"; people say "Task". */
+export function itemWordOf(board) {
+  const w = board?.board?.item_word || board?.item_word || 'Task';
+  return w === 'Item' ? 'Task' : w;
+}
+
+/** The earliest and latest date an item list covers on a date or timeline column, for the group summary pill. */
+export function dateRange(items, column, values) {
+  const days = [];
+  for (const it of items) {
+    const v = cellValue(it, column, values);
+    if (column.kind === 'timeline') {
+      const [s, e] = column.system_key ? v : v ? [v.start, v.end] : [null, null];
+      if (s) days.push(s);
+      if (e) days.push(e);
+    } else if (column.kind === 'date') {
+      const d = column.system_key ? v : v?.date;
+      if (d) days.push(d);
+    }
+  }
+  if (!days.length) return null;
+  days.sort();
+  return [days[0], days[days.length - 1]];
+}
 
 /** The label shown for an item on a status column. */
 export function statusLabelOf(item, column, values) {
@@ -90,6 +115,7 @@ export function cellText(item, column, values, people = []) {
     case 'location': return v.address || '';
     case 'checkbox': return v ? 'Yes' : '';
     case 'priority': return v ? `P${v}` : '';
+    case 'dependency': return (v || []).map((d) => d.title).join(', ');
     default: return typeof v === 'object' ? JSON.stringify(v) : String(v);
   }
 }
