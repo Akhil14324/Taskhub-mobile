@@ -25,7 +25,7 @@ export function cardColumns(columns) {
 }
 
 /** One item as a card (phone list and Kanban). Tapping the card opens it; tapping a field edits that field. */
-export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem, onOpenCell, groupColor, showStatus = true }) {
+export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem, onOpenCell, groupColor, showStatus = true, trailing }) {
   const colors = useColors();
   const cols = useMemo(() => cardColumns(board.columns), [board.columns]);
   const progress = useMemo(() => progressOf(item, board.items), [item, board.items]);
@@ -79,7 +79,14 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
             <Text style={{ fontSize: 12, color: colors.gray[500] }}>{item.comment_count}</Text>
           </View>
         )}
+        {!!trailing && <View style={{ marginLeft: 'auto' }}>{trailing}</View>}
       </View>
+      {progress?.stalled && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="hourglass-outline" size={12} color={colors.red[600]} />
+          <Text style={{ fontSize: 11, color: colors.red[600], fontWeight: '600' }}>No step finished in {progress.idleDays} days</Text>
+        </View>
+      )}
     </Pressable>
   );
 });

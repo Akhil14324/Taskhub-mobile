@@ -112,16 +112,19 @@ export default function BoardKanban({ board, items, people, onOpenItem, onOpenCe
             <ScrollView style={{ maxHeight: 640 }} contentContainerStyle={{ gap: spacing.sm, minHeight: 60 }}>
               {laneItems.map((t) => (
                 <View key={t.id} ref={mayEdit(t, statusCol) ? makeDraggable : undefined} dataSet={{ boardCard: String(t.id) }}>
-                  <ItemCard item={t} board={board} people={people} groupColor={label.color} showStatus={false} onOpenItem={onOpenItem} onOpenCell={onOpenCell} />
-                  {mayEdit(t, statusCol) && (
-                    <Pressable
-                      onPress={(e) => onOpenCell(anchorOf(e), t, statusCol)}
-                      accessibilityLabel="Move to another column"
-                      style={{ position: 'absolute', right: 8, bottom: 8, padding: 2 }}
-                    >
-                      <Ionicons name="swap-horizontal" size={15} color={colors.gray[500]} />
-                    </Pressable>
-                  )}
+                  <ItemCard
+                    item={t} board={board} people={people} groupColor={label.color} showStatus={false} onOpenItem={onOpenItem} onOpenCell={onOpenCell}
+                    trailing={mayEdit(t, statusCol) ? (
+                      <Pressable
+                        onPress={(e) => onOpenCell(anchorOf(e), t, statusCol)}
+                        accessibilityLabel="Move to another column"
+                        hitSlop={6}
+                        style={({ hovered }) => ({ padding: 3, borderRadius: radius.sm, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+                      >
+                        <Ionicons name="swap-horizontal" size={15} color={colors.gray[500]} />
+                      </Pressable>
+                    ) : null}
+                  />
                 </View>
               ))}
               {!laneItems.length && <Text style={{ color: colors.gray[500], fontSize: 13, textAlign: 'center', paddingVertical: spacing.md }}>Drop a task here</Text>}

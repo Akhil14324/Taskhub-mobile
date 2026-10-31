@@ -220,6 +220,43 @@ export default function BoardTable({
   }, [columns]);
   const SUB_NAME_W = NAME_W + UPD_W - 6 - 30;
 
+  // The rows of a task's steps. A step that has steps of its own shows its own ring and can be opened, to any depth.
+  const renderSubRows = (kids, block, depth) => kids.map((k) => {
+    const own = block.children.get(k.id) || [];
+    const open = openParents.has(k.id);
+    const prog = own.length ? progressMap.get(k.id) : null;
+    return (
+      <View key={k.id}>
+        <View style={{ flexDirection: 'row', height: 34, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
+          <Pressable
+            onPress={() => onOpenItem(k.id)}
+            style={({ hovered }) => ({ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: spacing.sm + depth * 18, paddingRight: spacing.sm, backgroundColor: hovered ? colors.gray[50] : 'transparent' })}
+          >
+            {own.length ? (
+              <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
+                <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={13} color={colors.gray[600]} />
+              </Pressable>
+            ) : <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />}
+            <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+            {prog && (
+              <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <ProgressDot pct={prog.pct} size={16} stroke={2.5} />
+                <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
+              </View>
+            )}
+          </Pressable>
+          {subColumns.map((c) => (
+            <View key={c.id} style={{ borderLeftWidth: 1, borderColor: colors.gray[200] }}>
+              <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
+                onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
+            </View>
+          ))}
+        </View>
+        {open && own.length > 0 && renderSubRows(own, block, depth + 1)}
+      </View>
+    );
+  });
+
   const renderSubTasks = (parent, kids, block) => (
     <View style={{ flexDirection: 'row', backgroundColor: colors.gray[50], paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
       <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
@@ -228,23 +265,7 @@ export default function BoardTable({
           <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subtask</Text></View>
           {subColumns.map((c) => <View key={c.id} style={{ width: c.width, alignItems: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], height: 30, justifyContent: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>{c.title}</Text></View>)}
         </View>
-        {kids.map((k) => (
-          <View key={k.id} style={{ flexDirection: 'row', height: 34, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
-            <Pressable
-              onPress={() => onOpenItem(k.id)}
-              style={({ hovered }) => ({ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.sm, backgroundColor: hovered ? colors.gray[50] : 'transparent' })}
-            >
-              <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
-            </Pressable>
-            {subColumns.map((c) => (
-              <View key={c.id} style={{ borderLeftWidth: 1, borderColor: colors.gray[200] }}>
-                <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
-                  onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
-              </View>
-            ))}
-          </View>
-        ))}
+        {renderSubRows(kids, block, 0)}
         {canAdd && (
           <TextInput
             placeholder="+ Add subtask"

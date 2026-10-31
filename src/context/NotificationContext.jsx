@@ -58,6 +58,7 @@ const TYPE_ICONS = {
   todo_added: 'add-circle',
   task_rejected: 'arrow-undo',
   task_deleted: 'trash',
+  process_stalled: 'hourglass',
   chat: 'chatbubble',
 };
 

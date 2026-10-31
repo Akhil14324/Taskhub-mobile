@@ -108,7 +108,7 @@ export function depthOf(todo, byId) {
 export function subtaskProgress(todo, allTodos) {
   // Counted from the lowest-level sub-tasks (see utils/progress.js), so a list row, a card and a monitor agree.
   const p = progressOf(todo, allTodos);
-  return p ? { done: p.done, total: p.total } : { done: 0, total: 0 };
+  return p ? { done: p.done, total: p.total, pct: p.pct, stalled: p.stalled, idleDays: p.idleDays } : { done: 0, total: 0 };
 }
 
 /**

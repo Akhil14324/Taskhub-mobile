@@ -11,7 +11,8 @@ import BackTitle from '../components/BackTitle';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { SkeletonList } from '../components/Skeleton';
 import { Avatar, Chip, DueChip, EmptyHero, SectionHeader } from '../components/kit';
-import ProgressDot from '../components/ProgressDot';
+import ProcessProgress from '../components/ProcessProgress';
+import AskWhy from '../components/todos/AskWhy';
 import { progressMapOf } from '../utils/progress';
 import { HealthPill, useNowTick } from '../components/todos/TimeHealth';
 import MonitorTodoSheet from '../components/todos/MonitorTodoSheet';
@@ -238,15 +239,7 @@ function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now
         <Ionicons name={STATUS[todo.is_done ? 'done' : todo.status].icon} size={18} color={colors.gray[500]} style={{ marginTop: 1 }} />
         <Text style={{ flex: 1, fontSize: fontSize.base, fontWeight: '600', color: todo.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: todo.is_done ? 'line-through' : 'none' }} numberOfLines={2}>{todo.title}</Text>
       </View>
-      {subCount > 0 && progress && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <ProgressDot pct={progress.pct} size={20} />
-          <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.gray[200], overflow: 'hidden' }}>
-            <View style={{ width: `${progress.pct}%`, height: 6, backgroundColor: progress.pct >= 100 ? '#00c875' : colors.brand[500] }} />
-          </View>
-          <Text style={{ fontSize: 12, color: colors.gray[700], fontWeight: '600' }}>{progress.done} of {progress.total} steps · {progress.pct}%</Text>
-        </View>
-      )}
+      {subCount > 0 && progress && <ProcessProgress p={progress} compact />}
       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
         {!!pill && <HealthPill level={pill.level} label={pill.label} icon={pill.icon} compact />}
         <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
@@ -254,6 +247,13 @@ function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now
         {mine && todo.members?.length > 1 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>shared</Text>}
         {todo.comment_count > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{todo.comment_count} comments</Text>}
         {!!todo.business_name && <Text style={{ fontSize: 11, color: colors.gray[500], fontWeight: '600' }}>{todo.business_name}</Text>}
+        {/* A step that is not done, or a task that has stalled: ask the person why, right here. */}
+        {!todo.is_done && (depth > 0 || progress?.stalled) && (
+          <AskWhy
+            todoId={todo.id}
+            suggestion={depth > 0 ? `Why is "${todo.title}" not done yet?` : `Nothing has been finished on this for ${progress.idleDays} days. What is holding it up?`}
+          />
+        )}
       </View>
     </AnimatedPressable>
   );

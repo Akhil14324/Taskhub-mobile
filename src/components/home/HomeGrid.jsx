@@ -6,7 +6,9 @@ import { spacing, radius, BRAND } from '../../theme/theme';
 import * as SecureStore from '../../utils/secureStorage';
 import { makeDraggable } from '../../hooks/useWebReorder';
 import Popover, { anchorOf } from '../board/Popover';
-import { HOME_WIDGETS, DEFAULT_HOME } from './HomeWidgets';
+import { HOME_WIDGETS, DEFAULT_HOME, WIDGETS_SINCE } from './HomeWidgets';
+
+const VERSION = 2;
 
 const COLS = 12;
 const MIN_SPAN = 3;
@@ -18,11 +20,17 @@ const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
 /** The saved layout, cleaned: only known widgets, sizes in range. A new widget in a later release is appended. */
 function clean(raw) {
-  let list = Array.isArray(raw) ? raw : null;
-  if (!list) return DEFAULT_HOME.map((id) => ({ id, span: HOME_WIDGETS[id].span, h: HOME_WIDGETS[id].h }));
-  list = list.filter((w) => w && HOME_WIDGETS[w.id]).map((w) => ({ id: w.id, span: clamp(Math.round(w.span) || HOME_WIDGETS[w.id].span, MIN_SPAN, COLS), h: clamp(Math.round(w.h) || HOME_WIDGETS[w.id].h, MIN_H, MAX_H) }));
+  // Saved as { v, items } (v 2 on); a plain array is the first release.
+  const saved = Array.isArray(raw) ? { v: 1, items: raw } : raw && Array.isArray(raw.items) ? raw : null;
+  if (!saved) return DEFAULT_HOME.map((id) => ({ id, span: HOME_WIDGETS[id].span, h: HOME_WIDGETS[id].h }));
+  const list = saved.items.filter((w) => w && HOME_WIDGETS[w.id]).map((w) => ({ id: w.id, span: clamp(Math.round(w.span) || HOME_WIDGETS[w.id].span, MIN_SPAN, COLS), h: clamp(Math.round(w.h) || HOME_WIDGETS[w.id].h, MIN_H, MAX_H) }));
+  // Widgets that did not exist when this layout was saved are added once, so new things show up.
+  for (let v = (saved.v || 1) + 1; v <= VERSION; v += 1) {
+    for (const id of WIDGETS_SINCE[v] || []) if (HOME_WIDGETS[id] && !list.some((w) => w.id === id)) list.push({ id, span: HOME_WIDGETS[id].span, h: HOME_WIDGETS[id].h });
+  }
   return list;
 }
+const pack = (items) => JSON.stringify({ v: VERSION, items });
 
 /**
  * Home as a board of widgets that fills the page. On a computer every widget can be dragged by its title to a
@@ -52,7 +60,7 @@ export default function HomeGrid({ ctx, desktop, userId }) {
 
   const save = useCallback((next) => {
     setLayout(next);
-    SecureStore.setItemAsync(key, JSON.stringify(next)).catch(() => {});
+    SecureStore.setItemAsync(key, pack(next)).catch(() => {});
   }, [key]);
 
   // Drag a widget by its title to move it before or after another.
@@ -141,7 +149,7 @@ export default function HomeGrid({ ctx, desktop, userId }) {
         window.removeEventListener('pointerup', up);
         document.body.style.userSelect = '';
         setTimeout(() => {
-          SecureStore.setItemAsync(key, JSON.stringify(layoutRef.current)).catch(() => {});
+          SecureStore.setItemAsync(key, pack(layoutRef.current)).catch(() => {});
         }, 60);
       };
       document.body.style.userSelect = 'none';

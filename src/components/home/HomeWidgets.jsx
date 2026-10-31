@@ -10,8 +10,9 @@ import DailyReportCard from '../engage/DailyReportCard';
 import TeamBoard from '../engage/TeamBoard';
 import AtRiskCard from '../engage/AtRiskCard';
 import ProgressDot from '../ProgressDot';
+import ProcessProgress from '../ProcessProgress';
 import { progressMapOf } from '../../utils/progress';
-import { todayYmd, addDays, parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT } from '../../utils/dates';
+import { todayYmd, addDays, parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT, timeAgo } from '../../utils/dates';
 
 // The stage colours match the board's status labels, so a status looks the same on Home and on a board.
 const STAGES = [
@@ -255,6 +256,105 @@ function ForYou({ ctx }) {
   );
 }
 
+/** Things somebody should look at: tasks with steps that have stalled, late tasks and stuck ones, worst first. */
+function NeedsAttention({ ctx }) {
+  const colors = useColors();
+  const { todos, openTodo } = ctx;
+  const rows = useMemo(() => {
+    const prog = progressMapOf(todos);
+    const today = todayYmd();
+    const out = [];
+    for (const t of todos) {
+      if (t.parent_id || t.is_done) continue;
+      const p = prog.get(t.id);
+      if (p?.stalled) out.push({ t, rank: 0 + (p.daysToDue ?? 9) / 100, icon: 'hourglass-outline', color: colors.red[600], text: `${p.done} of ${p.total} steps · nothing finished in ${p.idleDays} days${p.daysToDue === null || p.daysToDue === undefined ? '' : p.daysToDue < 0 ? `, ${-p.daysToDue}d late` : `, due in ${p.daysToDue}d`}` });
+      else if (t.status === 'blocked') out.push({ t, rank: 1, icon: 'hand-left-outline', color: colors.gray[700], text: 'Stuck' });
+      else if (t.due_date && t.due_date < today) out.push({ t, rank: 2 + (t.due_date.localeCompare(today) < 0 ? 0 : 1), icon: 'alert-circle-outline', color: colors.red[600], text: `Late since ${t.due_date}` });
+    }
+    return out.sort((a, b) => a.rank - b.rank).slice(0, 14);
+  }, [todos, colors]);
+  if (!rows.length) return <Empty text="Nothing needs attention. Everything is moving." />;
+  return (
+    <View>
+      {rows.map(({ t, icon, color, text }) => (
+        <AnimatedPressable key={t.id} onPress={() => openTodo(t.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[100] }}>
+          <Ionicons name={icon} size={18} color={color} />
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+            <Text numberOfLines={2} style={{ fontSize: 12, color: colors.gray[600] }}>{[t.assignee_name, t.business_name].filter(Boolean).join(' · ')}{[t.assignee_name, t.business_name].some(Boolean) ? ' · ' : ''}{text}</Text>
+          </View>
+        </AnimatedPressable>
+      ))}
+    </View>
+  );
+}
+
+/** For each business: what was finished this week (tasks and steps) and what is still open. */
+function ByBusiness({ ctx }) {
+  const colors = useColors();
+  const { todos } = ctx;
+  const rows = useMemo(() => {
+    const weekAgo = addDays(todayYmd(), -6);
+    const byId = new Map(todos.map((t) => [t.id, t]));
+    const hasKids = new Set(todos.filter((t) => t.parent_id).map((t) => t.parent_id));
+    const m = new Map();
+    for (const t of todos) {
+      if (!t.business_id) continue;
+      const cur = m.get(t.business_id) || { id: t.business_id, name: t.business_name, tasksDone: 0, stepsDone: 0, open: 0, openSteps: 0 };
+      const isStep = t.parent_id && byId.has(t.parent_id) && !hasKids.has(t.id);
+      const finishedThisWeek = t.is_done && t.done_at && t.done_at.slice(0, 10) >= weekAgo;
+      if (!t.parent_id) { if (finishedThisWeek) cur.tasksDone += 1; if (!t.is_done) cur.open += 1; } else if (isStep) { if (finishedThisWeek) cur.stepsDone += 1; if (!t.is_done) cur.openSteps += 1; }
+      m.set(t.business_id, cur);
+    }
+    return [...m.values()].sort((a, b) => (b.stepsDone + b.tasksDone) - (a.stepsDone + a.tasksDone) || b.open - a.open);
+  }, [todos]);
+  if (!rows.length) return <Empty text="No business work yet." />;
+  const max = Math.max(1, ...rows.map((r) => r.stepsDone + r.tasksDone));
+  return (
+    <View style={{ gap: 12 }}>
+      {rows.map((r) => (
+        <View key={r.id} style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.gray[900] }}>{r.name}</Text>
+            <Text style={{ fontSize: 12, color: colors.gray[600] }}>{r.open} open · {r.openSteps} steps left</Text>
+          </View>
+          <View style={{ height: 12, flexDirection: 'row', borderRadius: 3, overflow: 'hidden', backgroundColor: colors.gray[100] }}>
+            <View style={{ width: `${(r.stepsDone / max) * 100}%`, backgroundColor: paletteHex('blue') }} />
+            <View style={{ width: `${(r.tasksDone / max) * 100}%`, backgroundColor: paletteHex('green') }} />
+          </View>
+          <Text style={{ fontSize: 12, color: colors.gray[600] }}>{r.stepsDone} steps and {r.tasksDone} tasks finished this week</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** The last things finished (steps and tasks), newest first. */
+function Recent({ ctx }) {
+  const colors = useColors();
+  const { todos, openTodo } = ctx;
+  const rows = useMemo(() => {
+    const byId = new Map(todos.map((t) => [t.id, t]));
+    return todos.filter((t) => t.is_done && t.done_at).sort((a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 14)
+      .map((t) => ({ t, parent: t.parent_id ? byId.get(t.parent_id) : null }));
+  }, [todos]);
+  if (!rows.length) return <Empty text="Nothing finished yet." />;
+  return (
+    <View>
+      {rows.map(({ t, parent }) => (
+        <AnimatedPressable key={t.id} onPress={() => openTodo(t.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderBottomWidth: 1, borderColor: colors.gray[100] }}>
+          <Ionicons name="checkmark-circle" size={18} color="#00c875" />
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+            <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{[t.done_by_name || t.assignee_name, parent ? `step of ${parent.title}` : t.business_name].filter(Boolean).join(' · ')}</Text>
+          </View>
+          <Text style={{ fontSize: 11, color: colors.gray[500] }}>{timeAgo(t.done_at)}</Text>
+        </AnimatedPressable>
+      ))}
+    </View>
+  );
+}
+
 /** Tasks that are made of steps, with how many of those steps are done, the least done first. */
 function Processes({ ctx }) {
   const colors = useColors();
@@ -272,17 +372,10 @@ function Processes({ ctx }) {
     <View>
       {rows.map(({ t, p }) => (
         <AnimatedPressable key={t.id} onPress={() => openTodo(t.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[100] }}>
-          <ProgressDot pct={p.pct} size={22} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
-            <View style={{ height: 5, borderRadius: 3, backgroundColor: colors.gray[200], overflow: 'hidden' }}>
-              <View style={{ width: `${p.pct}%`, height: 5, backgroundColor: p.pct >= 100 ? '#00c875' : BRAND }} />
-            </View>
             <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{[t.assignee_name, t.business_name].filter(Boolean).join(' · ')}</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray[900] }}>{p.pct}%</Text>
-            <Text style={{ fontSize: 11, color: colors.gray[500] }}>{p.done} of {p.total} steps</Text>
+            <ProcessProgress p={p} compact />
           </View>
         </AnimatedPressable>
       ))}
@@ -292,19 +385,24 @@ function Processes({ ctx }) {
 
 // id -> { title, icon, span (of 12 columns), h (px), render, scroll }
 export const HOME_WIDGETS = {
-  numbers: { title: 'At a glance', icon: 'speedometer-outline', span: 12, h: 150, Body: Numbers },
-  myday: { title: 'My day', icon: 'sunny-outline', span: 4, h: 300, Body: MyDay },
-  stages: { title: 'Tasks by stage', icon: 'stats-chart-outline', span: 4, h: 300, Body: Stages },
+  numbers: { title: 'At a glance', icon: 'speedometer-outline', span: 12, h: 140, Body: Numbers },
+  myday: { title: 'My day', icon: 'sunny-outline', span: 4, h: 280, Body: MyDay },
+  attention: { title: 'Needs attention', icon: 'alert-circle-outline', span: 4, h: 280, Body: NeedsAttention },
+  stages: { title: 'Tasks by stage', icon: 'stats-chart-outline', span: 4, h: 280, Body: Stages },
+  processes: { title: 'Progress of tasks with steps', icon: 'git-branch-outline', span: 6, h: 340, Body: Processes },
+  bybiz: { title: 'This week by business', icon: 'business-outline', span: 6, h: 340, Body: ByBusiness },
   workload: { title: 'Workload by person', icon: 'people-outline', span: 4, h: 300, Body: Workload },
-  week: { title: 'Coming up this week', icon: 'calendar-outline', span: 6, h: 290, Body: WeekAhead },
-  processes: { title: 'Progress of tasks with steps', icon: 'git-branch-outline', span: 6, h: 330, Body: Processes },
-  late: { title: 'Late tasks', icon: 'alert-circle-outline', span: 6, h: 290, Body: LateList },
-  businesses: { title: 'Progress by business', icon: 'briefcase-outline', span: 6, h: 290, Body: Businesses },
-  foryou: { title: 'Business work for you', icon: 'person-outline', span: 6, h: 290, Body: ForYou },
+  week: { title: 'Coming up this week', icon: 'calendar-outline', span: 4, h: 300, Body: WeekAhead },
+  recent: { title: 'Finished recently', icon: 'checkmark-done-outline', span: 4, h: 300, Body: Recent },
+  late: { title: 'Late tasks', icon: 'time-outline', span: 6, h: 300, Body: LateList },
+  foryou: { title: 'Business work for you', icon: 'person-outline', span: 6, h: 300, Body: ForYou },
+  businesses: { title: 'Progress by business', icon: 'briefcase-outline', span: 6, h: 280, Body: Businesses },
   team: { title: 'Team today', icon: 'people-circle-outline', span: 6, h: 380, Body: ({ ctx }) => <TeamBoard refreshKey={ctx.reportKey} /> },
   report: { title: 'Daily report', icon: 'document-text-outline', span: 6, h: 380, Body: ({ ctx }) => <DailyReportCard refreshKey={ctx.reportKey} /> },
-  atrisk: { title: 'At risk', icon: 'warning-outline', span: 6, h: 290, Body: ({ ctx }) => <AtRiskCard onOpen={ctx.openTodo} /> },
+  atrisk: { title: 'At risk', icon: 'warning-outline', span: 6, h: 280, Body: ({ ctx }) => <AtRiskCard onOpen={ctx.openTodo} /> },
 };
-export const DEFAULT_HOME = ['numbers', 'myday', 'stages', 'workload', 'processes', 'week', 'late', 'businesses', 'foryou', 'team', 'report', 'atrisk'];
+export const DEFAULT_HOME = ['numbers', 'myday', 'attention', 'stages', 'processes', 'bybiz', 'workload', 'week', 'recent', 'late', 'foryou', 'businesses', 'team', 'report', 'atrisk'];
+// Widgets added after the first release: a person who saved a layout earlier gets these added once, at the end.
+export const WIDGETS_SINCE = { 2: ['attention', 'processes', 'bybiz', 'recent'] };
 
 export { ScrollView };
