@@ -29,7 +29,7 @@ const clock = (s) => {
  * minute pieces, so an hour or more works), or paste a transcript. "Make to-dos" reads the whole meeting and
  * creates each task for the person it is for. Only the person who recorded it can see it; no audio is kept.
  */
-export default function MeetingNotesScreen() {
+export default function MeetingNotesScreen({ embedded = false }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -84,8 +84,8 @@ export default function MeetingNotesScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[styles.page, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
-        <BackTitle title="Meetings" style={styles.title} />
+      <ScrollView contentContainerStyle={[styles.page, { paddingTop: embedded ? spacing.sm : insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
+        {!embedded && <BackTitle title="Meetings" style={styles.title} />}
         <Text style={styles.lead}>Record a whole meeting. The text is kept and to-dos are made from it, each given to the person it is for.</Text>
 
         <AnimatedPressable style={styles.primary} onPress={() => setNewOpen(true)}>

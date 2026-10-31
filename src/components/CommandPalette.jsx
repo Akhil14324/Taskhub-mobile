@@ -71,7 +71,7 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'dashboards', group: 'Go to', icon: 'speedometer-outline', label: 'Dashboards: numbers from your boards', run: () => go('Dashboards') },
     { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
     { id: 'automations', group: 'Go to', icon: 'flash-outline', label: 'Automations: rules that do things for you', run: () => go('Automations') },
-    { id: 'meetings', group: 'Go to', icon: 'mic-outline', label: 'Meetings: record a whole meeting', run: () => go('MeetingNotes') },
+    { id: 'meetings', group: 'Go to', icon: 'document-text-outline', label: 'Notes: notepad and meetings', run: () => go('MeetingNotes') },
     { id: 'progress', group: 'Go to', icon: 'sunny-outline', label: 'Progress: today, stand-up, wins, goals', hint: hint('nav.progress'), run: () => go('Progress') },
     { id: 'recap', group: 'Go to', icon: 'stats-chart-outline', label: 'Week in review', run: () => go('Recap') },
     { id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') },

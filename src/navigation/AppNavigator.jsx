@@ -56,7 +56,7 @@ import MyWorkScreen from '../screens/MyWorkScreen';
 import TimeboxScreen from '../screens/TimeboxScreen';
 import DashboardsScreen from '../screens/DashboardsScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
-import MeetingNotesScreen from '../screens/MeetingNotesScreen';
+import MeetingNotesScreen from '../screens/NotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
 import PersonMonitorScreen from '../screens/PersonMonitorScreen';
@@ -321,7 +321,7 @@ function MainTabs() {
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
-    { group: 'Work', label: 'Meetings', icon: 'mic-outline', route: 'MeetingNotes' },
+    { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
