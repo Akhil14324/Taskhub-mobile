@@ -17,6 +17,7 @@ export const ACTIONS = [
   { id: 'app.help', group: 'Search and commands', label: 'Show the keyboard shortcuts', scope: 'global', combos: ['?'] },
   { id: 'nav.home', group: 'Go to', label: 'Home', scope: 'global', combos: ['g h'] },
   { id: 'nav.mywork', group: 'Go to', label: 'My work', scope: 'global', combos: ['g w'] },
+  { id: 'nav.timebox', group: 'Go to', label: 'Timebox', scope: 'global', combos: ['g y'] },
   { id: 'nav.boards', group: 'Go to', label: 'Boards', scope: 'global', combos: ['g b'] },
   { id: 'nav.progress', group: 'Go to', label: 'Progress', scope: 'global', combos: ['g d'] },
   { id: 'nav.todos', group: 'Go to', label: 'To-do and business tasks', scope: 'global', combos: ['g t'] },
@@ -54,6 +55,8 @@ export const ACTIONS = [
   { id: 'cal.week', group: 'Calendar', label: 'Week view', scope: 'calendar', combos: ['c w'] },
   { id: 'cal.day', group: 'Calendar', label: 'Day view', scope: 'calendar', combos: ['c d'] },
   { id: 'cal.agenda', group: 'Calendar', label: 'Agenda view', scope: 'calendar', combos: ['c a'] },
+
+  { id: 'board.undo', group: 'Boards', label: 'Undo the last change on the board', scope: 'board', combos: ['mod+z'] },
 
   { id: 'chat.next', group: 'Chat', label: 'Next conversation', scope: 'chat', combos: ['ArrowDown'] },
   { id: 'chat.prev', group: 'Chat', label: 'Previous conversation', scope: 'chat', combos: ['ArrowUp'] },

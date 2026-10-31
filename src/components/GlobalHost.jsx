@@ -12,6 +12,7 @@ import FocusMode from './FocusMode';
 import RoulettePicker from './RoulettePicker';
 import CatBuddy from './buddy/CatBuddy';
 import AutomationHost from './automation/AutomationHost';
+import TimeboxMorning from './timebox/TimeboxMorning';
 import { configureFeedback } from '../utils/feedback';
 import { on, openPalette, showToast } from '../utils/events';
 import { takeSharedText } from '../utils/shareTarget';
@@ -60,6 +61,7 @@ export default function GlobalHost() {
       <FocusMode />
       <AttentionAlert />
       <AutomationHost />
+      <TimeboxMorning userId={user?.id} />
       <CatBuddy />
     </>
   );
