@@ -341,11 +341,11 @@ export default function BoardScreen({ route }) {
       )}
       {menu?.type === 'group' && (
         <GroupMenu
-          anchor={menu.anchor} group={menu.group} canManage={data.access.manage} onClose={() => setMenu(null)}
+          anchor={menu.anchor} group={menu.group} canManage={data.access.manage && data.board.kind !== 'my_todos'} onClose={() => setMenu(null)}
           onRename={(name) => board.updateGroup(menu.group, { name })}
           onColor={(color) => board.updateGroup(menu.group, { color })}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
-          onDuplicate={data.access.add ? () => board.duplicateGroup(menu.group) : null}
+          onDuplicate={data.access.add && data.board.kind !== 'my_todos' ? () => board.duplicateGroup(menu.group) : null}
         />
       )}
       {menu?.type === 'more' && (

@@ -5,6 +5,8 @@ import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
 import { spacing, radius } from '../../theme/theme';
 import { CellView } from './Cells';
+import ProgressDot from '../ProgressDot';
+import { progressOf } from '../../utils/progress';
 import { groupBlocks, paletteHex, canEditColumn, statusLabelOf, cellValue, itemWordOf } from './model';
 import { mayEdit } from './CellEditorHost';
 import { anchorOf } from './BoardTable';
@@ -26,6 +28,7 @@ export function cardColumns(columns) {
 export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem, onOpenCell, groupColor, showStatus = true }) {
   const colors = useColors();
   const cols = useMemo(() => cardColumns(board.columns), [board.columns]);
+  const progress = useMemo(() => progressOf(item, board.items), [item, board.items]);
   const tap = (column) => (e) => {
     if (canEditColumn(column) && mayEdit(item, column)) onOpenCell(anchorOf(e), item, column);
   };
@@ -60,14 +63,14 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
         )}
         {cols.extra.filter((c) => { const v = cellValue(item, c, board.values); return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.every((x) => x === null)); }).map((c) => (
           <Pressable key={c.id} onPress={tap(c)} hitSlop={4} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 180 }}>
-            <Text style={{ fontSize: 11, color: colors.gray[500] }}>{c.title}</Text>
+            {c.kind !== 'dependency' && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{c.title}</Text>}
             <CellView item={item} column={c} values={board.values} people={people} compact />
           </Pressable>
         ))}
-        {item.subtask_count > 0 && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            <Ionicons name="git-branch-outline" size={12} color={colors.gray[500]} />
-            <Text style={{ fontSize: 12, color: colors.gray[500] }}>{item.subtask_done_count}/{item.subtask_count}</Text>
+        {progress && (
+          <View accessibilityLabel={`${progress.done} of ${progress.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <ProgressDot pct={progress.pct} size={18} />
+            <Text style={{ fontSize: 12, color: colors.gray[600] }}>{progress.done}/{progress.total}</Text>
           </View>
         )}
         {item.comment_count > 0 && (

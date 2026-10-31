@@ -9,6 +9,8 @@ import { paletteHex, paletteInk } from '../board/model';
 import DailyReportCard from '../engage/DailyReportCard';
 import TeamBoard from '../engage/TeamBoard';
 import AtRiskCard from '../engage/AtRiskCard';
+import ProgressDot from '../ProgressDot';
+import { progressMapOf } from '../../utils/progress';
 import { todayYmd, addDays, parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT } from '../../utils/dates';
 
 // The stage colours match the board's status labels, so a status looks the same on Home and on a board.
@@ -253,6 +255,41 @@ function ForYou({ ctx }) {
   );
 }
 
+/** Tasks that are made of steps, with how many of those steps are done, the least done first. */
+function Processes({ ctx }) {
+  const colors = useColors();
+  const { todos, openTodo } = ctx;
+  const rows = useMemo(() => {
+    const prog = progressMapOf(todos);
+    return todos
+      .filter((t) => !t.parent_id && !t.is_done && prog.get(t.id)?.total > 1)
+      .map((t) => ({ t, p: prog.get(t.id) }))
+      .sort((a, b) => a.p.pct - b.p.pct || (a.t.due_date || '9').localeCompare(b.t.due_date || '9'))
+      .slice(0, 12);
+  }, [todos]);
+  if (!rows.length) return <Empty text="No task has steps yet. Add sub-tasks to a task and its progress shows here." />;
+  return (
+    <View>
+      {rows.map(({ t, p }) => (
+        <AnimatedPressable key={t.id} onPress={() => openTodo(t.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[100] }}>
+          <ProgressDot pct={p.pct} size={22} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+            <View style={{ height: 5, borderRadius: 3, backgroundColor: colors.gray[200], overflow: 'hidden' }}>
+              <View style={{ width: `${p.pct}%`, height: 5, backgroundColor: p.pct >= 100 ? '#00c875' : BRAND }} />
+            </View>
+            <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{[t.assignee_name, t.business_name].filter(Boolean).join(' · ')}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray[900] }}>{p.pct}%</Text>
+            <Text style={{ fontSize: 11, color: colors.gray[500] }}>{p.done} of {p.total} steps</Text>
+          </View>
+        </AnimatedPressable>
+      ))}
+    </View>
+  );
+}
+
 // id -> { title, icon, span (of 12 columns), h (px), render, scroll }
 export const HOME_WIDGETS = {
   numbers: { title: 'At a glance', icon: 'speedometer-outline', span: 12, h: 150, Body: Numbers },
@@ -260,6 +297,7 @@ export const HOME_WIDGETS = {
   stages: { title: 'Tasks by stage', icon: 'stats-chart-outline', span: 4, h: 300, Body: Stages },
   workload: { title: 'Workload by person', icon: 'people-outline', span: 4, h: 300, Body: Workload },
   week: { title: 'Coming up this week', icon: 'calendar-outline', span: 6, h: 290, Body: WeekAhead },
+  processes: { title: 'Progress of tasks with steps', icon: 'git-branch-outline', span: 6, h: 330, Body: Processes },
   late: { title: 'Late tasks', icon: 'alert-circle-outline', span: 6, h: 290, Body: LateList },
   businesses: { title: 'Progress by business', icon: 'briefcase-outline', span: 6, h: 290, Body: Businesses },
   foryou: { title: 'Business work for you', icon: 'person-outline', span: 6, h: 290, Body: ForYou },
@@ -267,6 +305,6 @@ export const HOME_WIDGETS = {
   report: { title: 'Daily report', icon: 'document-text-outline', span: 6, h: 380, Body: ({ ctx }) => <DailyReportCard refreshKey={ctx.reportKey} /> },
   atrisk: { title: 'At risk', icon: 'warning-outline', span: 6, h: 290, Body: ({ ctx }) => <AtRiskCard onOpen={ctx.openTodo} /> },
 };
-export const DEFAULT_HOME = ['numbers', 'myday', 'stages', 'workload', 'week', 'late', 'businesses', 'foryou', 'team', 'report', 'atrisk'];
+export const DEFAULT_HOME = ['numbers', 'myday', 'stages', 'workload', 'processes', 'week', 'late', 'businesses', 'foryou', 'team', 'report', 'atrisk'];
 
 export { ScrollView };

@@ -51,12 +51,20 @@ export default function useBoard(boardId) {
   }, [subscribe, boardId, reloadSoon]);
 
   // ---- local patching -------------------------------------------------------------------------------
+  // On "My to-dos" a group is one of the person's lists, so an item's group is its list_id.
   const patchItem = useCallback((id, patch) => {
-    setData((d) => d && { ...d, items: d.items.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
+    setData((d) => d && {
+      ...d,
+      items: d.items.map((t) => (t.id === id ? { ...t, ...patch, ...(d.board.kind === 'my_todos' && 'list_id' in patch ? { business_section_id: patch.list_id || null } : {}) } : t)),
+    });
   }, []);
   const putItem = useCallback((todo) => {
     if (!todo) return;
-    setData((d) => d && { ...d, items: d.items.some((t) => t.id === todo.id) ? d.items.map((t) => (t.id === todo.id ? todo : t)) : [...d.items, todo] });
+    setData((d) => {
+      if (!d) return d;
+      const next = d.board.kind === 'my_todos' && !todo.parent_id ? { ...todo, business_section_id: todo.list_id || null } : todo;
+      return { ...d, items: d.items.some((t) => t.id === todo.id) ? d.items.map((t) => (t.id === todo.id ? next : t)) : [...d.items, next] };
+    });
   }, []);
 
   const fail = useCallback((err, fallback = 'That did not work') => {

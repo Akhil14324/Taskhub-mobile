@@ -109,7 +109,16 @@ export default function TeamMonitorScreen() {
               <Stat label="Overdue" value={team.overdue} level={team.overdue ? 'red' : null} />
               <Stat label="Stuck" value={team.blocked} level={team.blocked ? 'orange' : null} />
               <Stat label="Done" value={team.completed} level={team.completed ? 'green' : null} />
+              <Stat label="Steps done" value={team.steps?.finished || 0} level={team.steps?.finished ? 'green' : null} />
             </View>
+            {team.steps?.total > 0 && (
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: fontSize.sm, color: colors.gray[600] }}>
+                  {team.steps.done} of {team.steps.total} steps done across {team.steps.processes} open task{team.steps.processes === 1 ? '' : 's'}
+                </Text>
+                <StepBar done={team.steps.done} total={team.steps.total} />
+              </View>
+            )}
             <HealthBar health={team.health} height={10} />
             <View style={styles.legend}>
               {['green', 'orange', 'red'].map((l) => (
@@ -172,14 +181,34 @@ function PersonRow({ person, onPress }) {
         <Ionicons name="chevron-forward" size={18} color={colors.gray[400]} />
       </View>
       <HealthBar health={s.health} />
+      {s.steps?.total > 0 && (
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontSize: fontSize.sm, color: colors.gray[700] }}>
+            <Text style={{ fontWeight: '800', color: colors.gray[900] }}>{s.steps.done} of {s.steps.total}</Text> steps done in {s.steps.processes} open task{s.steps.processes === 1 ? '' : 's'}
+          </Text>
+          <StepBar done={s.steps.done} total={s.steps.total} />
+        </View>
+      )}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
         <Mini label="open" value={s.open} />
         {s.overdue > 0 && <Mini label="overdue" value={s.overdue} color={healthColor('red', theme)} />}
         {s.blocked > 0 && <Mini label="blocked" value={s.blocked} color={healthColor('orange', theme)} />}
         <Mini label="done" value={s.completed} color={s.completed ? healthColor('green', theme) : undefined} />
+        {s.steps?.finished > 0 && <Mini label="steps done" value={s.steps.finished} color={healthColor('green', theme)} />}
         {s.on_time_rate !== null && <Mini label="on time" value={`${s.on_time_rate}%`} />}
       </View>
     </AnimatedPressable>
+  );
+}
+
+/** How far the steps (sub-tasks) of the open tasks have got. */
+function StepBar({ done, total }) {
+  const colors = useColors();
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <View accessibilityLabel={`${pct} percent of steps done`} style={{ height: 8, borderRadius: 4, backgroundColor: colors.gray[200], overflow: 'hidden' }}>
+      <View style={{ width: `${pct}%`, height: 8, backgroundColor: pct >= 100 ? '#00c875' : colors.brand[500] }} />
+    </View>
   );
 }
 

@@ -14,6 +14,8 @@ import { mayEdit } from './CellEditorHost';
 import { canEditColumn, itemWordOf, paletteHex } from './model';
 import Popover, { anchorOf } from './Popover';
 import Hint from './Hint';
+import ProgressDot from '../ProgressDot';
+import { progressOf } from '../../utils/progress';
 import TodoComments from '../todos/TodoComments';
 import { TimelineEntries } from '../todos/TimeHealth';
 import { AttachmentList, pickFile, uploadAttachment } from '../todos/collab';
@@ -93,6 +95,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   useEffect(() => { if (tab === 'files' && files === null) loadFiles(); }, [tab, files, loadFiles]);
   useEffect(() => { if (tab === 'activity') loadLog(); }, [tab, loadLog, item?.updated_at, item?.status]);
 
+  const prog = useMemo(() => (item ? progressOf(item, board.items) : null), [item, board.items]);
   const group = useMemo(() => board.groups.find((g) => g.id === item?.business_section_id) || null, [board.groups, item]);
   if (!item) return null;
 
@@ -195,6 +198,12 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
             <View style={{ flex: 1 }}>
               <Text numberOfLines={2} style={{ fontSize: 24, fontWeight: '700', color: colors.gray[900] }}>{item.title}</Text>
               <Text style={{ fontSize: 13, color: colors.gray[600], marginTop: 2 }}>in <Ionicons name="arrow-forward" size={11} /> {board.board.name}</Text>
+              {!!prog && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <ProgressDot pct={prog.pct} size={22} />
+                  <Text style={{ fontSize: 13, color: colors.gray[700] }}>{prog.done} of {prog.total} steps done · {prog.pct}%</Text>
+                </View>
+              )}
             </View>
             <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="close" size={22} color={colors.gray[700]} />
@@ -208,7 +217,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
       {groupAnchor && (
         <Popover visible anchor={groupAnchor} onClose={() => setGroupAnchor(null)} width={240}>
           {board.groups.map((g) => (
-            <Pressable key={g.id} onPress={() => { setGroupAnchor(null); if (g.id !== item.business_section_id) actions.updateFields(item, { business_section_id: g.id }); }}
+            <Pressable key={g.id} onPress={() => { setGroupAnchor(null); if (g.id !== item.business_section_id) actions.updateFields(item, board.board.kind === 'my_todos' ? { list_id: g.id } : { business_section_id: g.id }); }}
               style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: paletteHex(g.color) }} />
               <Text style={{ flex: 1, fontSize: 14, color: colors.gray[900] }}>{g.name}</Text>

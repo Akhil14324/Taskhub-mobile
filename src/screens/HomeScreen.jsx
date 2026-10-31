@@ -157,7 +157,7 @@ export default function HomeScreen() {
 
   const stats = useHomeStats(todos, meId);
   const ctx = {
-    stats, insights, myDay, reportKey, assignedToMe, toggleTodo,
+    stats, todos, insights, myDay, reportKey, assignedToMe, toggleTodo,
     doneToday, totalToday, dueNow, overduePersonal,
     go: (name, params) => navigation.navigate(name, params),
     openAdd: () => setAddOpen(true),

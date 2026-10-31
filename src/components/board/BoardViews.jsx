@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
@@ -9,6 +9,7 @@ import { Avatar } from '../kit';
 import {
   todayYmd, addDays, parseYmd, toYmd, MONTHS_SHORT, WEEKDAYS_SHORT, timeAgo, formatDue,
 } from '../../utils/dates';
+import { progressMapOf } from '../../utils/progress';
 import {
   statusLabelOf, paletteHex, paletteInk, cellValue, groupBlocks, numberSummary, formatNumber,
 } from './model';
@@ -149,6 +150,8 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
   const [fit, setFit] = useState(false);
   const [shut, setShut] = useState(() => new Set());
   const [links, setLinks] = useState([]);
+  const scrollRef = useRef(null);
+  const scrolled = useRef(false);
   useEffect(() => {
     if (!gantt) return undefined;
     let live = true;
@@ -157,6 +160,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
   }, [gantt, board.board.id, items.length, items.map((t) => `${t.due_date}${t.start_date}`).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = todayYmd();
+  const progress = useMemo(() => progressMapOf(board.items), [board.items]);
   const statusCol = statusColumnOf(board);
   const blocks = useMemo(() => groupBlocks(board.groups, items).map((b) => ({ ...b, dated: b.top.filter((t) => t.start_date || dueOf(t)) })).filter((b) => b.dated.length), [board.groups, items]);
   const span = useMemo(() => {
@@ -185,6 +189,14 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
   const rowIdx = new Map();
   rows.forEach((r, i) => { if (r.item) rowIdx.set(r.item.id, i); });
 
+  // Open scrolled to the first task (or to today when the first task is already behind us).
+  useEffect(() => {
+    if (scrolled.current || !blocks.length) return;
+    const firstOpen = blocks.flatMap((b) => b.dated).filter((t) => !t.is_done).map((t) => t.start_date || dueOf(t)).filter(Boolean).sort()[0];
+    const target = firstOpen && firstOpen > today ? firstOpen : today;
+    scrolled.current = true;
+    setTimeout(() => scrollRef.current?.scrollTo({ x: Math.max(0, x(target) - 120), animated: false }), 60);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   if (!blocks.length) {
     return <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>No task has a date yet. Give tasks a Due date or a Timeline and they show here.</Text>;
   }
@@ -202,6 +214,9 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
       <View style={{ flex: 1, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
           <Text style={{ fontSize: 20, fontWeight: '600', color: colors.gray[900], flex: 1 }}>{gantt ? 'Gantt' : 'Timeline'}</Text>
+          <Pressable onPress={() => scrollRef.current?.scrollTo({ x: Math.max(0, x(today) - 160), animated: true })} accessibilityLabel="Scroll to today" style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
+            <Text style={{ fontSize: 14, color: colors.gray[800] }}>Today</Text>
+          </Pressable>
           <Pressable onPress={() => setFit((f) => !f)} accessibilityLabel="Fit everything on the screen" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, borderWidth: 1, borderColor: fit ? BRAND : colors.gray[300], backgroundColor: fit ? colors.brand[50] : 'transparent' }}>
             <Ionicons name="calendar-outline" size={16} color={fit ? BRAND : colors.gray[700]} />
             <Text style={{ fontSize: 14, color: fit ? BRAND : colors.gray[800] }}>Auto Fit</Text>
@@ -239,7 +254,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
                 </View>
               ))}
             </View>
-            <ScrollView horizontal style={{ flex: 1 }}>
+            <ScrollView horizontal style={{ flex: 1 }} ref={scrollRef}>
               <View style={{ width: gridW }}>
                 {/* Header: week ranges over day cells */}
                 <View style={{ height: HEAD_H, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
@@ -281,9 +296,12 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
                         <View key={`t${t.id}`} style={{ position: 'absolute', top: i * ROW_H + 8, left: bar.left, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <Pressable
                             onPress={() => onOpenItem(t.id)}
-                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}`}
-                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 3, backgroundColor: paletteHex(label?.color || 'blue') }}
-                          />
+                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}${progress.get(t.id) ? `, ${progress.get(t.id).pct} percent of its steps done` : ''}`}
+                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 3, backgroundColor: paletteHex(label?.color || 'blue'), overflow: 'hidden' }}
+                          >
+                            {/* how much of its sub-tasks are done: the left part of the bar is darker */}
+                            {!!progress.get(t.id)?.pct && <View style={{ width: `${progress.get(t.id).pct}%`, height: '100%', backgroundColor: 'rgba(0,0,0,0.28)' }} />}
+                          </Pressable>
                           <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], width: 160 }}>{t.title}</Text>
                         </View>
                       );

@@ -9,6 +9,8 @@ import {
 } from './model';
 import { mayEdit } from './CellEditorHost';
 import Hint from './Hint';
+import ProgressDot from '../ProgressDot';
+import { progressMapOf } from '../../utils/progress';
 import { anchorOf } from './Popover';
 import { formatDue } from '../../utils/dates';
 
@@ -142,6 +144,7 @@ export default function BoardTable({
   const canManage = !!access?.manage;
   const canAdd = !!access?.add;
   const word = itemWordOf(board);
+  const progressMap = useMemo(() => progressMapOf(board.items), [board.items]);
   const tableWidth = NAME_W + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
@@ -264,6 +267,7 @@ export default function BoardTable({
     const open = openParents.has(t.id);
     const focusedHere = focus?.itemId === t.id;
     const hasKids = kids.length > 0;
+    const prog = hasKids ? progressMap.get(t.id) : null;
     return (
       <View key={t.id}>
         <View style={{ flexDirection: 'row', height: ROW_H, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
@@ -285,7 +289,12 @@ export default function BoardTable({
             <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>
               {t.title}
             </Text>
-            {hasKids && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{t.subtask_done_count}/{kids.length}</Text>}
+            {hasKids && prog && (
+              <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <ProgressDot pct={prog.pct} size={18} />
+                <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
+              </View>
+            )}
             {mayEdit(t) && (
               <Pressable onPress={(e) => onOpenName(anchorOf(e), t)} hitSlop={4} accessibilityLabel="Rename" style={({ hovered }) => ({ opacity: hovered ? 1 : 0.4 })}>
                 <Ionicons name="pencil-outline" size={13} color={colors.gray[500]} />
