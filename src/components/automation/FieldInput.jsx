@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { useTodos } from '../../context/TodoContext';
 import useDirectory from '../../hooks/useDirectory';
+import useBoards from '../../hooks/useBoards';
 import { spacing, radius, fontSize } from '../../theme/theme';
 import { glass } from '../../theme/glass';
 import AnimatedPressable from '../AnimatedPressable';
@@ -50,6 +51,16 @@ function VariableRow({ vars, onPick }) {
           {vars.map((v) => <Chip key={v} small label={`%${v}`} onPress={() => onPick(`%${v}`)} />)}
         </ScrollView>
       )}
+    </View>
+  );
+}
+
+/** Board chips; its own component so only a board field loads the board list. */
+function BoardChoice({ value, onPick }) {
+  const { boards } = useBoards();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+      {(boards || []).map((b) => <Chip key={b.id} small label={b.name} active={String(value) === String(b.id)} onPress={() => onPick(String(b.id))} />)}
     </View>
   );
 }
@@ -213,6 +224,8 @@ export default function FieldInput({ field, value, onChange, ctx = {} }) {
             {(businesses || []).map((b) => <Chip key={b.id} small label={b.name} active={String(value) === String(b.id)} onPress={() => set(String(b.id))} />)}
           </View>
         );
+      case 'board':
+        return <BoardChoice value={value} onPick={set} />;
       case 'task':
         return (
           <View style={styles.row}>

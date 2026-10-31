@@ -105,6 +105,9 @@ export default function BoardCards({ board, items, people, collapsed, onToggleGr
   const colors = useColors();
   const blocks = useMemo(() => groupBlocks(board.groups, items), [board.groups, items]);
   const word = board.board.item_word;
+  // Speed (M14): a phone draws 40 cards per group, then "Show more".
+  const [shown, setShown] = useState(() => new Map());
+  const limitOf = (gid) => shown.get(gid ?? 'none') || 40;
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 140, gap: spacing.lg }}>
       {blocks.map((b) => {
@@ -116,9 +119,14 @@ export default function BoardCards({ board, items, people, collapsed, onToggleGr
               <Text style={{ fontSize: 16, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
               <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length}</Text>
             </Pressable>
-            {!shut && b.top.map((t) => (
+            {!shut && b.top.slice(0, limitOf(b.group.id)).map((t) => (
               <ItemCard key={t.id} item={t} board={board} people={people} groupColor={b.group.color} onOpenItem={onOpenItem} onOpenCell={onOpenCell} />
             ))}
+            {!shut && b.top.length > limitOf(b.group.id) && (
+              <Pressable onPress={() => setShown((m) => new Map(m).set(b.group.id ?? 'none', limitOf(b.group.id) + 40))} style={{ paddingVertical: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: colors.brand[600], fontWeight: '600' }}>Show more ({b.top.length - limitOf(b.group.id)} left)</Text>
+              </Pressable>
+            )}
             {!shut && board.access?.add && <AddLine word={word} onAdd={(title) => onAddItem(title, b.group.id)} />}
           </View>
         );

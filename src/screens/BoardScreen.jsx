@@ -20,10 +20,14 @@ import CellEditorHost from '../components/board/CellEditorHost';
 import Popover from '../components/board/Popover';
 import { TextEditor, BoardMeta } from '../components/board/Cells';
 import { useAuth } from '../context/AuthContext';
-import { AddColumnMenu, ColumnMenu, GroupMenu } from '../components/board/BoardMenus';
-import { matchesSearch } from '../components/board/model';
+import { AddColumnMenu, ColumnMenu, GroupMenu, BoardMoreMenu } from '../components/board/BoardMenus';
+import BoardAutomate from '../components/board/BoardAutomate';
+import BoardImport from '../components/board/BoardImport';
+import { matchesSearch, cellText } from '../components/board/model';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
+import useShortcuts from '../hooks/useShortcuts';
 import { showToast } from '../utils/events';
+import { toCsv, downloadText } from '../utils/csv';
 
 // The views a board can show (F-VIW-00 .. F-VIW-13). Map, form and gallery come with their own steps.
 const VIEW_KINDS = [
@@ -74,6 +78,31 @@ export default function BoardScreen({ route }) {
   const [editing, setEditing] = useState(null);
   const [menu, setMenu] = useState(null); // { type: 'addColumn' | 'column' | 'group' | 'rename' | 'newItem' | 'newGroup', anchor, ... }
   const [openTodoId, setOpenTodoId] = useState(null);
+  const [automate, setAutomate] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Ctrl+Z puts back the last cell change; inside a text box the box keeps its own undo.
+  useShortcuts({
+    'board.undo': () => {
+      const tag = typeof document !== 'undefined' ? document.activeElement?.tagName : null;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return false;
+      board.undo();
+      return true;
+    },
+  }, desktop && !!data);
+
+  /** The board as a spreadsheet: every item the viewer sees, each column as text. */
+  const exportCsv = useCallback(() => {
+    if (!data) return;
+    const groupName = new Map(data.groups.map((g) => [g.id, g.name]));
+    const byId = new Map(data.items.map((t) => [t.id, t]));
+    const rows = [['Name', 'Group', 'Sub-item of', ...data.columns.map((c) => c.title)]];
+    for (const t of data.items) {
+      rows.push([t.title, groupName.get(t.business_section_id) || '', t.parent_id ? byId.get(t.parent_id)?.title || '' : '',
+        ...data.columns.map((c) => cellText(t, c, data.values, people))]);
+    }
+    downloadText(`${data.board.name.replace(/[^\w\- ]+/g, '').trim() || 'board'} ${todayYmd()}.csv`, toCsv(rows));
+  }, [data, people]);
 
   const views = useMemo(() => (data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), [data]);
   const view = views.find((v) => v.id === viewId) || views[0] || { kind: 'table' };
@@ -145,6 +174,15 @@ export default function BoardScreen({ route }) {
                 style={{ flex: 1, paddingVertical: 6, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
             </View>
           )}
+          {desktop && (
+            <Pressable onPress={() => setAutomate(true)} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="flash-outline" size={16} color={colors.gray[700]} />
+              <Text style={{ fontSize: 14, color: colors.gray[800] }}>Automate</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={(e) => setMenu({ type: 'more', anchor: anchorOf(e) })} accessibilityLabel="More board actions" hitSlop={6} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[700]} />
+          </Pressable>
           {data.access.add && (
             <Pressable
               {...glass('accent')}
@@ -257,8 +295,21 @@ export default function BoardScreen({ route }) {
           onRename={(name) => board.updateGroup(menu.group, { name })}
           onColor={(color) => board.updateGroup(menu.group, { color })}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
+          onDuplicate={data.access.add ? () => board.duplicateGroup(menu.group) : null}
         />
       )}
+      {menu?.type === 'more' && (
+        <BoardMoreMenu
+          anchor={menu.anchor} data={data} onClose={() => setMenu(null)}
+          onAutomate={() => setAutomate(true)}
+          onImport={() => setImporting(true)}
+          onExport={exportCsv}
+          onDuplicated={(copy) => navigation.push('Board', { id: copy.id })}
+          onArchive={async () => { await board.updateBoard({ archived: true }); navigation.goBack(); }}
+        />
+      )}
+      <BoardAutomate visible={automate} board={b} onClose={() => setAutomate(false)} />
+      <BoardImport visible={importing} board={data} onClose={() => setImporting(false)} onDone={board.reload} />
       {menu?.type === 'addView' && (
         <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={260}>
           {VIEW_KINDS.map(([k, label, icon]) => (

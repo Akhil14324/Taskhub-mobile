@@ -12,6 +12,9 @@ import { mayEdit } from './CellEditorHost';
 const NAME_W = 380;
 const ADD_W = 44;
 const ROW_H = 38;
+const PAGE = 100; // rows drawn per group before "Show more"
+// "entry" -> "entries", "task" -> "tasks"
+const plural = (w) => (/[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /(s|x|ch|sh)$/.test(w) ? `${w}es` : `${w}s`);
 
 /** Where a pressed cell is on screen, so its editor opens right there. */
 export function anchorOf(e) {
@@ -117,6 +120,9 @@ export default function BoardTable({
   const canAdd = !!access?.add;
   const tableWidth = NAME_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
+  // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
+  const [shown, setShown] = useState(() => new Map());
+  const limitOf = (gid) => shown.get(gid ?? 'none') || PAGE;
 
   // Groups as shown: the board's groups, plus "No group" when some items have none.
   const blocks = useMemo(() => groupBlocks(groups, items), [groups, items]);
@@ -126,13 +132,13 @@ export default function BoardTable({
     const out = [];
     for (const b of blocks) {
       if (collapsed.has(b.group.id)) continue;
-      for (const t of b.top) {
+      for (const t of b.top.slice(0, shown.get(b.group.id ?? 'none') || PAGE)) {
         out.push(t);
         if (openParents.has(t.id)) for (const c of b.children.get(t.id) || []) out.push(c);
       }
     }
     return out;
-  }, [blocks, collapsed, openParents]);
+  }, [blocks, collapsed, openParents, shown]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -254,7 +260,7 @@ export default function BoardTable({
                 <Pressable disabled={!b.group.id || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
                   <Text style={{ fontSize: 17, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
                 </Pressable>
-                <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? board.board.item_word.toLowerCase() : `${board.board.item_word.toLowerCase()}s`}</Text>
+                <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? board.board.item_word.toLowerCase() : plural(board.board.item_word.toLowerCase())}</Text>
               </View>
               {!isCollapsed && (
                 <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden', backgroundColor: colors.white }}>
@@ -273,7 +279,15 @@ export default function BoardTable({
                       {canManage && <Ionicons name="add" size={18} color={colors.gray[600]} />}
                     </Pressable>
                   </View>
-                  {b.top.map((t) => renderRow(t, b, 0))}
+                  {b.top.slice(0, limitOf(b.group.id)).map((t) => renderRow(t, b, 0))}
+                  {b.top.length > limitOf(b.group.id) && (
+                    <Pressable
+                      onPress={() => setShown((m) => new Map(m).set(b.group.id ?? 'none', limitOf(b.group.id) + PAGE))}
+                      style={({ hovered }) => ({ height: ROW_H, justifyContent: 'center', paddingLeft: spacing.lg + 18, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.gray[50] : colors.white })}
+                    >
+                      <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Show {Math.min(PAGE, b.top.length - limitOf(b.group.id))} more of {b.top.length - limitOf(b.group.id)}</Text>
+                    </Pressable>
+                  )}
                   {canAdd && <AddItemRow color={b.group.color} word={board.board.item_word} width={NAME_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
                   <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={NAME_W} />
                 </View>

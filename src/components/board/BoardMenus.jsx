@@ -7,7 +7,7 @@ import Popover from './Popover';
 import { TextEditor, PaletteGrid } from './Cells';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
-import { confirmDialog } from '../../utils/events';
+import { confirmDialog, showToast } from '../../utils/events';
 
 // Column types offered in "+ Add column", in the order people reach for them. Built-in ones (a to-do field)
 // are listed separately and only while the board does not show them yet.
@@ -224,7 +224,7 @@ function ColumnSettings({ column, columns, onSave }) {
   );
 }
 
-export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchive, onClose }) {
+export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchive, onDuplicate, onClose }) {
   const [stage, setStage] = useState('menu');
   return (
     <Popover visible anchor={anchor} onClose={onClose} width={260}>
@@ -234,6 +234,7 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
         <View>
           <MenuRow icon="create-outline" label="Rename group" onPress={() => setStage('rename')} />
           <MenuRow icon="color-palette-outline" label="Change colour" onPress={() => setStage('color')} />
+          {onDuplicate && <MenuRow icon="copy-outline" label="Duplicate group" sub="with its open items" onPress={() => { onClose(); onDuplicate(); }} />}
           {canManage && (
             <MenuRow
               icon="archive-outline"
@@ -241,6 +242,93 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
               onPress={async () => {
                 onClose();
                 const ok = await confirmDialog({ title: `Archive "${group.name}"?`, message: 'The group is hidden. Its items stay where they are and nothing is deleted.', confirmLabel: 'Archive' });
+                if (ok) onArchive();
+              }}
+            />
+          )}
+        </View>
+      )}
+    </Popover>
+  );
+}
+
+const COPY_ITEMS = [['none', 'Only the structure'], ['open', 'With open items'], ['all', 'With every item']];
+
+/**
+ * The board's own menu (F-BRD-05, F-TPL-02, F-IMP-01, F-EXP-01): automate, duplicate, save as a template,
+ * import, export, archive. Duplicating and saving a template never change the board itself.
+ */
+export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onExport, onDuplicated, onArchive }) {
+  const colors = useColors();
+  const [stage, setStage] = useState('menu');
+  const [withItems, setWithItems] = useState('none');
+  const [busy, setBusy] = useState(false);
+  const b = data.board;
+
+  const duplicate = async (name) => {
+    setBusy(true);
+    try {
+      const res = await api.post(`/boards/${b.id}/duplicate`, { name, with_items: withItems });
+      onClose();
+      onDuplicated(res.data.board);
+    } catch (e) {
+      setBusy(false);
+      showToast({ message: e?.response?.data?.error || 'Could not copy the board', icon: 'alert-circle-outline' });
+    }
+  };
+  const saveTemplate = async (name) => {
+    setBusy(true);
+    try {
+      await api.post('/boards/templates', { board_id: b.id, name, with_items: withItems, for_business: !!b.business_id && data.access.manage });
+      showToast({ message: `Saved "${name}" as a template`, tone: 'success', icon: 'copy' });
+      onClose();
+    } catch (e) {
+      setBusy(false);
+      showToast({ message: e?.response?.data?.error || 'Could not save it', icon: 'alert-circle-outline' });
+    }
+  };
+
+  const itemsChoice = (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm }}>
+      {COPY_ITEMS.map(([k, l]) => (
+        <Pressable key={k} onPress={() => setWithItems(k)} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: withItems === k ? colors.brand[600] : colors.gray[300], backgroundColor: withItems === k ? colors.brand[50] : 'transparent' }}>
+          <Text style={{ fontSize: 13, color: withItems === k ? colors.brand[600] : colors.gray[700] }}>{l}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  return (
+    <Popover visible anchor={anchor} onClose={onClose} width={300}>
+      {stage === 'duplicate' && (
+        <View>
+          {itemsChoice}
+          {busy ? <Text style={{ padding: spacing.sm, color: colors.gray[600] }}>Copying…</Text>
+            : <TextEditor initial={`${b.name} (copy)`} placeholder="Name of the copy" onDone={(t) => { if (t.trim()) duplicate(t.trim()); else onClose(); }} />}
+        </View>
+      )}
+      {stage === 'template' && (
+        <View>
+          {itemsChoice}
+          {busy ? <Text style={{ padding: spacing.sm, color: colors.gray[600] }}>Saving…</Text>
+            : <TextEditor initial={b.name} placeholder="Template name" onDone={(t) => { if (t.trim()) saveTemplate(t.trim()); else onClose(); }} />}
+          {!!b.business_id && data.access.manage && <Text style={{ fontSize: 11, color: colors.gray[500], padding: 6 }}>Everyone in {b.business_name || 'the company'} can use it.</Text>}
+        </View>
+      )}
+      {stage === 'menu' && (
+        <View>
+          <MenuRow icon="flash-outline" label="Automate" onPress={() => { onClose(); onAutomate(); }} />
+          <MenuRow icon="copy-outline" label="Duplicate board" onPress={() => setStage('duplicate')} />
+          <MenuRow icon="albums-outline" label="Save as a template" onPress={() => setStage('template')} />
+          {data.access.add && <MenuRow icon="cloud-upload-outline" label="Import from a spreadsheet" onPress={() => { onClose(); onImport(); }} />}
+          <MenuRow icon="download-outline" label="Export to a spreadsheet" onPress={() => { onClose(); onExport(); }} />
+          {data.access.manage && !b.is_default && (
+            <MenuRow
+              icon="archive-outline"
+              label="Archive board"
+              onPress={async () => {
+                onClose();
+                const ok = await confirmDialog({ title: `Archive "${b.name}"?`, message: 'The board is hidden from the list. Its items stay, nothing is deleted, and it can be brought back.', confirmLabel: 'Archive' });
                 if (ok) onArchive();
               }}
             />
