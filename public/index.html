@@ -66,10 +66,10 @@
          ------------------------------------------------------------------------------------------ */
       :root {
         color-scheme: light;
-        --s-page: 246 247 251;
+        --s-page: 255 255 255;
         --s-surface: 255 255 255;
-        --s-alt: 245 246 248;
-        --s-border: 208 212 228;
+        --s-alt: 247 247 247;
+        --s-border: 222 222 222;
         --s-primary: 0 115 234;
         --s-primary-strong: 0 96 185;
         --s-primary-soft: 204 229 255;
@@ -78,13 +78,13 @@
       }
       html[data-theme='dark'] {
         color-scheme: dark;
-        --s-page: 24 27 52;
-        --s-surface: 48 50 78;
-        --s-alt: 41 47 76;
-        --s-border: 75 78 105;
+        --s-page: 17 17 17;
+        --s-surface: 30 30 30;
+        --s-alt: 38 38 38;
+        --s-border: 58 58 58;
         --s-primary: 0 115 234;
         --s-primary-strong: 61 140 240;
-        --s-primary-soft: 19 55 116;
+        --s-primary-soft: 22 58 110;
         --s-shadow: 0 0 0;
         --s-shadow-a: 0.32;
       }
@@ -132,8 +132,8 @@
         background-color: rgb(var(--s-alt)) !important;
         box-shadow: none !important;
       }
-      [data-glass='scrim'] { background-color: rgb(16 18 40 / 0.36) !important; }
-      html[data-theme='dark'] [data-glass='scrim'] { background-color: rgb(0 0 0 / 0.55) !important; }
+      [data-glass='scrim'] { background-color: rgb(0 0 0 / 0.32) !important; }
+      html[data-theme='dark'] [data-glass='scrim'] { background-color: rgb(0 0 0 / 0.6) !important; }
       [data-glass='sheet'][data-morphing] { will-change: left, top, width, height; }
       @media (prefers-contrast: more) {
         [data-glass] { box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.8) !important; }

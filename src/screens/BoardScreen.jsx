@@ -14,6 +14,8 @@ import { useTodos } from '../context/TodoContext';
 import BoardTable, { anchorOf } from '../components/board/BoardTable';
 import BoardCards from '../components/board/BoardCards';
 import BoardKanban from '../components/board/BoardKanban';
+import { BoardCalendar, BoardTimeline, BoardChart, BoardWorkload, BoardSummary, BoardActivity } from '../components/board/BoardViews';
+import { todayYmd, addDays } from '../utils/dates';
 import CellEditorHost from '../components/board/CellEditorHost';
 import Popover from '../components/board/Popover';
 import { TextEditor, BoardMeta } from '../components/board/Cells';
@@ -23,9 +25,30 @@ import { matchesSearch } from '../components/board/model';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import { showToast } from '../utils/events';
 
-// Views this step draws; the other kinds (calendar, timeline, gantt, chart, ...) arrive with M7.
-const DRAWN_VIEWS = new Set(['table', 'kanban']);
-const VIEW_ICONS = { table: 'grid-outline', kanban: 'albums-outline' };
+// The views a board can show (F-VIW-00 .. F-VIW-13). Map, form and gallery come with their own steps.
+const VIEW_KINDS = [
+  ['table', 'Main table', 'grid-outline'], ['kanban', 'Kanban', 'albums-outline'], ['calendar', 'Calendar', 'calendar-outline'],
+  ['timeline', 'Timeline', 'git-commit-outline'], ['gantt', 'Gantt', 'git-network-outline'], ['chart', 'Chart', 'bar-chart-outline'],
+  ['workload', 'Workload', 'people-outline'], ['summary', 'Summary', 'list-outline'], ['activity', 'Activity', 'pulse-outline'],
+];
+const DRAWN_VIEWS = new Set(VIEW_KINDS.map((v) => v[0]));
+const VIEW_ICONS = Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i]));
+
+// Quick filters, saved with the view (F-FLT-04).
+const QUICK = [['mine', 'Mine'], ['overdue', 'Overdue'], ['week', 'This week'], ['hide_done', 'Hide done']];
+function applyQuick(items, f, meId) {
+  if (!f) return items;
+  const today = todayYmd();
+  const week = addDays(today, 7);
+  const due = (t) => t.due_date || t.deadline_date;
+  const keep = (t) => (!f.mine || t.assignee_id === meId || (t.members || []).some((m) => m.id === meId))
+    && (!f.overdue || (!t.is_done && due(t) && due(t) < today))
+    && (!f.week || (due(t) && due(t) >= today && due(t) <= week))
+    && (!f.hide_done || !t.is_done);
+  const ok = new Set(items.filter(keep).map((t) => t.id));
+  // Sub-items stay with a parent that is shown.
+  return items.filter((t) => ok.has(t.id) || (t.parent_id && ok.has(t.parent_id)));
+}
 
 /**
  * One board (MONDAY_FEATURE_SPEC.md F-BRD-02, F-VIW-01, F-VIW-02). Desktop draws the main table (or Kanban);
@@ -55,12 +78,14 @@ export default function BoardScreen({ route }) {
   const views = useMemo(() => (data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), [data]);
   const view = views.find((v) => v.id === viewId) || views[0] || { kind: 'table' };
 
+  const filters = view.settings?.filters || null;
   const items = useMemo(() => {
     if (!data) return [];
-    if (!search.trim()) return data.items;
-    const hit = new Set(data.items.filter((t) => matchesSearch(t, search, data.columns, data.values, people)).map((t) => t.id));
-    return data.items.filter((t) => hit.has(t.id) || (t.parent_id && hit.has(t.parent_id)) || data.items.some((c) => c.parent_id === t.id && hit.has(c.id)));
-  }, [data, search, people]);
+    const base = applyQuick(data.items, filters, user?.id);
+    if (!search.trim()) return base;
+    const hit = new Set(base.filter((t) => matchesSearch(t, search, data.columns, data.values, people)).map((t) => t.id));
+    return base.filter((t) => hit.has(t.id) || (t.parent_id && hit.has(t.parent_id)) || base.some((c) => c.parent_id === t.id && hit.has(c.id)));
+  }, [data, search, people, filters, user]);
 
   const toggleGroup = useCallback((id) => setCollapsed((cur) => {
     const next = new Set(cur);
@@ -75,7 +100,12 @@ export default function BoardScreen({ route }) {
     else showToast({ message: 'Open it from To-do: it is not in your lists yet', icon: 'information-circle' });
   }, [todos]);
   const toggleValue = useCallback((item, column, value) => (column.kind === 'vote' ? board.vote(item, column, value) : board.setValue(item, column, value)), [board]);
-  const addItem = useCallback((title, groupId) => board.addItem(title, { groupId }), [board]);
+  const addItem = useCallback((title, groupId, fields) => board.addItem(title, { groupId, fields }), [board]);
+  // A view's quick filters: saved with the view when the person may change it (their own view, or they run the board).
+  const toggleQuick = useCallback((key) => {
+    const next = { ...(view.settings?.filters || {}), [key]: !view.settings?.filters?.[key] };
+    if (view.id && (view.owner_id || data?.access?.manage)) board.updateView(view, { settings: { filters: next } });
+  }, [view, data, board]);
 
   if (!data) {
     return (
@@ -142,13 +172,41 @@ export default function BoardScreen({ route }) {
               </Pressable>
             );
           })}
+          <Pressable onPress={(e) => setMenu({ type: 'addView', anchor: anchorOf(e) })} accessibilityLabel="Add a view" style={{ paddingVertical: 8, paddingHorizontal: spacing.sm }}>
+            <Ionicons name="add" size={18} color={colors.gray[600]} />
+          </Pressable>
         </View>
+        {view.kind !== 'activity' && (
+          <View style={{ flexDirection: 'row', gap: 6, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
+            {QUICK.map(([k, l]) => {
+              const on = !!filters?.[k];
+              return (
+                <Pressable key={k} onPress={() => toggleQuick(k)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: on ? BRAND : colors.gray[300], backgroundColor: on ? colors.brand[50] : 'transparent' }}>
+                  {on && <Ionicons name="checkmark" size={13} color={BRAND} />}
+                  <Text style={{ fontSize: 13, color: on ? BRAND : colors.gray[700] }}>{l}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Body */}
       <View style={{ flex: 1, paddingHorizontal: desktop && view.kind === 'table' ? spacing.xl : 0, paddingTop: desktop ? spacing.lg : 0 }}>
         {view.kind === 'kanban' ? (
           <BoardKanban board={data} items={items} people={people} onOpenItem={openItem} onOpenCell={openCell} />
+        ) : view.kind === 'calendar' ? (
+          <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => setMenu({ type: 'newItem', anchor: anchorOf(e), fields: { due_date: day } }) : null} />
+        ) : view.kind === 'timeline' || view.kind === 'gantt' ? (
+          <BoardTimeline board={data} items={items} onOpenItem={openItem} gantt={view.kind === 'gantt'} />
+        ) : view.kind === 'chart' ? (
+          <BoardChart board={data} items={items} people={people} />
+        ) : view.kind === 'workload' ? (
+          <BoardWorkload board={data} items={items} people={people} onOpenItem={openItem} />
+        ) : view.kind === 'summary' ? (
+          <BoardSummary board={data} items={items} />
+        ) : view.kind === 'activity' ? (
+          <BoardActivity board={data} onOpenItem={openItem} />
         ) : desktop ? (
           <BoardTable
             board={data} items={items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
@@ -201,6 +259,25 @@ export default function BoardScreen({ route }) {
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
         />
       )}
+      {menu?.type === 'addView' && (
+        <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={260}>
+          {VIEW_KINDS.map(([k, label, icon]) => (
+            <Pressable
+              key={k}
+              onPress={async () => {
+                setMenu(null);
+                const made = await board.addView({ kind: k, name: label, personal: !data.access.manage });
+                if (made?.view) setViewId(made.view.id);
+              }}
+              style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+            >
+              <Ionicons name={icon} size={16} color={colors.brand[600]} />
+              <Text style={{ fontSize: 14, color: colors.gray[800] }}>{label}</Text>
+            </Pressable>
+          ))}
+          <Text style={{ fontSize: 11, color: colors.gray[500], padding: 6 }}>{data.access.manage ? 'Everyone on the board sees views you add.' : 'Views you add are yours only.'}</Text>
+        </Popover>
+      )}
       {menu?.type === 'rename' && (
         <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={320}>
           <TextEditor initial={b.name} placeholder="Board name" onDone={(t) => { if (t.trim()) board.rename(t.trim()); setMenu(null); }} />
@@ -208,7 +285,7 @@ export default function BoardScreen({ route }) {
       )}
       {menu?.type === 'newItem' && (
         <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={340}>
-          <TextEditor initial="" placeholder={`New ${b.item_word.toLowerCase()} name`} onDone={(t) => { if (t.trim()) addItem(t, firstGroup); setMenu(null); }} />
+          <TextEditor initial="" placeholder={`New ${b.item_word.toLowerCase()} name`} onDone={(t) => { if (t.trim()) addItem(t, firstGroup, menu.fields); setMenu(null); }} />
         </Popover>
       )}
       {menu?.type === 'newGroup' && (

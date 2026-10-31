@@ -7,7 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6f7fb",
+  "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "share_target": {
     "action": "/share-target",

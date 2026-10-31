@@ -2,6 +2,7 @@
 // columns map onto to-do fields, and filtering / grouping. Mirrors the backend's utils/columns.js.
 
 import { PALETTE } from '../../theme/theme';
+import { isDarkMode } from '../kit';
 
 export const STATUS_KEYS = ['todo', 'in_progress', 'blocked', 'in_review', 'on_hold', 'done'];
 
@@ -41,8 +42,11 @@ export function canEditColumn(column) {
   return column.system_key ? EDITABLE_SYSTEM.has(column.system_key) : EDITABLE_KINDS.has(column.kind);
 }
 
-export const paletteHex = (name) => PALETTE[name]?.hex || PALETTE.grey.hex;
-export const paletteInk = (name) => PALETTE[name]?.ink || '#1f1f1f';
+// In dark mode the light grey ("Not started") turns slate with white text, as on a dark board.
+const DARK_GREY = { hex: '#797e93', ink: '#ffffff' };
+const swatch = (name) => (isDarkMode() && (name === 'grey' || !PALETTE[name]) ? DARK_GREY : PALETTE[name] || PALETTE.grey);
+export const paletteHex = (name) => swatch(name).hex;
+export const paletteInk = (name) => swatch(name).ink;
 
 /** The label shown for an item on a status column. */
 export function statusLabelOf(item, column, values) {
