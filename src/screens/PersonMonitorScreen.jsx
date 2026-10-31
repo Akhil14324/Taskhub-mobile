@@ -64,8 +64,6 @@ export default function PersonMonitorScreen() {
     if (!data) return [];
     const q = query.trim().toLowerCase();
     const list = data.todos
-      // sub-tasks are part of their parent; show them only when searching
-      .filter((t) => !t.parent_id || q)
       .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.labels || []).some((l) => l.includes(q.replace(/^\+/, ''))));
     const filtered = list.filter((t) => {
       if (view === 'all') return true;
@@ -77,12 +75,27 @@ export default function PersonMonitorScreen() {
     });
     // Worst first for open work, newest first for finished.
     const rank = { red: 0, orange: 1, green: 2, none: 3 };
-    return filtered.sort((a, b) => {
+    // A sub-task sits under its parent when the parent is shown; otherwise (searching, or a filter hid the parent) it stands alone.
+    const shown = new Set(filtered.map((t) => t.id));
+    const roots = filtered.filter((t) => !t.parent_id || !shown.has(t.parent_id));
+    roots.sort((a, b) => {
       if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
       if (a.is_done) return new Date(b.done_at) - new Date(a.done_at);
       return rank[todoHealth(a, now).level] - rank[todoHealth(b, now).level];
     });
+    return roots;
   }, [data, query, view, now]);
+
+  // Every sub-task of a row, whatever the filter (the parent's steps are part of it), in tree order.
+  const childrenOf = useMemo(() => {
+    const map = new Map();
+    for (const t of data?.todos || []) {
+      if (!t.parent_id) continue;
+      if (!map.has(t.parent_id)) map.set(t.parent_id, []);
+      map.get(t.parent_id).push(t);
+    }
+    return map;
+  }, [data]);
 
   const week = useMemo(() => {
     if (!data) return [];
@@ -168,7 +181,7 @@ export default function PersonMonitorScreen() {
                   {VIEWS.map((v) => <Chip key={v.key} label={v.label} active={view === v.key} onPress={() => setView(v.key)} />)}
                 </ScrollView>
                 {todos.map((t) => (
-                  <TodoRow key={t.id} todo={t} personId={person?.id} now={now} onPress={() => setOpenId(t.id)} />
+                  <TodoBranch key={t.id} todo={t} depth={0} childrenOf={childrenOf} personId={person?.id} now={now} onOpen={setOpenId} />
                 ))}
                 {!todos.length && <EmptyHero icon="checkmark-done" title="Nothing here" message="No to-dos match this view." />}
               </>
@@ -184,7 +197,20 @@ export default function PersonMonitorScreen() {
   );
 }
 
-function TodoRow({ todo, personId, now, onPress }) {
+/** A to-do and its sub-tasks, each level indented under the one above. */
+function TodoBranch({ todo, depth, childrenOf, personId, now, onOpen }) {
+  const kids = childrenOf.get(todo.id) || [];
+  return (
+    <>
+      <TodoRow todo={todo} depth={depth} subCount={kids.length} personId={personId} now={now} onPress={() => onOpen(todo.id)} />
+      {depth < 4 && kids.map((k) => (
+        <TodoBranch key={k.id} todo={k} depth={depth + 1} childrenOf={childrenOf} personId={personId} now={now} onOpen={onOpen} />
+      ))}
+    </>
+  );
+}
+
+function TodoRow({ todo, depth = 0, subCount = 0, personId, now, onPress }) {
   const colors = useColors();
   const health = todoHealth(todo, now);
   const m = todoMetrics(todo, now);
@@ -199,13 +225,14 @@ function TodoRow({ todo, personId, now, onPress }) {
   }
   return (
     <AnimatedPressable onPress={onPress} haptic="light" style={{
-      marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.white,
+      marginRight: spacing.lg, marginLeft: spacing.lg + depth * 18, marginTop: depth ? 4 : spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.white,
       borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200], gap: 6,
     }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
         <Ionicons name={STATUS[todo.is_done ? 'done' : todo.status].icon} size={18} color={colors.gray[500]} style={{ marginTop: 1 }} />
         <Text style={{ flex: 1, fontSize: fontSize.base, fontWeight: '600', color: todo.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: todo.is_done ? 'line-through' : 'none' }} numberOfLines={2}>{todo.title}</Text>
+        {subCount > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{subCount} sub-task{subCount > 1 ? 's' : ''}</Text>}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
         {!!pill && <HealthPill level={pill.level} label={pill.label} icon={pill.icon} compact />}

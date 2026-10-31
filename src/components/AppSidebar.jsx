@@ -33,7 +33,6 @@ const SECTION_OF = {
   ChatList: 'chat',
   ChatThread: 'chat',
   GroupInfo: 'chat',
-  Approvals: 'approvals',
   TeamMonitor: 'monitor',
   Reports: 'reports',
   Assistant: 'assistant',
@@ -115,7 +114,7 @@ export default function AppSidebar({ routeName }) {
   const { user, logout } = useAuth();
   const { totalUnread } = useChat();
   const { todos } = useTodos();
-  const { unreadCount, approvalCount } = useNotifications();
+  const { unreadCount } = useNotifications();
   const { myDay } = useEngage();
   const dayBadge = (myDay?.waiting_on_you || []).length;
   const [help, setHelp] = useState(false);
@@ -136,7 +135,6 @@ export default function AppSidebar({ routeName }) {
     'nav.progress': () => go('Progress'),
     'nav.todos': () => go('Todos'),
     'nav.chat': () => go('ChatList'),
-    'nav.approvals': () => go('Approvals'),
     'nav.monitor': () => (user?.can_monitor ? go('TeamMonitor') : false),
     'nav.notifications': () => go('Notifications'),
     'nav.org': () => go('Organization'),
@@ -172,15 +170,11 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
         <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Dashboards" active={section === 'dashboards'} onPress={() => go('Dashboards')} />
         <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
-        <Entry p={p} icon="shield-checkmark-outline" activeIcon="shield-checkmark" label="Approvals" badge={approvalCount} active={section === 'approvals'} onPress={() => go('Approvals')} />
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
         <Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
         <Entry p={p} icon="mic-outline" activeIcon="mic" label="Meetings" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
-        {user?.permissions?.insights && (
-          <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Weekly report" active={section === 'reports'} onPress={() => go('Reports')} />
-        )}
         {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
         {featureOn(user?.preferences, 'automation') && <Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />}
         {user?.permissions?.manage_access && (

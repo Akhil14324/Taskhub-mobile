@@ -22,7 +22,6 @@ export const ACTIONS = [
   { id: 'nav.progress', group: 'Go to', label: 'Progress', scope: 'global', combos: ['g d'] },
   { id: 'nav.todos', group: 'Go to', label: 'To-do and business tasks', scope: 'global', combos: ['g t'] },
   { id: 'nav.chat', group: 'Go to', label: 'Chat', scope: 'global', combos: ['g c'] },
-  { id: 'nav.approvals', group: 'Go to', label: 'Approvals', scope: 'global', combos: ['g a'] },
   { id: 'nav.monitor', group: 'Go to', label: 'Team monitor', scope: 'global', combos: ['g m'] },
   { id: 'nav.notifications', group: 'Go to', label: 'Notifications', scope: 'global', combos: ['g n'] },
   { id: 'nav.org', group: 'Go to', label: 'Organisation', scope: 'global', combos: ['g o'] },
@@ -61,10 +60,6 @@ export const ACTIONS = [
   { id: 'chat.next', group: 'Chat', label: 'Next conversation', scope: 'chat', combos: ['ArrowDown'] },
   { id: 'chat.prev', group: 'Chat', label: 'Previous conversation', scope: 'chat', combos: ['ArrowUp'] },
 
-  { id: 'approvals.next', group: 'Approvals', label: 'Next item', scope: 'approvals', combos: ['j', 'ArrowDown'] },
-  { id: 'approvals.prev', group: 'Approvals', label: 'Previous item', scope: 'approvals', combos: ['k', 'ArrowUp'] },
-  { id: 'approvals.approve', group: 'Approvals', label: 'Approve the selected item', scope: 'approvals', combos: ['a'] },
-  { id: 'approvals.decline', group: 'Approvals', label: 'Decline the selected item', scope: 'approvals', combos: ['r'] },
 ];
 
 /** Keys that work as they always did and cannot be reassigned. */

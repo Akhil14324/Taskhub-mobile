@@ -153,7 +153,8 @@ function TodoItem({
 
   return (
     <View
-      style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }]}
+      style={[styles.container, depth > 0 && { marginLeft: Math.min(depth, 5) * INDENT }, todo.saving && { opacity: 0.55 }]}
+      pointerEvents={todo.saving ? 'none' : 'auto'}
       dataSet={{ todoRow: String(todo.id) }}
       onLayout={(e) => { width.value = e.nativeEvent.layout.width; }}
     >

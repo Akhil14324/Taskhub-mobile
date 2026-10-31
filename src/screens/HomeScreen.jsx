@@ -40,7 +40,7 @@ export default function HomeScreen() {
   const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
   const { todos, businesses, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
-  const { unreadCount, approvalCount, pushState, enablePush, refreshCounts } = useNotifications();
+  const { unreadCount, pushState, enablePush, refreshCounts } = useNotifications();
   const { totalUnread } = useChat();
   const { myDay } = useEngage();
   const ai = useAi();
@@ -205,15 +205,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {approvalCount > 0 && (
-          <AnimatedPressable onPress={() => navigation.navigate('Approvals')}>
-            <View {...glass('card')} style={[styles.banner, styles.bannerLink]}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.brand[700]} />
-              <Text style={[styles.bannerText, { fontWeight: '700' }]}>{approvalCount} item{approvalCount > 1 ? 's' : ''} waiting for your decision</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.brand[700]} />
-            </View>
-          </AnimatedPressable>
-        )}
 
         <DailyReportCard refreshKey={reportKey} />
         <TeamBoard refreshKey={reportKey} />

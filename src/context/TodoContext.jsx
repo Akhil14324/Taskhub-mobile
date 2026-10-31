@@ -88,16 +88,43 @@ export function TodoProvider({ children }) {
     fetchInsights();
   }, [user, fetchTodos, fetchInsights]);
 
-  // Someone ticked / edited / shared a to-do with us → refresh (debounced).
+  // Someone ticked / edited / shared a to-do (or we did, the server echoes every change back): fetch only the
+  // to-dos named by the events, not the whole list. Events without a to-do id (sections, lists) reload everything.
+  const dirtyIds = useRef(new Set());
+  const dirtyAll = useRef(false);
+  const insightsTimer = useRef(null);
   useEffect(() => {
     if (!user) return undefined;
-    return subscribe('todo:changed', () => {
+    const flush = async () => {
+      const ids = [...dirtyIds.current];
+      const all = dirtyAll.current || ids.length > 6;
+      dirtyIds.current = new Set();
+      dirtyAll.current = false;
+      if (all) { fetchTodos(); return; }
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await api.get(`/todos/${id}`, { __skipOops: true });
+          setTodos((prev) => {
+            const fresh = [res.data.todo, ...(res.data.subtasks || [])].filter(Boolean);
+            const freshIds = new Set(fresh.map((t) => t.id));
+            return sortTodos([...prev.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => !pendingDeletes.current.has(t.id))]);
+          });
+        } catch (err) {
+          // Gone or no longer visible to us: drop it. Anything else: fall back to a full reload.
+          if ([403, 404].includes(err.response?.status)) setTodos((prev) => prev.filter((t) => t.id !== id));
+          else fetchTodos();
+        }
+      }));
+    };
+    const off = subscribe('todo:changed', (e) => {
+      if (e?.todoId > 0) dirtyIds.current.add(e.todoId); else dirtyAll.current = true;
       clearTimeout(refetchTimer.current);
-      refetchTimer.current = setTimeout(() => {
-        fetchTodos();
-        fetchInsights();
-      }, 350);
+      refetchTimer.current = setTimeout(flush, 250);
+      // The streak and week numbers change slowly: refresh them at most every 2.5 s.
+      clearTimeout(insightsTimer.current);
+      insightsTimer.current = setTimeout(fetchInsights, 2500);
     });
+    return () => { off?.(); clearTimeout(refetchTimer.current); clearTimeout(insightsTimer.current); };
   }, [user, subscribe, fetchTodos, fetchInsights]);
 
   const upsert = useCallback((todo) => {
@@ -105,10 +132,12 @@ export function TodoProvider({ children }) {
     setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== todo.id), todo]));
   }, []);
 
-  const createTodo = useCallback(async (payload, { silent = false } = {}) => {
+  /** The server round trip behind createTodo. `tempId` is the optimistic row to swap for the real one. */
+  const createRemote = useCallback(async (payload, { silent = false, tempId = null } = {}) => {
     const res = await api.post('/todos', payload);
     // An assigned to-do goes to the other people's lists, so there is nothing to add to mine.
     if (!res.data.todo) {
+      if (tempId) setTodos((prev) => prev.filter((t) => t.id !== tempId));
       if (!silent) {
         const names = (res.data.assigned_names || [res.data.assigned_to?.name || 'them']).map((n) => n.split(' ')[0]);
         const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
@@ -117,7 +146,8 @@ export function TodoProvider({ children }) {
       emit('buddy', { type: 'added' });
       return null;
     }
-    upsert(res.data.todo);
+    if (tempId) setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== tempId && t.id !== res.data.todo.id), res.data.todo]));
+    else upsert(res.data.todo);
     // A new sub-task changes its parent's counts.
     if (res.data.todo.parent_id) fetchTodos();
     if (!silent) {
@@ -138,6 +168,27 @@ export function TodoProvider({ children }) {
     if (!res.data.todo.parent_id) emit('buddy', { type: 'added' });
     return res.data.todo;
   }, [upsert, fetchTodos]);
+
+  // Plain personal to-dos appear at once and are saved in the background, in the order they were typed.
+  // Anything that is handed to someone, or lives in a business, waits for the server (it decides where it goes).
+  const tempSeq = useRef(0);
+  const createQueue = useRef(Promise.resolve());
+  const createTodo = useCallback(async (payload, opts = {}) => {
+    const plain = !payload.business_id && !payload.delegate_to && !(payload.delegate_ids || []).length && !payload.assign_to;
+    if (!plain) return createRemote(payload, opts);
+    const tempId = `tmp-${Date.now()}-${++tempSeq.current}`;
+    const temp = {
+      status: 'todo', priority: 4, labels: [], members: [], comment_count: 0, subtask_count: 0, recurrence: null,
+      ...payload, id: tempId, is_done: false, saving: true, created_at: new Date().toISOString(),
+      assignee_id: user?.id ?? null, user_id: user?.id ?? null, sort_order: 0,
+    };
+    setTodos((prev) => sortTodos([...prev, temp]));
+    createQueue.current = createQueue.current.then(() => createRemote(payload, { ...opts, tempId })).catch((err) => {
+      setTodos((prev) => prev.filter((t) => t.id !== tempId));
+      showToast({ message: err.response?.data?.error || 'Could not save that to-do. Please try again.', tone: 'error', icon: 'alert-circle' });
+    });
+    return temp;
+  }, [createRemote, user]);
 
   const updateTodo = useCallback(async (id, patch) => {
     setTodos((prev) => sortTodos(prev.map((t) => (t.id === id ? { ...t, ...patch } : t))));

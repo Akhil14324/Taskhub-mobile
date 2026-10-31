@@ -43,10 +43,8 @@ import HomeScreen from '../screens/HomeScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import RecapScreen from '../screens/RecapScreen';
 import TodosScreen from '../screens/TodosScreen';
-import ApprovalsScreen from '../screens/ApprovalsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
-import ReportsScreen from '../screens/ReportsScreen';
 import AssistantScreen from '../screens/AssistantScreen';
 import WorkflowsScreen from '../screens/WorkflowsScreen';
 import useAi from '../hooks/useAi';
@@ -104,10 +102,8 @@ function ChatListEntry(props) { return useIsDesktop() ? <ChatWorkspace /> : <Cha
 const FramedChatThread = ChatThreadEntry;
 const FramedChatList = ChatListEntry;
 const FramedGroupInfo = framed(GroupInfoScreen, 1000);
-const FramedApprovals = framed(ApprovalsScreen, 1100);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
-const FramedReports = framed(ReportsScreen, 900);
 const FramedAssistant = framed(AssistantScreen, 760);
 const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
@@ -128,10 +124,8 @@ const TabTodos = T(TodosScreen, 'tab', 'Todos');
 const TabChat = T(FramedChatList, 'tab', 'ChatList');
 const PushChatThread = T(FramedChatThread);
 const PushGroupInfo = T(FramedGroupInfo);
-const PushApprovals = T(FramedApprovals);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
-const PushReports = T(FramedReports);
 const PushAssistant = T(FramedAssistant);
 const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
@@ -265,7 +259,7 @@ function MainTabs() {
   const colors = useColors();
   const { totalUnread: chatUnread } = useChat();
   const { todos } = useTodos();
-  const { unreadCount, approvalCount } = useNotifications();
+  const { unreadCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const desktop = useIsDesktop();
@@ -328,9 +322,7 @@ function MainTabs() {
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: 'Meetings', icon: 'mic-outline', route: 'MeetingNotes' },
-    { group: 'Work', label: `Approvals${approvalCount ? ` · ${approvalCount}` : ''}`, icon: 'shield-checkmark-outline', route: 'Approvals' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
-    ...(user?.permissions?.insights ? [{ group: 'Work', label: 'Weekly report', icon: 'document-text-outline', route: 'Reports' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
     ...(user?.permissions?.manage_access ? [{ group: 'Organisation', label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
@@ -397,7 +389,7 @@ function MainTabs() {
             lazy: !warm.has('Todos'),
             tabBarLabel: 'To-do',
             tabBarIcon: ({ focused, color }) => (
-              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge + approvalCount} />
+              <AnimatedTabIcon name={focused ? 'checkbox' : 'checkbox-outline'} focused={focused} color={color} badge={todoBadge} />
             ),
           }}
         />
@@ -576,10 +568,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="ChatThread" component={PushChatThread} />
             <Stack.Screen name="GroupInfo" component={PushGroupInfo} />
-            <Stack.Screen name="Approvals" component={PushApprovals} />
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
-            <Stack.Screen name="Reports" component={PushReports} />
             <Stack.Screen name="Assistant" component={PushAssistant} />
             <Stack.Screen name="Workflows" component={PushWorkflows} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
