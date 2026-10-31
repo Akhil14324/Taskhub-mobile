@@ -173,7 +173,7 @@ export default function CalendarView({ todos, today, onOpen, onToggle, onAdd, on
       const t = targetOf(e.target);
       if (!t) return;
       e.preventDefault();
-      if (hover !== t) { clear(); hover = t; t.style.outline = '2px dashed #dc2626'; t.style.outlineOffset = '-2px'; }
+      if (hover !== t) { clear(); hover = t; t.style.outline = '2px dashed #0073ea'; t.style.outlineOffset = '-2px'; }
     };
     const onDropEvent = (e) => {
       if (dragId == null) return;

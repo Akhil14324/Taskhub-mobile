@@ -11,7 +11,7 @@ import { makeDraggable } from '../../hooks/useWebReorder';
 import { glass } from '../../theme/glass';
 
 const COLUMN_WIDTH = 288;
-const MARK_TOP = 'inset 0 3px 0 #dc2626';
+const MARK_TOP = 'inset 0 3px 0 #0073ea';
 
 /**
  * Kanban board. A column is { key, title, icon?, items, accepts?, canAdd?, section? }; cards are
@@ -59,7 +59,7 @@ export default function BoardView({
       const after = e.clientX > rect.left + rect.width / 2;
       place = { target: col, after };
       mark = col;
-      col.style.boxShadow = after ? 'inset -3px 0 0 #dc2626' : 'inset 3px 0 0 #dc2626';
+      col.style.boxShadow = after ? 'inset -3px 0 0 #0073ea' : 'inset 3px 0 0 #0073ea';
     };
     const onDropCol = (e) => {
       if (!dragged || !place) return;
@@ -128,7 +128,7 @@ export default function BoardView({
       e.preventDefault();
       clear();
       hoverCol = col;
-      col.style.outline = '2px dashed #dc2626';
+      col.style.outline = '2px dashed #0073ea';
       col.style.outlineOffset = '-2px';
       const before = beforeCard(col, e.clientY);
       if (before) {

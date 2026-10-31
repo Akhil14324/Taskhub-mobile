@@ -26,7 +26,7 @@ export default function ProductivitySheet({ visible, onClose }) {
       <View style={styles.wrap}>
         <Text style={styles.heading}>Productivity</Text>
         <View style={styles.hero}>
-          <ProgressRing percent={percent} size={96} stroke={9} color="#dc2626">
+          <ProgressRing percent={percent} size={96} stroke={9} color="#0073ea">
             <Text style={styles.ringNumber}>{today}</Text>
             <Text style={styles.ringOf}>of {goal}</Text>
           </ProgressRing>
@@ -44,7 +44,7 @@ export default function ProductivitySheet({ visible, onClose }) {
             return (
               <View key={d.day} style={styles.barCol}>
                 <Text style={styles.barCount}>{d.count || ''}</Text>
-                <View style={[styles.bar, { height, backgroundColor: isToday ? '#dc2626' : colors.gray[300], opacity: d.count >= goal ? 1 : 0.85 }]} />
+                <View style={[styles.bar, { height, backgroundColor: isToday ? '#0073ea' : colors.gray[300], opacity: d.count >= goal ? 1 : 0.85 }]} />
                 <Text style={[styles.barLabel, isToday && { color: colors.gray[900], fontWeight: '700' }]}>{WEEKDAYS_SHORT[parseYmd(d.day).getDay()][0]}</Text>
               </View>
             );

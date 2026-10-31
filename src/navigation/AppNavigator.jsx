@@ -474,7 +474,7 @@ const tabStyles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#dc2626',
+    backgroundColor: '#e2445c',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,

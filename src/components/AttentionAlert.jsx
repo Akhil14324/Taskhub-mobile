@@ -57,8 +57,8 @@ export default function AttentionAlert() {
   return (
     <Modal transparent visible animationType="none" onRequestClose={close}>
       <View style={styles.root}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#450a0a' }]} />
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#dc2626' }, bg]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#3d1820' }]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#e2445c' }, bg]} />
         <View style={styles.center}>
           <Ionicons name={alert.overdue || alert.alarm ? 'alarm' : 'notifications'} size={72} color="#fff" />
           <Text style={styles.title}>{alert.title || 'Attention'}</Text>

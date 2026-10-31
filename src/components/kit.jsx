@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withDelay, interpolateColor } from 'react-native-reanimated';
 import useReducedMotion from '../hooks/useReducedMotion';
 import { useColors, useTheme } from '../context/ThemeContext';
-import { spacing, radius, fontSize, type } from '../theme/theme';
+import { spacing, radius, fontSize, type, PALETTE, BRAND } from '../theme/theme';
 import { glass } from '../theme/glass';
 import { SPRING } from '../theme/motion';
 import AnimatedPressable from './AnimatedPressable';
@@ -14,11 +14,19 @@ import { formatDue, formatTime, daysFromToday, RECURRENCE_LABELS } from '../util
 // ---------------------------------------------------------------------------
 // Colour helpers
 // ---------------------------------------------------------------------------
-// One colour app: every list/business accent is the brand red. The name argument is kept so
-// stored colour names (e.g. 'purple', 'orange') still resolve without a data migration.
-const BRAND_RED = '#dc2626';
-export function accent() {
-  return BRAND_RED;
+// Stored colour names (lists, businesses, boards: 'purple', 'orange', 'dark_green', ...) resolve to their
+// palette colour; anything unknown is the brand blue.
+const LEGACY_COLOR_NAMES = { amber: 'orange', gray: 'grey', teal: 'aquamarine', violet: 'purple' };
+export function accent(name) {
+  const key = LEGACY_COLOR_NAMES[name] || name;
+  return PALETTE[key]?.hex || BRAND;
+}
+
+/** Text colour that stays readable on a palette colour (by name or hex). */
+export function inkOn(nameOrHex) {
+  const hit = PALETTE[LEGACY_COLOR_NAMES[nameOrHex] || nameOrHex]
+    || Object.values(PALETTE).find((p) => p.hex.toLowerCase() === String(nameOrHex).toLowerCase());
+  return hit ? hit.ink : '#ffffff';
 }
 
 /** Translucent tint of a hex colour for backgrounds that work in both themes. */
@@ -30,19 +38,19 @@ export function tint(hex, alpha = 0.14) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Priorities are told apart by shade of red (darkest = most urgent); P4 is neutral.
-// The darkest red is unreadable on a dark page, so it lifts to a light red there (set by ThemeProvider).
+// Priorities: red urgent, orange high, blue normal, grey low. The urgent red lifts a little in dark mode
+// so it stays readable as text (set by ThemeProvider). darkestRed() is that red, kept by name for callers.
 let darkMode = false;
 export function setDarkMode(value) { darkMode = !!value; }
-export const darkestRed = () => (darkMode ? '#fca5a5' : '#991b1b');
+export const darkestRed = () => (darkMode ? '#f0697f' : '#d83a52');
 export const PRIORITY = {
   1: { label: 'Priority 1', short: 'P1', get color() { return darkestRed(); } },
-  2: { label: 'Priority 2', short: 'P2', color: '#dc2626' },
-  3: { label: 'Priority 3', short: 'P3', color: '#f87171' },
-  4: { label: 'Priority 4', short: 'P4', color: '#94a3b8' },
+  2: { label: 'Priority 2', short: 'P2', get color() { return darkMode ? '#fec26f' : '#e8932a'; } },
+  3: { label: 'Priority 3', short: 'P3', get color() { return darkMode ? '#8dbbfd' : '#0073ea'; } },
+  4: { label: 'Priority 4', short: 'P4', color: '#9699a6' },
 };
 
-const AVATAR_COLORS = ['#dc2626', '#b91c1c', '#991b1b', '#e11d48'];
+const AVATAR_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#a25ddc', '#e2445c', '#579bfc', '#037f4c', '#ff158a', '#5559df', '#7f5347'];
 
 function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
@@ -129,7 +137,7 @@ export const Chip = memo(function Chip({ label, icon, color, active, onPress, on
       chipStyles.chip,
       small && chipStyles.small,
       {
-        backgroundColor: active ? tone : tint(tone.startsWith('#') ? tone : '#dc2626', 0.12),
+        backgroundColor: active ? tone : tint(tone.startsWith('#') ? tone : BRAND, 0.12),
         borderColor: active ? tone : 'transparent',
       },
       style,
@@ -164,15 +172,15 @@ const chipStyles = StyleSheet.create({
   labelSmall: { fontSize: 11 },
 });
 
-/** Due date chip: darkest red when overdue, lighter reds for today / tomorrow, grey after. */
+/** Due date chip: red when overdue, orange today, darker grey tomorrow, grey after. */
 export const DueChip = memo(function DueChip({ date, time, recurrence, done, compact }) {
   const colors = useColors();
   if (!date) return null;
   const diff = daysFromToday(date);
   const color = done ? colors.gray[400]
     : diff < 0 ? darkestRed()
-      : diff === 0 ? '#dc2626'
-        : diff === 1 ? '#f87171'
+      : diff === 0 ? PRIORITY[2].color
+        : diff === 1 ? colors.gray[600]
           : colors.gray[500];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
@@ -292,7 +300,7 @@ export function Fab({ onPress, icon = 'add', bottom = 24, color, label }) {
     enter.value = withDelay(100, withSpring(1, SPRING.sheet));
   }, [enter]);
   const style = useAnimatedStyle(() => ({ opacity: Math.min(1, enter.value * 1.5), transform: [{ scale: 0.6 + enter.value * 0.4 }] }));
-  const bg = color || (theme === 'dark' ? '#dc2626' : '#dc2626');
+  const bg = color || BRAND;
   return (
     <Animated.View style={[{ position: 'absolute', right: spacing.xl, bottom }, style]}>
       <AnimatedPressable
@@ -415,7 +423,7 @@ export function EmptyHero({ icon = 'sparkles', title, message, color, action }) 
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl }}>
       <Animated.View {...glass('card')} style={[{
-        width: 88, height: 88, borderRadius: 44, backgroundColor: tint(tone.startsWith('#') ? tone : '#dc2626', 0.14),
+        width: 88, height: 88, borderRadius: 44, backgroundColor: tint(tone.startsWith('#') ? tone : BRAND, 0.14),
         alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
       }, iconStyle]}
       >

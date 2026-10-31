@@ -7,14 +7,14 @@ const HOUR = 3600;
 const DAY = 24 * HOUR;
 
 // ---------------------------------------------------------------------------
-// Health colours. The UI is red-only EXCEPT here: time status uses green / orange / red so
-// "fine / watch it / late" reads at a glance. Do not use these colours for anything else.
+// Health colours: time status uses green / orange / red so "fine / watch it / late" reads at a glance.
+// They are the readable text shades of the palette colours (MONDAY_FEATURE_SPEC.md F-DSN-01).
 // ---------------------------------------------------------------------------
 export const HEALTH = {
-  green: { label: 'On track', light: '#16a34a', dark: '#4ade80', icon: 'checkmark-circle' },
-  orange: { label: 'Watch', light: '#d97706', dark: '#fbbf24', icon: 'alert-circle' },
-  red: { label: 'Late', light: '#dc2626', dark: '#f87171', icon: 'flame' },
-  none: { label: '', light: '#9ca3af', dark: '#6b7280', icon: 'ellipse-outline' },
+  green: { label: 'On track', light: '#00854d', dark: '#3ddc97', icon: 'checkmark-circle' },
+  orange: { label: 'Watch', light: '#a8650a', dark: '#fec26f', icon: 'alert-circle' },
+  red: { label: 'Late', light: '#d83a52', dark: '#f0697f', icon: 'flame' },
+  none: { label: '', light: '#9699a6', dark: '#797e93', icon: 'ellipse-outline' },
 };
 
 export function healthColor(level, theme = 'light') {
