@@ -43,6 +43,7 @@ const SECTION_OF = {
   Automations: 'automations',
   Boards: 'boards',
   MyWork: 'mywork',
+  Timebox: 'timebox',
   Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',
@@ -128,6 +129,7 @@ export default function AppSidebar({ routeName }) {
   useShortcuts({
     'nav.home': () => go('Dashboard'),
     'nav.mywork': () => go('MyWork'),
+    'nav.timebox': () => go('Timebox'),
     'nav.boards': () => go('Boards'),
     'nav.progress': () => go('Progress'),
     'nav.todos': () => go('Todos'),
@@ -161,6 +163,7 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
         {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
         <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
+        <Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
         <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />

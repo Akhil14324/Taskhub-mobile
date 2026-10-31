@@ -55,6 +55,7 @@ import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
 import BoardsHomeScreen from '../screens/BoardsHomeScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
+import TimeboxScreen from '../screens/TimeboxScreen';
 import MeetingNotesScreen from '../screens/MeetingNotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
@@ -136,6 +137,7 @@ const PushAutomation = T(FramedAutomation);
 const PushBoards = T(BoardsHomeScreen);
 const PushBoard = T(BoardScreen);
 const PushMyWork = T(MyWorkScreen);
+const PushTimebox = T(TimeboxScreen);
 const PushMeetingNotes = T(FramedMeetingNotes);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
@@ -314,6 +316,7 @@ function MainTabs() {
   const moreItems = [
     ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
+    { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
@@ -577,6 +580,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Boards" component={PushBoards} />
             <Stack.Screen name="Board" component={PushBoard} />
             <Stack.Screen name="MyWork" component={PushMyWork} />
+            <Stack.Screen name="Timebox" component={PushTimebox} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />

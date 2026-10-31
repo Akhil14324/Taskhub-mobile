@@ -45,6 +45,7 @@ export function openNotificationTarget(data = {}) {
   if (data.brief) return navigateWhenReady('Reports', { range: 1 });
   // A batch of tasks from a meeting ("Akhil gave you 34 tasks") opens My work, not one task.
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
+  if (data.screen === 'Timebox' || data.type === 'timebox') return navigateWhenReady('Timebox', data.date ? { date: data.date } : undefined);
   if (data.type === 'kudos' || data.type === 'daily_digest') return navigateWhenReady('Progress', { tab: 'today' });
   if (data.type === 'goal_new') return navigateWhenReady('Progress', { tab: 'goals' });
   if (data.standup || data.type === 'standup_posted' || data.type === 'standup_nudge') return navigateWhenReady('Progress', { tab: 'standup' });
