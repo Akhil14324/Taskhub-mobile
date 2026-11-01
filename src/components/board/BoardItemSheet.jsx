@@ -64,7 +64,7 @@ function Field({ onPress, children, tall, stretch }) {
  * files ...) and, on the right, Updates (the conversation), Files and the Activity Log. Every value is the
  * board's own cell, so it changes through the same editors and rules as in the table.
  */
-export default function BoardItemSheet({ item, board, people, actions, onClose, onOpenCell, onOpenFull }) {
+export default function BoardItemSheet({ item, board, people, actions, onClose, onOpenCell, onOpenFull, initialTab = 'updates' }) {
   const colors = useColors();
   const desktop = useIsDesktop();
   const win = useWindowDimensions();
@@ -79,7 +79,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const word = itemWordOf(board);
   const id = item?.id;
 
-  useEffect(() => { setName(item?.title || ''); setTab('updates'); setFiles(null); setLog(null); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setName(item?.title || ''); setTab(initialTab || 'updates'); setFiles(null); setLog(null); }, [id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFiles = useCallback(async () => {
     if (!id) return;
@@ -117,8 +117,9 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
     } finally { setUploading(false); }
   };
 
-  const width = desktop ? Math.min(1080, win.width - 80) : win.width;
-  const height = desktop ? Math.min(820, win.height - 60) : win.height;
+  // A panel that slides in from the right edge, full height; a phone gets the whole screen.
+  const width = desktop ? Math.min(1040, Math.round(win.width * 0.66)) : win.width;
+  const height = win.height;
 
   const left = (
     <ScrollView style={{ flex: desktop ? 0.9 : undefined }} contentContainerStyle={{ gap: spacing.sm, padding: spacing.xl, paddingTop: spacing.md }} keyboardShouldPersistTaps="handled">
@@ -188,11 +189,11 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
-      <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' }}>
+      <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1, backgroundColor: colors.overlay, alignItems: 'flex-end', justifyContent: 'center' }}>
         <Pressable
           {...glass('sheet')}
           onPress={(e) => e.stopPropagation?.()}
-          style={{ width, height, backgroundColor: colors.white, borderRadius: desktop ? radius.xl : 0, overflow: 'hidden' }}
+          style={{ width, height, backgroundColor: colors.page, borderLeftWidth: 1, borderColor: colors.gray[200], overflow: 'hidden' }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.sm, gap: spacing.md }}>
             <View style={{ flex: 1 }}>

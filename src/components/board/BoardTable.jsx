@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -20,25 +20,58 @@ const NAME_W = 340;
 const UPD_W = 46; // the "updates" column next to the name: opens the task window
 const ADD_W = 44;
 const ROW_H = 38;
+// Heights the "..." menu can change (Item height, Header height) and how many columns stay put when scrolling sideways.
+const Metrics = createContext({ rowH: ROW_H, headH: 34, pinned: 0 });
+const ITEM_HEIGHTS = { compact: 30, normal: 38, tall: 56 };
+const HEADER_HEIGHTS = { single: 34, double: 54, triple: 74 };
 const PAGE = 100; // rows drawn per group before "Show more"
 // "entry" -> "entries", "task" -> "tasks"
 const plural = (w) => (/[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /(s|x|ch|sh)$/.test(w) ? `${w}es` : `${w}s`);
 
-const Cell = memo(function Cell({ item, column, values, people, focused, onOpen, onToggle, width }) {
+// Text, long text and numbers are typed straight into the cell, like a spreadsheet.
+const INLINE_KINDS = new Set(['text', 'long_text', 'numbers']);
+
+const Cell = memo(function Cell({ item, column, values, people, focused, onOpen, onToggle, width, sticky }) {
   const colors = useColors();
+  const { rowH } = useContext(Metrics);
   const editable = canEditColumn(column) && mayEdit(item, column);
   const isStatus = column.kind === 'status';
+  const inline = !column.system_key && INLINE_KINDS.has(column.kind) && editable;
+  const [typing, setTyping] = useState(false);
+  const [draft, setDraft] = useState('');
+  const stored = values?.[item.id]?.[column.id];
+  const begin = () => { setDraft(stored === null || stored === undefined ? '' : String(stored)); setTyping(true); };
+  const commit = () => {
+    setTyping(false);
+    const next = column.kind === 'numbers' ? (draft.trim() === '' ? null : Number(draft)) : draft;
+    if (column.kind === 'numbers' && next !== null && !Number.isFinite(next)) return;
+    if ((next ?? '') !== (stored ?? '')) onToggle(item, column, next === '' ? null : next);
+  };
+  if (inline && typing) {
+    return (
+      <View style={[{ width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200], justifyContent: 'center' }, sticky]}>
+        <TextInput
+          autoFocus value={draft} onChangeText={setDraft} onBlur={commit}
+          onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') { setTyping(false); } }}
+          onSubmitEditing={commit} blurOnSubmit
+          keyboardType={column.kind === 'numbers' ? 'numeric' : 'default'}
+          style={{ height: rowH - 2, marginHorizontal: 1, paddingHorizontal: spacing.sm, fontSize: 14, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
+        />
+      </View>
+    );
+  }
   return (
     <Pressable
-      onPress={(e) => editable && onOpen(e, item, column)}
+      onPress={(e) => { if (!editable) return; if (inline) begin(); else onOpen(e, item, column); }}
       accessibilityLabel={`${column.title}: ${item.title}`}
       style={({ hovered }) => ({
-        width, height: ROW_H, borderRightWidth: 1, borderColor: colors.gray[200], justifyContent: 'center',
+        width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200], justifyContent: 'center',
         alignItems: column.kind === 'numbers' ? 'flex-end' : isStatus ? 'stretch' : 'center',
         paddingHorizontal: isStatus ? 0 : spacing.sm,
-        backgroundColor: hovered && editable && !isStatus ? colors.gray[100] : 'transparent',
+        backgroundColor: hovered && editable && !isStatus ? colors.gray[100] : sticky ? colors.white : 'transparent',
         outlineStyle: focused ? 'solid' : 'none', outlineWidth: 2, outlineColor: BRAND, outlineOffset: -2,
-        cursor: editable ? 'pointer' : 'default',
+        cursor: editable ? (inline ? 'text' : 'pointer') : 'default',
+        ...(sticky || {}),
       })}
     >
       <CellView item={item} column={column} values={values} people={people}
@@ -58,18 +91,19 @@ const COLUMN_HINTS = {
   long_text: 'Free notes for this task.',
 };
 
-function HeaderCell({ column, canManage, onMenu, width }) {
+function HeaderCell({ column, canManage, onMenu, width, sticky }) {
   const colors = useColors();
+  const { headH } = useContext(Metrics);
   const hint = column.description || COLUMN_HINTS[column.kind];
   return (
-    <View style={{ width, height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+    <View style={[{ width, height: headH, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }, sticky && { backgroundColor: colors.white }, sticky]}>
       <Pressable
         disabled={!canManage}
         onPress={(e) => onMenu(e, column)}
         accessibilityLabel={`${column.title} column`}
-        style={({ hovered }) => ({ flexShrink: 1, height: 34, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent' })}
+        style={({ hovered }) => ({ flexShrink: 1, height: headH, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent' })}
       >
-        <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{column.title}</Text>
+        <Text numberOfLines={Math.round(headH / 20)} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500', textAlign: 'center' }}>{column.title}</Text>
       </Pressable>
       {!!hint && <Hint text={hint} size={14} style={{ marginRight: 6 }} />}
     </View>
@@ -78,9 +112,10 @@ function HeaderCell({ column, canManage, onMenu, width }) {
 
 function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
   const colors = useColors();
+  const { rowH } = useContext(Metrics);
   const [text, setText] = useState('');
   return (
-    <View style={{ flexDirection: 'row', height: ROW_H, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+    <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
       <View style={{ width: 6, backgroundColor: paletteHex(color), opacity: 0.5 }} />
       <TextInput accessibilityLabel={`Add ${word.toLowerCase()}`}
         value={text}
@@ -138,9 +173,21 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem,
 }) {
   const colors = useColors();
   const { columns, groups, values, access } = board;
+  const rowH = ITEM_HEIGHTS[itemHeight] || ROW_H;
+  const headH = HEADER_HEIGHTS[headerHeight] || 34;
+  const metrics = useMemo(() => ({ rowH, headH, pinned }), [rowH, headH, pinned]);
+  // Which task has its name open for typing (a click on the name, or a task that was just made).
+  const [nameEdit, setNameEdit] = useState(null);
+  useEffect(() => { if (editNameId) { setNameEdit(editNameId); onEditNameDone?.(); } }, [editNameId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The name block always stays in view when the table scrolls sideways, plus the first `pinned` columns.
+  const NAME_BLOCK = NAME_W + UPD_W;
+  const stickyName = { position: 'sticky', left: 0, zIndex: 4 };
+  const lefts = useMemo(() => { let x = NAME_BLOCK; return columns.map((c) => { const l = x; x += c.width; return l; }); }, [columns, NAME_BLOCK]);
+  const stickyCol = (ci) => (ci < pinned ? { position: 'sticky', left: lefts[ci], zIndex: 3 } : null);
   const canManage = !!access?.manage;
   const canAdd = !!access?.add;
   const word = itemWordOf(board);
@@ -289,42 +336,56 @@ export default function BoardTable({
     const focusedHere = focus?.itemId === t.id;
     const hasKids = kids.length > 0;
     const prog = hasKids ? progressMap.get(t.id) : null;
+    const rule = colorOf ? colorOf(t) : null;
     return (
       <View key={t.id}>
-        <View style={{ flexDirection: 'row', height: ROW_H, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
-          <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
-          <Pressable
+        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
+          <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
+          <View style={{ width: 6, backgroundColor: paletteHex(rule || block.group.color) }} />
+          <View
             dataSet={{ cell: `${t.id}:-1` }}
-            onPress={() => setFocus({ itemId: t.id, col: -1 })}
-            onLongPress={(e) => mayEdit(t) && onOpenName(anchorOf(e), t)}
-            style={({ hovered }) => ({
+            style={{
               width: NAME_W - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
               paddingRight: spacing.xs, borderRightWidth: 1, borderColor: colors.gray[200],
-              backgroundColor: hovered ? colors.gray[50] : 'transparent',
+              backgroundColor: rule ? `${paletteHex(rule)}26` : 'transparent',
               outlineStyle: focusedHere && focus.col === -1 ? 'solid' : 'none', outlineWidth: 2, outlineColor: BRAND, outlineOffset: -2,
-            })}
+            }}
           >
             <Pressable onPress={() => toggleParent(t.id)} hitSlop={6} accessibilityLabel={open ? 'Hide subtasks' : 'Show subtasks'}>
               <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={hasKids ? colors.gray[600] : colors.gray[300]} />
             </Pressable>
-            <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>
-              {t.title}
-            </Text>
+            {nameEdit === t.id && mayEdit(t) ? (
+              <TextInput
+                autoFocus selectTextOnFocus defaultValue={t.title} accessibilityLabel={`Name of ${t.title}`}
+                onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
+                onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
+                onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
+                style={{ flex: 1, height: rowH - 4, paddingHorizontal: 6, fontSize: 14, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
+              />
+            ) : (
+              <Pressable
+                onPress={() => { setFocus({ itemId: t.id, col: -1 }); if (mayEdit(t)) setNameEdit(t.id); else onOpenItem(t.id); }}
+                accessibilityLabel={`Edit the name of ${t.title}`}
+                style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'text' }}
+              >
+                <Text numberOfLines={rowH > 40 ? 2 : 1} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>
+                  {t.title}
+                </Text>
+              </Pressable>
+            )}
             {hasKids && prog && (
               <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <ProgressDot pct={prog.pct} size={18} />
                 <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
               </View>
             )}
-            {mayEdit(t) && (
-              <Pressable onPress={(e) => onOpenName(anchorOf(e), t)} hitSlop={4} accessibilityLabel="Rename" style={({ hovered }) => ({ opacity: hovered ? 1 : 0.4 })}>
-                <Ionicons name="pencil-outline" size={13} color={colors.gray[500]} />
-              </Pressable>
-            )}
-          </Pressable>
+            <Pressable onPress={() => onOpenItem(t.id)} hitSlop={4} accessibilityLabel={`Open ${t.title}`} style={({ hovered }) => ({ padding: 3, borderRadius: 4, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="expand-outline" size={15} color={colors.gray[500]} />
+            </Pressable>
+          </View>
           <Pressable
-            onPress={() => onOpenItem(t.id)}
-            accessibilityLabel={`Updates and details of ${t.title}`}
+            onPress={() => onOpenItem(t.id, 'updates')}
+            accessibilityLabel={`Updates of ${t.title}`}
             style={({ hovered }) => ({ width: UPD_W, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.brand[50] : 'transparent' })}
           >
             <Ionicons name={t.comment_count > 0 ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={19} color={t.comment_count > 0 ? BRAND : colors.gray[400]} />
@@ -334,8 +395,9 @@ export default function BoardTable({
               </View>
             )}
           </Pressable>
+          </View>
           {columns.map((c, ci) => (
-            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }}>
+            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }} style={stickyCol(ci) ? [stickyCol(ci), { backgroundColor: colors.white }] : undefined}>
               <Cell
                 item={t} column={c} values={values} people={people} width={c.width}
                 focused={focusedHere && focus.col === ci}
@@ -352,6 +414,7 @@ export default function BoardTable({
   };
 
   return (
+    <Metrics.Provider value={metrics}>
     <ScrollView horizontal style={{ flex: 1 }} contentContainerStyle={{ minWidth: '100%' }}>
       <ScrollView style={{ width: Math.max(tableWidth, 600) }} contentContainerStyle={{ paddingBottom: 120 }}>
         {blocks.map((b) => {
@@ -370,16 +433,18 @@ export default function BoardTable({
               {!isCollapsed && (
                 <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden', backgroundColor: colors.white }}>
                   <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }}>
-                    <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
-                    <View style={{ width: NAME_W - 6 + UPD_W, height: 34, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
-                      <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{word}</Text>
+                    <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
+                      <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
+                      <View style={{ width: NAME_W - 6 + UPD_W, height: headH, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+                        <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{word}</Text>
+                      </View>
                     </View>
-                    {columns.map((c) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
+                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
                     <Pressable
                       disabled={!canManage}
                       onPress={(e) => onAddColumn(anchorOf(e))}
                       accessibilityLabel="Add column"
-                      style={({ hovered }) => ({ width: ADD_W, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+                      style={({ hovered }) => ({ width: ADD_W, height: headH, alignItems: 'center', justifyContent: 'center', backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
                     >
                       {canManage && <Ionicons name="add" size={18} color={colors.gray[600]} />}
                     </Pressable>
@@ -388,7 +453,7 @@ export default function BoardTable({
                   {b.top.length > limitOf(b.group.id) && (
                     <Pressable
                       onPress={() => setShown((m) => new Map(m).set(b.group.id ?? 'none', limitOf(b.group.id) + PAGE))}
-                      style={({ hovered }) => ({ height: ROW_H, justifyContent: 'center', paddingLeft: spacing.lg + 18, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.gray[50] : colors.white })}
+                      style={({ hovered }) => ({ height: rowH, justifyContent: 'center', paddingLeft: spacing.lg + 18, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.gray[50] : colors.white })}
                     >
                       <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Show {Math.min(PAGE, b.top.length - limitOf(b.group.id))} more of {b.top.length - limitOf(b.group.id)}</Text>
                     </Pressable>
@@ -409,5 +474,6 @@ export default function BoardTable({
         )}
       </ScrollView>
     </ScrollView>
+    </Metrics.Provider>
   );
 }

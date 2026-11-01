@@ -3,6 +3,7 @@
 
 import { PALETTE } from '../../theme/theme';
 import { isDarkMode } from '../kit';
+import { todayYmd, addDays, parseYmd } from '../../utils/dates';
 
 export const STATUS_KEYS = ['todo', 'in_progress', 'blocked', 'in_review', 'on_hold', 'done'];
 
@@ -180,4 +181,106 @@ export function formatNumber(n, settings = {}) {
   const text = Number(n).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   if (!settings.unit) return text;
   return settings.unit_side === 'right' || /^[a-z%]/i.test(settings.unit) ? `${text} ${settings.unit}` : `${settings.unit}${text}`;
+}
+
+// ---- Excel-style column filters ------------------------------------------------------------------------
+// A filter is { [columnId]: [valueKey, ...] }: an item stays when, for every filtered column, one of its value
+// keys is picked. `none` is the empty cell. The same keys feed the Filter panel's lists and their counts.
+
+const NAME_COL = 'name';
+export const NAME_FILTER = NAME_COL;
+
+function ymdOf(item, column, values) {
+  const v = cellValue(item, column, values);
+  if (column.kind === 'timeline') return (column.system_key ? v?.[1] : v?.end) || null;
+  if (column.kind === 'date') return (column.system_key ? v : v?.date) || null;
+  return null;
+}
+
+/** The date buckets a due date can fall in (the Due date filter list). */
+export const DATE_BUCKETS = [
+  ['overdue', 'Overdue'], ['done_on_time', 'Done on time'], ['done_overdue', 'Done overdue'], ['today', 'Today'],
+  ['tomorrow', 'Tomorrow'], ['this_week', 'This week'], ['next_week', 'Next week'], ['this_month', 'This month'],
+  ['future', 'Future dates'], ['past', 'Past dates'], ['none', 'Blank'],
+];
+
+function dateKeys(item, column, values) {
+  const d = ymdOf(item, column, values);
+  if (!d) return ['none'];
+  const today = todayYmd();
+  const keys = [];
+  const done = !!item.is_done;
+  const doneOn = (item.completed_at || item.done_at || '').slice(0, 10);
+  if (!done && d < today) keys.push('overdue');
+  if (done && doneOn && doneOn > d) keys.push('done_overdue');
+  if (done && (!doneOn || doneOn <= d)) keys.push('done_on_time');
+  if (d === today) keys.push('today');
+  if (d === addDays(today, 1)) keys.push('tomorrow');
+  const dow = (parseYmd(today).getDay() + 6) % 7; // Monday = 0
+  const weekStart = addDays(today, -dow);
+  if (d >= weekStart && d <= addDays(weekStart, 6)) keys.push('this_week');
+  if (d >= addDays(weekStart, 7) && d <= addDays(weekStart, 13)) keys.push('next_week');
+  if (d.slice(0, 7) === today.slice(0, 7)) keys.push('this_month');
+  keys.push(d > today ? 'future' : d < today ? 'past' : 'today_exact');
+  return keys;
+}
+
+/** [{ key, label }] an item has on a column (the name column is `name`). */
+export function valueKeysOf(item, column, values, people = []) {
+  if (column === NAME_COL) return [{ key: `t:${item.title}`, label: item.title }];
+  const v = cellValue(item, column, values);
+  const blank = [{ key: 'none', label: 'Blank' }];
+  switch (column.kind) {
+    case 'status': {
+      const l = statusLabelOf(item, column, values);
+      return l ? [{ key: `l:${l.id || l.maps_to}`, label: l.label, color: l.color }] : blank;
+    }
+    case 'person': {
+      const ids = column.system_key ? (v ? [v] : []) : (v || []);
+      if (!ids.length) return [{ key: 'none', label: 'Unassigned' }];
+      return ids.map((id) => ({ key: `p:${id}`, label: people.find((p) => p.id === id)?.name || (id === item.assignee_id ? item.assignee_name : '') || `User ${id}`, person: id }));
+    }
+    case 'date': case 'timeline': return dateKeys(item, column, values).map((k) => ({ key: `d:${k}`, label: (DATE_BUCKETS.find((b) => b[0] === k) || [k, k])[1] }));
+    case 'dependency': return (v || []).length ? v.map((d) => ({ key: `t:${d.title}`, label: d.title })) : blank;
+    case 'files': return values?.[item.id]?.[column.id]?.length || (v && v.length) ? [{ key: 'has', label: 'Has files' }] : [{ key: 'none', label: 'No files' }];
+    case 'checkbox': return [{ key: v ? 'yes' : 'no', label: v ? 'Checked' : 'Unchecked' }];
+    default: {
+      const t = cellText(item, column, values, people).trim();
+      return t ? [{ key: `t:${t.slice(0, 80)}`, label: t.slice(0, 80) }] : blank;
+    }
+  }
+}
+
+/** The list a column's filter shows: every value in use with its count, date buckets in their fixed order. */
+export function filterOptions(items, column, values, people = []) {
+  const map = new Map();
+  for (const it of items) {
+    for (const o of valueKeysOf(it, column, values, people)) {
+      if (o.key === 'd:today_exact') continue;
+      const cur = map.get(o.key) || { ...o, count: 0 };
+      cur.count += 1;
+      map.set(o.key, cur);
+    }
+  }
+  const out = [...map.values()];
+  if (column !== NAME_COL && (column.kind === 'date' || column.kind === 'timeline')) {
+    const order = DATE_BUCKETS.map((b) => `d:${b[0]}`);
+    out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  } else if (column !== NAME_COL && column.kind === 'status') {
+    const order = (column.labels || []).map((l) => `l:${l.id || l.maps_to}`);
+    out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  } else out.sort((a, b) => (a.key === 'none') - (b.key === 'none') || a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
+  return out;
+}
+
+/** Does an item pass every column filter in `cols` ({ columnId | 'name': [keys] })? */
+export function passesColumnFilters(item, columns, values, people, cols) {
+  for (const [id, keys] of Object.entries(cols || {})) {
+    if (!keys?.length) continue;
+    const column = id === NAME_COL ? NAME_COL : columns.find((c) => String(c.id) === String(id));
+    if (!column) continue;
+    const have = valueKeysOf(item, column, values, people).map((o) => o.key);
+    if (!keys.some((k) => have.includes(k))) return false;
+  }
+  return true;
 }

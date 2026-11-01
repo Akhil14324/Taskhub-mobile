@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { createElement, useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -127,6 +127,15 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
                   <Text style={[styles.timeText, pickedTime === tp && styles.timeTextActive]}>{formatTime(tp)}</Text>
                 </AnimatedPressable>
               ))}
+            </View>
+            {/* Any minute of the day, not only the presets above. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.sm }}>
+              <Text style={{ fontSize: fontSize.sm, color: colors.gray[600] }}>Any time</Text>
+              {Platform.OS === 'web' ? createElement('input', {
+                type: 'time', step: 60, value: pickedTime || '', 'aria-label': 'Pick any time',
+                onChange: (e) => { const v = e.target.value; setPickedTime(v || null); if (v) onChange({ date: date || todayYmd(), time: v }); },
+                style: { height: 34, padding: '0 10px', fontSize: 14, color: colors.gray[900], background: colors.gray[100], border: `1px solid ${colors.gray[300]}`, borderRadius: 8, colorScheme: colors.page === '#111111' ? 'dark' : 'light', outline: 'none' },
+              }) : null}
             </View>
             <Text style={styles.timeHint}>Tip: type times in quick add, e.g. "tomorrow 6:30pm".</Text>
           </>

@@ -48,7 +48,7 @@ function Section({ icon, title, children }) {
 }
 
 /** Where a new board can go, from the org tree (what the person belongs to) plus Personal / Leadership. */
-function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
+export function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated }) {
   const colors = useColors();
   const [name, setName] = useState('');
   const [where, setWhere] = useState({ scope: 'personal' });

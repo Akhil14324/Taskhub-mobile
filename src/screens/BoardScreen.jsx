@@ -23,7 +23,10 @@ import { useAuth } from '../context/AuthContext';
 import { AddColumnMenu, ColumnMenu, GroupMenu, BoardMoreMenu } from '../components/board/BoardMenus';
 import BoardAutomate from '../components/board/BoardAutomate';
 import BoardImport from '../components/board/BoardImport';
-import { matchesSearch, cellText, itemWordOf, statusLabelOf } from '../components/board/model';
+import { cellText, itemWordOf, statusLabelOf, valueKeysOf, filterOptions, passesColumnFilters, cellValue } from '../components/board/model';
+import BoardsSidebar from '../components/board/BoardsSidebar';
+import { ruleMatches } from '../components/board/BoardToolbar';
+import { formatDue } from '../utils/dates';
 import BoardTabs from '../components/board/BoardTabs';
 import BoardToolbar from '../components/board/BoardToolbar';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
@@ -76,6 +79,8 @@ export default function BoardScreen({ route }) {
 
   const [viewId, setViewId] = useState(null);
   const [search, setSearch] = useState('');
+  const [searchCols, setSearchCols] = useState(null); // null = every column
+  const [nameEditId, setNameEditId] = useState(null); // the task whose name is open for typing
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [focus, setFocus] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -123,6 +128,12 @@ export default function BoardScreen({ route }) {
       sort: st.sort?.column_id ? st.sort : null,
       hidden: st.hidden_columns || [],
       group_by: st.group_by || null,
+      group_dir: st.group_dir || 'asc',
+      pinned: st.pinned || 0,
+      header_height: st.header_height || 'single',
+      item_height: st.item_height || 'normal',
+      color_rules: st.color_rules || [],
+      defaults: st.defaults || {},
     };
   }, [view, localVs]);
 
@@ -133,6 +144,7 @@ export default function BoardScreen({ route }) {
     if ('sort' in patch) set.sort = patch.sort || {};
     if ('hidden' in patch) set.hidden_columns = patch.hidden;
     if ('group_by' in patch) set.group_by = patch.group_by || '';
+    for (const k of ['group_dir', 'pinned', 'header_height', 'item_height', 'color_rules', 'defaults']) if (k in patch) set[k] = patch[k];
     setLocalVs((cur) => ({ ...cur, [view.id]: { ...(cur[view.id] || {}), ...set } }));
     if (canSaveView) board.updateView(view, { settings: set });
   }, [view, vs, canSaveView, board]);
@@ -141,25 +153,32 @@ export default function BoardScreen({ route }) {
   const items = useMemo(() => {
     if (!data) return [];
     let base = applyQuick(data.items, filters, user?.id);
+    if (Object.values(filters.cols || {}).some((a) => a?.length)) {
+      const ok = new Set(base.filter((t) => !t.parent_id && passesColumnFilters(t, data.columns, data.values, people, filters.cols)).map((t) => t.id));
+      base = base.filter((t) => ok.has(t.id) || (t.parent_id && ok.has(t.parent_id)));
+    }
     if (search.trim()) {
-      const hit = new Set(base.filter((t) => matchesSearch(t, search, data.columns, data.values, people)).map((t) => t.id));
+      const q = search.trim().toLowerCase();
+      const cols = searchCols ? data.columns.filter((c) => searchCols.includes(c.id)) : data.columns;
+      const nameOn = !searchCols || searchCols.includes('name');
+      const hit = new Set(base.filter((t) => (nameOn && t.title.toLowerCase().includes(q)) || cols.some((c) => cellText(t, c, data.values, people).toLowerCase().includes(q))).map((t) => t.id));
       base = base.filter((t) => hit.has(t.id) || (t.parent_id && hit.has(t.parent_id)) || base.some((c) => c.parent_id === t.id && hit.has(c.id)));
     }
-    const col = vs.sort && data.columns.find((c) => c.id === vs.sort.column_id);
+    const col = vs.sort && (vs.sort.column_id === 'name' ? 'name' : data.columns.find((c) => c.id === vs.sort.column_id));
     if (col) {
       const dir = vs.sort.dir === 'desc' ? -1 : 1;
-      const key = (t) => cellText(t, col, data.values, people);
+      const key = (t) => (col === 'name' ? t.title : cellText(t, col, data.values, people));
       base = [...base].sort((a, b) => {
         const x = key(a);
         const y = key(b);
         if (!x && !y) return 0;
         if (!x) return 1; // empty cells always last
         if (!y) return -1;
-        return dir * (col.kind === 'numbers' ? Number(x) - Number(y) : x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' }));
+        return dir * (col !== 'name' && col.kind === 'numbers' ? Number(x) - Number(y) : x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' }));
       });
     }
     return base;
-  }, [data, search, people, filters, user, vs.sort]);
+  }, [data, search, searchCols, people, filters, user, vs.sort]);
 
   // The table can show the tasks grouped by status or owner instead of by the board's own groups. Those
   // groups only exist on screen (their ids are text), so they cannot be renamed, moved or added to.
@@ -167,24 +186,37 @@ export default function BoardScreen({ route }) {
     if (!data) return null;
     const columns = data.columns.filter((c) => !vs.hidden.includes(c.id));
     const statusCol = data.columns.find((c) => c.system_key === 'status') || data.columns.find((c) => c.kind === 'status');
-    if (vs.group_by === 'status' && statusCol) {
-      const groups = (statusCol.labels || []).map((l) => ({ id: `s:${l.id}`, name: l.label, color: l.color }));
-      const rows = items.map((t) => {
-        const l = !t.parent_id ? statusLabelOf(t, statusCol, data.values) : null;
-        return !t.parent_id ? { ...t, business_section_id: l?.id ? `s:${l.id}` : null } : t;
-      });
-      return { data: { ...data, columns, groups }, items: rows };
-    }
-    if (vs.group_by === 'owner') {
+    const personCol = data.columns.find((c) => c.kind === 'person');
+    const gcol = !vs.group_by ? null
+      : vs.group_by === 'status' ? statusCol
+      : vs.group_by === 'owner' ? personCol
+      : data.columns.find((c) => String(c.id) === String(vs.group_by));
+    if (gcol) {
+      const isDate = gcol.kind === 'date' || gcol.kind === 'timeline';
+      const keyOf = (t) => {
+        if (isDate) {
+          const v = cellValue(t, gcol, data.values);
+          const d = gcol.kind === 'timeline' ? (gcol.system_key ? v?.[1] : v?.end) : (gcol.system_key ? v : v?.date);
+          return d ? { key: `v:${d}`, label: formatDue(d), sort: d } : { key: 'v:none', label: 'No date', sort: '\uffff' };
+        }
+        const o = valueKeysOf(t, gcol, data.values, people)[0];
+        return { key: `v:${o.key}`, label: o.label, color: o.color, sort: o.key === 'none' ? '\uffff' : o.label.toLowerCase() };
+      };
       const seen = new Map();
-      for (const t of items) if (!t.parent_id && t.assignee_id && !seen.has(t.assignee_id)) seen.set(t.assignee_id, t.assignee_name || 'Someone');
+      for (const t of items) if (!t.parent_id) { const k = keyOf(t); if (!seen.has(k.key)) seen.set(k.key, k); }
+      let list = [...seen.values()];
+      if (gcol.kind === 'status') {
+        const order = (gcol.labels || []).map((l) => `v:l:${l.id || l.maps_to}`);
+        list.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+      } else list.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0));
+      if (vs.group_dir === 'desc') { const tail = list.filter((g) => g.sort === '\uffff'); list = [...list.filter((g) => g.sort !== '\uffff').reverse(), ...tail]; }
       const palette = ['blue', 'green', 'orange', 'purple', 'pink', 'aquamarine', 'red', 'yellow'];
-      const groups = [...seen].map(([id, name], i) => ({ id: `o:${id}`, name, color: palette[i % palette.length] }));
-      const rows = items.map((t) => (!t.parent_id ? { ...t, business_section_id: t.assignee_id ? `o:${t.assignee_id}` : null } : t));
+      const groups = list.map((g, i) => ({ id: g.key, name: g.label, color: g.color || palette[i % palette.length] }));
+      const rows = items.map((t) => (!t.parent_id ? { ...t, business_section_id: keyOf(t).key } : t));
       return { data: { ...data, columns, groups }, items: rows };
     }
     return { data: { ...data, columns }, items };
-  }, [data, items, vs.hidden, vs.group_by]);
+  }, [data, items, vs.hidden, vs.group_by, vs.group_dir, people]);
 
   const toggleGroup = useCallback((id) => setCollapsed((cur) => {
     const next = new Set(cur);
@@ -196,16 +228,58 @@ export default function BoardScreen({ route }) {
   const openName = useCallback((anchor, item) => setEditing({ item, column: null, anchor }), []);
   // A task opens in the board's own task window; "More options" there opens the full to-do window.
   const [sheetId, setSheetId] = useState(null);
-  const openItem = useCallback((id) => setSheetId(id), []);
+  const [sheetTab, setSheetTab] = useState('updates');
+  const openItem = useCallback((id, tab) => { setSheetTab(tab || 'updates'); setSheetId(id); }, []);
   const openFull = useCallback((id) => {
     if (todos.some((t) => t.id === id)) { setSheetId(null); setOpenTodoId(id); }
     else showToast({ message: 'Open it from To-do: it is not in your lists yet', icon: 'information-circle' });
   }, [todos]);
   const toggleValue = useCallback((item, column, value) => (column.kind === 'vote' ? board.vote(item, column, value) : board.setValue(item, column, value)), [board]);
   // A group made up on screen (grouped by status or owner) has a text id: the task goes to no group.
-  const addItem = useCallback((title, groupId, fields) => board.addItem(title, { groupId: typeof groupId === 'number' ? groupId : null, fields }), [board]);
   // A view's quick filters: saved with the view when the person may change it (their own view, or they run the board).
-  const newTask = useCallback((anchor) => setMenu({ type: 'newItem', anchor: anchor && 'x' in anchor ? anchor : anchorOf(anchor) }), []);
+  // The view's default values (Owner, Status, Due date, Notes ...) are put on a task right after it is made.
+  const applyDefaults = useCallback(async (item) => {
+    if (!item) return;
+    for (const [cid, val] of Object.entries(vs.defaults || {})) {
+      const col = data?.columns.find((c) => String(c.id) === cid);
+      if (!col || val === null || val === undefined || val === '') continue;
+      if (col.kind === 'person') board.assign(item, val);
+      else if (col.kind === 'status') {
+        const l = (col.labels || []).find((x) => x.id === val);
+        if (!l) continue;
+        if (col.system_key) board.setStatus(item, l.maps_to); else board.setValue(item, col, { label_id: l.id });
+      } else if (col.kind === 'date') {
+        const d = addDays(todayYmd(), Number(val));
+        if (col.system_key) board.updateFields(item, { due_date: d }); else board.setValue(item, col, { date: d });
+      } else if (col.kind === 'long_text' || col.kind === 'text') board.setValue(item, col, String(val));
+    }
+  }, [vs.defaults, data, board]);
+  // New task: made at once in the first group (or the one that has the focus) and its name is open for typing.
+  const newTask = useCallback(async (anchor, groupId, fields) => {
+    const gid = typeof groupId === 'number' ? groupId : (data?.groups[0]?.id ?? null);
+    const made = await board.addItem(word, { groupId: gid, fields });
+    if (made) { setNameEditId(made.id); applyDefaults(made); }
+  }, [board, data, word, applyDefaults]);
+  const newGroup = useCallback(async () => {
+    const colorsList = ['blue', 'green', 'orange', 'purple', 'pink', 'aquamarine', 'red', 'yellow'];
+    await board.addGroup({ name: 'New Group', color: colorsList[(data?.groups.length || 0) % colorsList.length] });
+  }, [board, data]);
+  const addItem = useCallback(async (title, groupId, fields) => {
+    const made = await board.addItem(title, { groupId: typeof groupId === 'number' ? groupId : null, fields });
+    if (made && !fields?.parent_id) applyDefaults(made);
+    return made;
+  }, [board, applyDefaults]);
+  const canAddView = true;
+  const saveAsView = useCallback(async () => {
+    const made = await board.addView({ kind: view.kind, name: `${view.name} copy`, personal: !data?.access.manage, settings: { ...(view.settings || {}), ...(localVs[view.id] || {}) } });
+    if (made?.view) { setViewId(made.view.id); showToast({ message: 'Saved as a new view', tone: 'success', icon: 'checkmark-circle' }); }
+  }, [board, view, localVs, data]);
+  // The first colour rule an item matches (conditional coloring), or null.
+  const colorOf = useCallback((item) => {
+    if (!vs.color_rules.length || !data) return null;
+    const r = vs.color_rules.find((x) => ruleMatches(x, item, data, people));
+    return r ? r.color : null;
+  }, [vs.color_rules, data, people]);
   const closeView = useCallback(async (v) => {
     const ok = await confirmDialog({ title: `Close the ${v.name} tab?`, message: 'Only this view goes. The tasks are not touched, and you can add the tab again with +.', confirmLabel: 'Close tab', destructive: true });
     if (!ok) return;
@@ -227,7 +301,9 @@ export default function BoardScreen({ route }) {
 
   return (
     <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
-    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
+    {desktop && <BoardsSidebar boardId={boardId} />}
+    <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
       {/* Header */}
       <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -272,8 +348,12 @@ export default function BoardScreen({ route }) {
           <BoardToolbar
             data={data} vs={vs} onChange={changeVs} people={people} search={search} onSearch={setSearch} word={word} desktop={desktop}
             canAdd={data.access.add} kind={view.kind}
-            onNew={newTask}
-            onNewGroup={() => setMenu({ type: 'newGroup', anchor: null })}
+            onNew={() => newTask()}
+            onNewGroup={newGroup}
+            searchCols={searchCols} onSearchCols={setSearchCols}
+            items={items} canManage={data.access.manage}
+            shownCount={items.filter((t) => !t.parent_id).length} totalCount={data.items.filter((t) => !t.parent_id).length}
+            onSaveAsView={canAddView ? saveAsView : null}
             onImport={() => setImporting(true)}
           />
         </View>
@@ -284,7 +364,7 @@ export default function BoardScreen({ route }) {
         {view.kind === 'kanban' ? (
           <BoardKanban board={data} items={items} onMove={board.setStatus} onSetValue={board.setValue} people={people} onOpenItem={openItem} onOpenCell={openCell} />
         ) : view.kind === 'calendar' ? (
-          <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => setMenu({ type: 'newItem', anchor: anchorOf(e), fields: { due_date: day } }) : null} />
+          <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => newTask(null, undefined, { due_date: day }) : null} />
         ) : view.kind === 'timeline' || view.kind === 'gantt' ? (
           <BoardTimeline board={data} items={items} onOpenItem={openItem} gantt={view.kind === 'gantt'} />
         ) : view.kind === 'chart' ? (
@@ -303,14 +383,18 @@ export default function BoardScreen({ route }) {
             onAddColumn={(anchor) => setMenu({ type: 'addColumn', anchor })}
             onGroupMenu={(anchor, group) => setMenu({ type: 'group', anchor, group })}
             onAddItem={addItem}
-            onAddGroup={() => setMenu({ type: 'newGroup', anchor: null })}
+            onAddGroup={newGroup}
             focus={focus} setFocus={setFocus}
+            pinned={vs.pinned} headerHeight={vs.header_height} itemHeight={vs.item_height}
+            colorOf={colorOf}
+            editNameId={nameEditId} onEditNameDone={() => setNameEditId(null)}
+            onRenameItem={(item, title) => board.updateFields(item, { title })}
           />
         ) : (
           <BoardCards
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenItem={openItem} onOpenCell={openCell} onAddItem={addItem}
-            onAddGroup={() => setMenu({ type: 'newGroup', anchor: null })}
+            onAddGroup={newGroup}
           />
         )}
       </View>
@@ -401,9 +485,10 @@ export default function BoardScreen({ route }) {
       <BoardItemSheet
         item={sheetId ? data.items.find((t) => t.id === sheetId) : null}
         board={data} people={people} actions={board}
-        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull}
+        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull} initialTab={sheetTab}
       />
       <TodoDetailSheet todoId={openTodoId} onClose={() => { setOpenTodoId(null); board.reload(); }} />
+    </View>
     </View>
     </BoardMeta.Provider>
   );
