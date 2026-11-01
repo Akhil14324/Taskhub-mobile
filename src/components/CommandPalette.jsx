@@ -41,7 +41,7 @@ export default function CommandPalette({ visible, onClose }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { toggleTheme, theme } = useTheme();
   const { user, logout } = useAuth();
-  const { todos } = useTodos();
+  const { todos, dumpEverything } = useTodos();
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const listRef = useRef(null);
@@ -69,6 +69,8 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'timebox', group: 'Go to', icon: 'hourglass-outline', label: 'Timebox: plan the day in half hours, send it at night', hint: hint('nav.timebox'), run: () => go('Timebox') },
     { id: 'boards', group: 'Go to', icon: 'grid-outline', label: 'Boards: every board you can open', run: () => go('Boards') },
     { id: 'dashboards', group: 'Go to', icon: 'speedometer-outline', label: 'Dashboards: numbers from your boards', run: () => go('Dashboards') },
+    { id: 'dump', group: 'Go to', icon: 'archive-outline', label: 'Dump: everything you sent out of your lists', run: () => go('Dump') },
+    { id: 'dump-all', group: 'Actions', icon: 'archive', label: 'Dump everything', run: () => dumpEverything() },
     { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
     { id: 'automations', group: 'Go to', icon: 'flash-outline', label: 'Automations: rules that do things for you', run: () => go('Automations') },
     { id: 'meetings', group: 'Go to', icon: 'document-text-outline', label: 'Notes: notepad and meetings', run: () => go('MeetingNotes') },

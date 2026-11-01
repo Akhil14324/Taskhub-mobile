@@ -83,7 +83,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const { user } = useAuth();
   const { on } = useFeature();
   const {
-    todos, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
+    todos: liveTodos, dump, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
     shareTodos, requestDelete, businesses, moveToBusiness, fetchComments,
   } = useTodos();
   const [bizSectionOpen, setBizSectionOpen] = useState(false);
@@ -92,6 +92,8 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   // The window can hop to a parent / sub-task without closing.
   const [activeId, setActiveId] = useState(todoId);
   useEffect(() => { setActiveId(todoId); }, [todoId]);
+  // A to-do in the Dump can be opened and edited too.
+  const todos = useMemo(() => (dump?.length ? [...liveTodos, ...dump] : liveTodos), [liveTodos, dump]);
   const todo = todos.find((t) => t.id === activeId);
   const byId = useMemo(() => new Map(todos.map((t) => [t.id, t])), [todos]);
   const crumbs = useMemo(() => {
@@ -729,8 +731,8 @@ export default function TodoDetailSheet({ todoId, onClose }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { todos } = useTodos();
-  const exists = todos.some((t) => t.id === todoId);
+  const { todos, dump } = useTodos();
+  const exists = todos.some((t) => t.id === todoId) || (dump || []).some((t) => t.id === todoId);
   const open = !!todoId && exists;
 
   const [mounted, setMounted] = useState(false);

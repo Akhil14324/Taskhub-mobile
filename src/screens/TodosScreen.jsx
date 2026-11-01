@@ -96,7 +96,7 @@ export default function TodosScreen() {
   const wide = useIsWide();
   const { width: windowWidth } = useWindowDimensions();
   const {
-    todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos,
+    todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos, dump, dumpEverything,
     updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, updateSection, deleteSection, saveFilter,
     deleteFilter, shareTodos, reorderTodos, fetchCompleted, mergeTodos, setTodoStatus, assignTodoTo, requestDelete,
     saveBoardOrder, favorites, reorderSections,
@@ -964,6 +964,10 @@ export default function TodosScreen() {
     }
   };
 
+  // Dump everything: a clear button (the Dump itself is reached from the sidebar, the More menu or the palette).
+  const dumpButton = view !== 'done' ? (
+    <IconButton icon="archive-outline" onPress={dumpEverything} accessibilityLabel="Dump everything. Sends all your to-dos to the Dump so you can see them fresh." />
+  ) : null;
   const rouletteButton = feature('roulette') && view !== 'done' ? (
     <IconButton icon="dice-outline" onPress={() => { const ids = new Set(visibleIds); openRoulette({ candidates: todos.filter((t) => ids.has(t.id)) }); }} accessibilityLabel="Pick a task for me" />
   ) : null;
@@ -1033,6 +1037,7 @@ export default function TodosScreen() {
           )}
           {desktop && !inTab && layoutSwitch}
           {desktop && !inTab && rouletteButton}
+          {desktop && !inTab && dumpButton}
           <IconButton icon={searching ? 'close' : 'search'} onPress={() => { setSearching((s) => !s); setSearch(''); }} accessibilityLabel="Search" />
           <IconButton icon="ellipsis-horizontal" onPress={() => setMenuOpen(true)} accessibilityLabel="More options" />
         </>
@@ -1112,11 +1117,12 @@ export default function TodosScreen() {
         )}
         </SlideGroup>
       </ScrollView>
-      {!desktop && !inTab && (layoutSwitch || rouletteButton) && (
+      {!desktop && !inTab && (layoutSwitch || rouletteButton || dumpButton) && (
         <View style={styles.mobileLayout}>
           {layoutSwitch}
           <View style={{ flex: 1 }} />
           {rouletteButton}
+          {dumpButton}
         </View>
       )}
     </View>
@@ -1447,6 +1453,9 @@ export default function TodosScreen() {
           onAdd={() => setAddOpen(true)}
           onNewList={() => setListEditor({ name: '', color: 'red', emoji: 'list' })}
           onMonitor={() => navigation.navigate('TeamMonitor')}
+          onDump={dumpEverything}
+          onOpenDump={() => navigation.navigate('Dump')}
+          dumpCount={dump.filter((t) => !t.parent_id).length}
           onFilters={() => setFiltersOpen(true)}
           simple={simpleView}
           favorites={favorites}

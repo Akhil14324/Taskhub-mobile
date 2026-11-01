@@ -3,7 +3,7 @@ import api from '../api/client';
 import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
-import { showToast, emit } from '../utils/events';
+import { showToast, emit, confirmDialog } from '../utils/events';
 import { openNotificationTarget } from '../navigation/navigationRef';
 import { formatDue } from '../utils/dates';
 import {
@@ -38,6 +38,8 @@ export function TodoProvider({ children }) {
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState(null);
+  // The Dump: the person's own to-dos they sent out of their lists (hidden from `todos` by the server).
+  const [dump, setDump] = useState([]);
   const pendingDeletes = useRef(new Map());
   const refetchTimer = useRef(null);
   // Read inside callbacks without making them change on every fetch.
@@ -63,6 +65,15 @@ export function TodoProvider({ children }) {
     }
   }, []);
 
+  const fetchDump = useCallback(async () => {
+    try {
+      const res = await api.get('/dump', { __skipOops: true });
+      setDump(res.data.todos || []);
+    } catch {
+      // keep what we have
+    }
+  }, []);
+
   const fetchInsights = useCallback(async () => {
     try {
       const res = await api.get('/todos/insights', { __skipOops: true });
@@ -81,12 +92,14 @@ export function TodoProvider({ children }) {
       setFavorites([]);
       setBusinesses([]);
       setInsights(null);
+      setDump([]);
       setLoading(true);
       return;
     }
     fetchTodos();
     fetchInsights();
-  }, [user, fetchTodos, fetchInsights]);
+    fetchDump();
+  }, [user, fetchTodos, fetchInsights, fetchDump]);
 
   // Someone ticked / edited / shared a to-do (or we did, the server echoes every change back): fetch only the
   // to-dos named by the events, not the whole list. Events without a to-do id (sections, lists) reload everything.
@@ -100,14 +113,16 @@ export function TodoProvider({ children }) {
       const all = dirtyAll.current || ids.length > 6;
       dirtyIds.current = new Set();
       dirtyAll.current = false;
-      if (all) { fetchTodos(); return; }
+      if (all) { fetchTodos(); fetchDump(); return; }
       await Promise.all(ids.map(async (id) => {
         try {
           const res = await api.get(`/todos/${id}`, { __skipOops: true });
           setTodos((prev) => {
             const fresh = [res.data.todo, ...(res.data.subtasks || [])].filter(Boolean);
             const freshIds = new Set(fresh.map((t) => t.id));
-            return sortTodos([...prev.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => !pendingDeletes.current.has(t.id))]);
+            // A to-do in the Dump belongs in the Dump list, not in the lists.
+            setDump((d) => [...d.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => t.dumped_at)]);
+            return sortTodos([...prev.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => !t.dumped_at && !pendingDeletes.current.has(t.id))]);
           });
         } catch (err) {
           // Gone or no longer visible to us: drop it. Anything else: fall back to a full reload.
@@ -125,10 +140,16 @@ export function TodoProvider({ children }) {
       insightsTimer.current = setTimeout(fetchInsights, 2500);
     });
     return () => { off?.(); clearTimeout(refetchTimer.current); clearTimeout(insightsTimer.current); };
-  }, [user, subscribe, fetchTodos, fetchInsights]);
+  }, [user, subscribe, fetchTodos, fetchInsights, fetchDump]);
 
   const upsert = useCallback((todo) => {
     if (!todo) return;
+    if (todo.dumped_at) {
+      setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+      setDump((prev) => [...prev.filter((t) => t.id !== todo.id), todo]);
+      return;
+    }
+    setDump((prev) => (prev.some((t) => t.id === todo.id) ? prev.filter((t) => t.id !== todo.id) : prev));
     setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== todo.id), todo]));
   }, []);
 
@@ -146,7 +167,8 @@ export function TodoProvider({ children }) {
       emit('buddy', { type: 'added' });
       return null;
     }
-    if (tempId) setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== tempId && t.id !== res.data.todo.id), res.data.todo]));
+    if (tempId && res.data.todo.dumped_at) { setTodos((prev) => prev.filter((t) => t.id !== tempId)); upsert(res.data.todo); }
+    else if (tempId) setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== tempId && t.id !== res.data.todo.id), res.data.todo]));
     else upsert(res.data.todo);
     // A new sub-task changes its parent's counts.
     if (res.data.todo.parent_id) fetchTodos();
@@ -193,6 +215,7 @@ export function TodoProvider({ children }) {
 
   const updateTodo = useCallback(async (id, patch) => {
     setTodos((prev) => sortTodos(prev.map((t) => (t.id === id ? { ...t, ...patch } : t))));
+    setDump((prev) => (prev.some((t) => t.id === id) ? prev.map((t) => (t.id === id ? { ...t, ...patch } : t)) : prev));
     try {
       const res = await api.put(`/todos/${id}`, patch);
       upsert(res.data.todo);
@@ -626,7 +649,47 @@ export function TodoProvider({ children }) {
 
   const labels = useMemo(() => labelsFrom(todos), [todos]);
 
+  // ---- the Dump -----------------------------------------------------------------------------------------
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
+  /** Bring these (and what is below them) back from the Dump, or all of them. */
+  const restoreFromDump = useCallback(async (what) => {
+    const res = await api.post('/dump/restore', what === 'all' ? { all: true } : { ids: what });
+    await Promise.all([fetchTodos(), fetchDump()]);
+    return res.data;
+  }, [fetchTodos, fetchDump]);
+  /** Send these to-dos to the Dump (and what is below them). */
+  const sendToDump = useCallback(async (ids) => {
+    const res = await api.post('/dump/send', { ids });
+    await Promise.all([fetchTodos(), fetchDump()]);
+    return res.data;
+  }, [fetchTodos, fetchDump]);
+  /**
+   * "Dump everything": every open personal to-do (with its sub-tasks) leaves the lists, Today and the boards and
+   * waits in the Dump. Nothing is changed or deleted. Asks first, then offers Undo.
+   */
+  const dumpEverything = useCallback(async () => {
+    const open = todosRef.current.filter((t) => !t.business_id && !t.parent_id && !t.is_done && !String(t.id).startsWith('tmp-')).length;
+    if (!open) { showToast({ message: 'Nothing to dump. Your lists are already clear.', icon: 'checkmark-circle' }); return null; }
+    const ok = await confirmDialog({
+      title: `Dump ${open} to-do${open === 1 ? '' : 's'}?`,
+      message: 'They leave your lists, Today and your boards and wait in the Dump, so you can see everything fresh. Nothing is deleted or changed, reminders stay quiet, and you can bring any of them back, one by one or all at once. Business tasks and finished to-dos stay where they are.',
+      confirmLabel: 'Dump everything',
+    });
+    if (!ok) return null;
+    const res = await api.post('/dump/all');
+    await Promise.all([fetchTodos(), fetchDump()]);
+    const ids = res.data.ids || [];
+    showToast({
+      message: `${res.data.count} to-do${res.data.count === 1 ? '' : 's'} moved to the Dump`, icon: 'archive',
+      actionLabel: 'Undo', duration: 9000,
+      onAction: async () => { try { await restoreFromDump(ids); showToast({ message: 'Brought back', icon: 'arrow-undo' }); } catch { showToast({ message: 'Could not undo that', tone: 'error' }); } },
+    });
+    return res.data;
+  }, [fetchTodos, fetchDump, restoreFromDump]);
+
   const value = useMemo(() => ({
+    dump, fetchDump, dumpEverything, restoreFromDump, sendToDump,
     todos,
     lists,
     sections,
@@ -684,7 +747,7 @@ export function TodoProvider({ children }) {
     fetchAssignees,
     shareTodos,
     importTodos,
-  }), [favorites, isFavorite, toggleFavorite, renameLabel, removeLabel, duplicateFilter, updateSection, duplicateSection, reorderSections, todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
+  }), [dump, fetchDump, dumpEverything, restoreFromDump, sendToDump, favorites, isFavorite, toggleFavorite, renameLabel, removeLabel, duplicateFilter, updateSection, duplicateSection, reorderSections, todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
     toggleTodo, deleteTodo, deleteTodos, duplicateTodo, moveToBusiness, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
     createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,

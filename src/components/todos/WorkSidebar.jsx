@@ -57,7 +57,7 @@ function Heading({ children, right }) {
  */
 export default function WorkSidebar({
   view, onView, counts, lists, filters, labels, businesses, bizCounts, canMonitor,
-  onAdd, onNewList, onMonitor, onFilters, simple = false, favorites = [], onItemMenu, extraLinks = [],
+  onAdd, onNewList, onMonitor, onFilters, onDump, onOpenDump, dumpCount = 0, simple = false, favorites = [], onItemMenu, extraLinks = [],
 }) {
   // Filters and labels are for people who already use the app a lot, so they start folded away.
   const [showMore, setShowMore] = useState(false);
@@ -83,6 +83,16 @@ export default function WorkSidebar({
         <Text style={styles.addText}>Add to-do</Text>
         <Text style={styles.addKey}>Q</Text>
       </AnimatedPressable>
+      {!!onDump && (
+        <AnimatedPressable
+          onPress={onDump}
+          accessibilityLabel="Dump everything. Sends all your to-dos to the Dump so you can see them fresh."
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 2, paddingVertical: 8, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}
+        >
+          <Ionicons name="archive-outline" size={17} color={colors.gray[700]} />
+          <Text style={{ flex: 1, fontSize: 14, color: colors.gray[800], fontWeight: '500' }}>Dump everything</Text>
+        </AnimatedPressable>
+      )}
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         <SlideGroup pillStyle={{ borderRadius: radius.md }}>
         <Heading>My work</Heading>
@@ -92,6 +102,7 @@ export default function WorkSidebar({
         <Item icon="person-add-outline" label="Assigned" count={counts.assigned} urgent active={view === 'assigned'} onPress={() => onView('assigned')} />
         <Item icon="people-outline" label="Shared" count={counts.shared} active={view === 'shared'} onPress={() => onView('shared')} />
         <Item icon="checkmark-done-outline" label="Completed" active={view === 'done'} onPress={() => onView('done')} />
+        <Item icon="archive-outline" label="Dump" count={dumpCount || undefined} onPress={onOpenDump} />
 
         {favoriteRows.length > 0 && (
           <>

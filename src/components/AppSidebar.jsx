@@ -45,6 +45,7 @@ const SECTION_OF = {
   Timebox: 'timebox',
   Dashboards: 'dashboards',
   RecycleBin: 'recycle',
+  Dump: 'todos',
   Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',

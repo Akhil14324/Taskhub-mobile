@@ -56,6 +56,7 @@ import MyWorkScreen from '../screens/MyWorkScreen';
 import TimeboxScreen from '../screens/TimeboxScreen';
 import DashboardsScreen from '../screens/DashboardsScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
+import DumpScreen from '../screens/DumpScreen';
 import MeetingNotesScreen from '../screens/NotesScreen';
 import AccessScreen from '../screens/AccessScreen';
 import EverythingScreen from '../screens/EverythingScreen';
@@ -110,6 +111,7 @@ const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
 const FramedRecycleBin = framed(RecycleBinScreen, 920);
+const FramedDump = framed(DumpScreen, 960);
 const FramedAccess = framed(AccessScreen, 1100);
 const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
@@ -137,6 +139,7 @@ const PushMyWork = T(MyWorkScreen);
 const PushTimebox = T(TimeboxScreen);
 const PushDashboards = T(DashboardsScreen);
 const PushRecycleBin = T(FramedRecycleBin);
+const PushDump = T(FramedDump);
 const PushMeetingNotes = T(FramedMeetingNotes);
 const PushAccess = T(FramedAccess);
 const PushEverything = T(FramedEverything);
@@ -318,6 +321,7 @@ function MainTabs() {
     { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'Dashboards', icon: 'speedometer-outline', route: 'Dashboards' },
+    { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
@@ -580,6 +584,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Timebox" component={PushTimebox} />
             <Stack.Screen name="Dashboards" component={PushDashboards} />
             <Stack.Screen name="RecycleBin" component={PushRecycleBin} />
+            <Stack.Screen name="Dump" component={PushDump} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />
