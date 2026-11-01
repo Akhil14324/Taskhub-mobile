@@ -181,14 +181,16 @@ function Block({ block, index, readOnly, canMark, selected, onSelect, update, on
   const slots = (toMin(block.end) - toMin(block.start)) / STEP;
   const color = block.priority !== null && block.priority !== undefined ? PRIORITY_COLORS[block.priority] : null;
   const set = (fields) => update((b) => ({ ...b, blocks: b.blocks.map((x, i) => (i === index ? { ...x, ...fields } : x)) }));
+  // A selected block grows to hold its controls (a 30 minute block is too short for them); it shrinks back when deselected.
+  const showTools = selected && !readOnly;
   const cycle = () => set({ done: block.done === null || block.done === undefined ? true : block.done === true ? false : null });
   return (
     <Pressable
       onPress={() => onSelect(selected ? null : index)}
-      style={{ height: slots * SLOT_H - 4, marginVertical: 2, flexDirection: 'row', borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: selected ? BRAND : colors.gray[200], backgroundColor: block.done === true ? colors.green[50] : colors.white }}
+      style={[{ marginVertical: 2, flexDirection: 'row', borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: selected ? BRAND : colors.gray[200], backgroundColor: block.done === true ? colors.green[50] : colors.white }, showTools ? { minHeight: slots * SLOT_H - 4 } : { height: slots * SLOT_H - 4 }]}
     >
       <View style={{ width: 5, backgroundColor: color ? paletteHex(color) : colors.gray[300] }} />
-      <View style={{ flex: 1, paddingHorizontal: 8, paddingVertical: 4, justifyContent: slots > 1 ? 'flex-start' : 'center' }}>
+      <View style={{ flex: 1, paddingHorizontal: 8, paddingVertical: 4, justifyContent: slots > 1 || showTools ? 'flex-start' : 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {readOnly ? (
             <Text numberOfLines={slots > 1 ? 3 : 1} style={{ flex: 1, fontSize: 14, color: colors.gray[900], textDecorationLine: block.done === false ? 'line-through' : 'none' }}>{block.text || 'Untitled block'}</Text>
@@ -206,8 +208,8 @@ function Block({ block, index, readOnly, canMark, selected, onSelect, update, on
           {!!block.todo_id && <IconBtn icon="open-outline" label="Open the to-do" onPress={() => onOpenTodo(block.todo_id)} />}
           {canMark && <DoneMark value={block.done} onPress={cycle} disabled={readOnly} />}
         </View>
-        {selected && !readOnly && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+        {showTools && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4, marginBottom: 2 }}>
             {[null, 0, 1, 2].map((p) => (
               <Pressable key={String(p)} onPress={() => set({ priority: p })} style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: block.priority === p ? (p === null ? colors.gray[200] : paletteHex(PRIORITY_COLORS[p])) : colors.gray[100] }}>
                 <Text style={{ fontSize: 12, color: block.priority === p && p !== null ? paletteInk(PRIORITY_COLORS[p]) : colors.gray[700] }}>{p === null ? 'Other' : `Top ${p + 1}`}</Text>
