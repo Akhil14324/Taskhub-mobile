@@ -362,7 +362,7 @@ export default function BoardScreen({ route }) {
       {/* Body */}
       <View style={{ flex: 1, paddingHorizontal: desktop && view.kind === 'table' ? spacing.xl : 0, paddingTop: desktop ? spacing.lg : 0 }}>
         {view.kind === 'kanban' ? (
-          <BoardKanban board={data} items={items} onMove={board.setStatus} onSetValue={board.setValue} people={people} onOpenItem={openItem} onOpenCell={openCell} />
+          <BoardKanban board={data} items={items} onMove={board.setStatus} onSetValue={board.setValue} people={people} onOpenItem={openItem} actions={board} canAdd={data.access.add} canManage={data.access.manage} />
         ) : view.kind === 'calendar' ? (
           <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => newTask(null, undefined, { due_date: day }) : null} />
         ) : view.kind === 'timeline' || view.kind === 'gantt' ? (
@@ -394,6 +394,7 @@ export default function BoardScreen({ route }) {
             colorOf={colorOf}
             editNameId={nameEditId} onEditNameDone={() => setNameEditId(null)}
             onRenameItem={(item, title) => board.updateFields(item, { title })}
+            onSetDone={(item) => board.setStatus(item, item.is_done ? 'todo' : 'done')}
           />
         ) : (
           <BoardCards

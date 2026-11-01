@@ -1,9 +1,11 @@
-import { View, Text, Pressable } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
 import { paletteHex, paletteInk } from '../board/model';
 import { formatDue } from '../../utils/dates';
+import Chart from './Charts';
 
 // The widget kinds a dashboard offers (backend utils/dashboard.js computes each one for the viewer).
 export const WIDGET_KINDS = [
@@ -17,7 +19,10 @@ export const WIDGET_KINDS = [
   ['text', 'Note', 'document-text-outline', 'A few lines of your own'],
 ];
 export const FILTERS = [['all', 'All'], ['open', 'Open'], ['done', 'Done'], ['overdue', 'Overdue'], ['mine', 'Mine'], ['this_week', 'This week']];
-export const BY = [['status', 'Stage'], ['person', 'Person'], ['board', 'Board'], ['priority', 'Priority']];
+export const BY = [
+  ['status', 'Stage'], ['person', 'Person'], ['board', 'Board'], ['priority', 'Priority'],
+  ['due_day', 'Due day'], ['due_week', 'Due week'], ['due_month', 'Due month'], ['created_week', 'Created week'], ['done_week', 'Finished week'],
+];
 
 const fmt = (n) => (Math.abs(n) >= 100000 ? n.toLocaleString('en-IN') : String(Math.round(n * 100) / 100));
 
@@ -104,7 +109,9 @@ export function WidgetBody({ widget, onOpenItem }) {
       );
     }
     case 'chart':
-      return <Bars bars={d.bars || []} />;
+      return d.categories ? (
+        <Chart data={d} type={widget.config?.chart || 'bar'} height={Math.max(150, (widget.config?.h || 280) - 64)} showLegend={widget.config?.legend !== false} showLabels={widget.config?.labels !== false} />
+      ) : <Bars bars={d.bars || []} />;
     case 'workload': {
       const people = d.people || [];
       const max = Math.max(1, ...people.map((p) => p.open));
@@ -135,21 +142,43 @@ export function WidgetBody({ widget, onOpenItem }) {
   }
 }
 
-export function WidgetCard({ widget, mine, onEdit, onOpenItem }) {
+export function WidgetCard({ widget, mine, onEdit, onOpenItem, onRename, onGrip, minHeight }) {
   const colors = useColors();
   const kind = WIDGET_KINDS.find((k) => k[0] === widget.kind);
+  const [renaming, setRenaming] = useState(false);
+  const title = widget.title || kind?.[1];
+  const commit = (e) => {
+    const v = (e.nativeEvent?.text ?? '').trim();
+    setRenaming(false);
+    if (v && v !== title) onRename?.(widget, v);
+  };
   return (
-    <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], padding: spacing.md, gap: spacing.sm, minHeight: 140 }}>
+    <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], padding: spacing.md, gap: spacing.sm, minHeight: minHeight || widget.config?.h || 140 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Ionicons name={kind?.[2] || 'apps-outline'} size={15} color={colors.gray[500]} />
-        <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>{widget.title || kind?.[1]}</Text>
+        {renaming ? (
+          <TextInput
+            autoFocus selectTextOnFocus defaultValue={title} onBlur={commit} onSubmitEditing={commit}
+            onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setRenaming(false); }}
+            style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.gray[900], borderWidth: 2, borderColor: '#0073ea', borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1, outlineStyle: 'none' }}
+          />
+        ) : (
+          <Pressable disabled={!mine} onPress={() => setRenaming(true)} style={{ flex: 1, cursor: mine ? 'text' : 'default' }} accessibilityLabel="Rename this widget">
+            <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>{title}</Text>
+          </Pressable>
+        )}
         {mine && (
-          <Pressable onPress={() => onEdit(widget)} accessibilityLabel="Change this widget" hitSlop={6}>
-            <Ionicons name="ellipsis-horizontal" size={16} color={colors.gray[500]} />
+          <Pressable onPress={() => onEdit(widget)} accessibilityLabel="Widget settings" hitSlop={6}>
+            <Ionicons name="settings-outline" size={16} color={colors.gray[500]} />
           </Pressable>
         )}
       </View>
       <WidgetBody widget={widget} onOpenItem={onOpenItem} />
+      {mine && !!onGrip && (
+        <View ref={onGrip} accessibilityLabel="Drag to resize" style={{ position: 'absolute', right: 3, bottom: 3, width: 18, height: 18, cursor: 'nwse-resize', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+          <Ionicons name="resize-outline" size={14} color={colors.gray[400]} />
+        </View>
+      )}
     </View>
   );
 }

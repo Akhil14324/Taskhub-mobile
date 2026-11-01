@@ -237,6 +237,7 @@ export default function useBoard(boardId) {
     addLabel: (col, label) => shape('post', `/columns/${col.id}/labels`, label),
     updateLabel: (col, label, patch) => shape('patch', `/columns/${col.id}/labels/${label.id}`, patch),
     removeLabel: (col, label) => shape('delete', `/columns/${col.id}/labels/${label.id}`),
+    orderLabels: (col, ids) => shape('put', `/columns/${col.id}/labels/order`, { ids }),
     addGroup: (group) => shape('post', '/groups', group),
     updateGroup: (group, patch) => shape('patch', `/groups/${group.id}`, patch),
     duplicateGroup: (group) => shape('post', `/groups/${group.id}/duplicate`, { with_items: true }),

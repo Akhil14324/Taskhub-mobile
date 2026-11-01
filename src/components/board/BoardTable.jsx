@@ -173,7 +173,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone,
 }) {
   const colors = useColors();
   const { columns, groups, values, access } = board;
@@ -275,23 +275,39 @@ export default function BoardTable({
     return (
       <View key={k.id}>
         <View style={{ flexDirection: 'row', height: 34, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
-          <Pressable
-            onPress={() => onOpenItem(k.id)}
-            style={({ hovered }) => ({ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: spacing.sm + depth * 18, paddingRight: spacing.sm, backgroundColor: hovered ? colors.gray[50] : 'transparent' })}
-          >
+          <View style={{ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: spacing.sm + depth * 18, paddingRight: spacing.sm }}>
             {own.length ? (
               <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
                 <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={13} color={colors.gray[600]} />
               </Pressable>
-            ) : <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />}
-            <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+            ) : (
+              <Pressable onPress={() => mayEdit(k) && onToggleValue && onSetDone?.(k)} hitSlop={6} accessibilityLabel={k.is_done ? 'Mark not done' : 'Mark done'}>
+                <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />
+              </Pressable>
+            )}
+            {nameEdit === k.id && mayEdit(k) ? (
+              <TextInput
+                autoFocus selectTextOnFocus defaultValue={k.title} accessibilityLabel={`Name of ${k.title}`}
+                onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
+                style={{ flex: 1, height: 28, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
+              />
+            ) : (
+              <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: 34, justifyContent: 'center', cursor: 'text' }}>
+                <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+              </Pressable>
+            )}
             {prog && (
               <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <ProgressDot pct={prog.pct} size={16} stroke={2.5} />
                 <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
               </View>
             )}
-          </Pressable>
+            <Pressable onPress={() => onOpenItem(k.id)} hitSlop={4} accessibilityLabel={`Open ${k.title}`} style={({ hovered }) => ({ padding: 3, borderRadius: 4, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="expand-outline" size={14} color={colors.gray[500]} />
+            </Pressable>
+          </View>
           {subColumns.map((c) => (
             <View key={c.id} style={{ borderLeftWidth: 1, borderColor: colors.gray[200] }}>
               <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
@@ -309,15 +325,15 @@ export default function BoardTable({
       <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
       <View style={{ marginLeft: 24, borderLeftWidth: 3, borderLeftColor: BRAND, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }}>
         <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
-          <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subtask</Text></View>
+          <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subitem</Text></View>
           {subColumns.map((c) => <View key={c.id} style={{ width: c.width, alignItems: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], height: 30, justifyContent: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>{c.title}</Text></View>)}
         </View>
         {renderSubRows(kids, block, 0)}
         {canAdd && (
           <TextInput
-            placeholder="+ Add subtask"
+            placeholder="+ Add subitem"
             placeholderTextColor={colors.gray[400]}
-            accessibilityLabel="Add a subtask"
+            accessibilityLabel="Add a subitem"
             onSubmitEditing={(e) => {
               const text = e.nativeEvent.text;
               if (text?.trim()) { onAddItem(text, block.group.id, { parent_id: parent.id }); e.target.clear?.(); }
