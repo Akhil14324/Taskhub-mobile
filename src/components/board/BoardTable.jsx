@@ -25,6 +25,7 @@ const Metrics = createContext({ rowH: ROW_H, headH: 34, pinned: 0 });
 const ITEM_HEIGHTS = { compact: 30, normal: 38, tall: 56 };
 const HEADER_HEIGHTS = { single: 34, double: 54, triple: 74 };
 const PAGE = 100; // rows drawn per group before "Show more"
+// The group box clips with overflow 'clip', not 'hidden': a hidden box would become the scroll container and the pinned columns could not stick.
 // "entry" -> "entries", "task" -> "tasks"
 const plural = (w) => (/[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /(s|x|ch|sh)$/.test(w) ? `${w}es` : `${w}s`);
 
@@ -323,7 +324,7 @@ export default function BoardTable({
   const renderSubTasks = (parent, kids, block) => (
     <View style={{ flexDirection: 'row', backgroundColor: colors.gray[50], paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
       <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
-      <View style={{ marginLeft: 24, borderLeftWidth: 3, borderLeftColor: BRAND, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }}>
+      <View style={{ marginLeft: 24, position: 'sticky', left: 30, zIndex: 2, borderLeftWidth: 3, borderLeftColor: BRAND, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }}>
         <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
           <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subitem</Text></View>
           {subColumns.map((c) => <View key={c.id} style={{ width: c.width, alignItems: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], height: 30, justifyContent: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>{c.title}</Text></View>)}
@@ -356,7 +357,7 @@ export default function BoardTable({
     return (
       <View key={t.id}>
         <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
-          <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
+          <View style={[{ flexDirection: 'row', backgroundColor: colors.white, height: rowH }, stickyName]}>
           <View style={{ width: 6, backgroundColor: paletteHex(rule || block.group.color) }} />
           <View
             dataSet={{ cell: `${t.id}:-1` }}
@@ -413,7 +414,7 @@ export default function BoardTable({
           </Pressable>
           </View>
           {columns.map((c, ci) => (
-            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }} style={stickyCol(ci) ? [stickyCol(ci), { backgroundColor: colors.white }] : undefined}>
+            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }} style={stickyCol(ci) ? [stickyCol(ci), { backgroundColor: colors.white, height: rowH }] : undefined}>
               <Cell
                 item={t} column={c} values={values} people={people} width={c.width}
                 focused={focusedHere && focus.col === ci}
@@ -431,8 +432,8 @@ export default function BoardTable({
 
   return (
     <Metrics.Provider value={metrics}>
-    <ScrollView horizontal style={{ flex: 1 }} contentContainerStyle={{ minWidth: '100%' }}>
-      <ScrollView style={{ width: Math.max(tableWidth, 600) }} contentContainerStyle={{ paddingBottom: 120 }}>
+    <View style={{ flex: 1, overflow: 'auto' }}>
+      <View style={{ width: Math.max(tableWidth, 600), paddingBottom: 120 }}>
         {blocks.map((b) => {
           const isCollapsed = collapsed.has(b.group.id);
           return (
@@ -447,7 +448,7 @@ export default function BoardTable({
                 <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? word.toLowerCase() : plural(word.toLowerCase())}</Text>
               </View>
               {!isCollapsed && (
-                <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden', backgroundColor: colors.white }}>
+                <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'clip', backgroundColor: colors.white }}>
                   <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }}>
                     <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
                       <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
@@ -488,8 +489,8 @@ export default function BoardTable({
             <Hint text="A group is a section of the board, like To-Do or Completed. Tasks live inside groups. You can rename, colour, move or duplicate a group from its name." size={14} />
           </Pressable>
         )}
-      </ScrollView>
-    </ScrollView>
+      </View>
+    </View>
     </Metrics.Provider>
   );
 }
