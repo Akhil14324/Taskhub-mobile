@@ -143,8 +143,11 @@ export function StatusLegend({ board, items }) {
   );
 }
 
-export function BoardTimeline({ board, items, onOpenItem, gantt }) {
+export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, onLink, depMode = 'strict' }) {
   const colors = useColors();
+  // A bar being dragged: { id, mode: 'move' | 'left' | 'right' | 'link', d: days, x, y }. Shown at once, saved on release.
+  const [drag, setDrag] = useState(null);
+  const live = useRef({});
   const [zoomIdx, setZoomIdx] = useState(0);
   const [width, setWidth] = useState(0);
   const [fit, setFit] = useState(false);
@@ -161,6 +164,8 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
 
   const today = todayYmd();
   const progress = useMemo(() => progressMapOf(board.items), [board.items]);
+  // How complete a task is: its steps when it has some, 100 when it is done, otherwise nothing to show.
+  const pctOf = (t) => (t.is_done ? 100 : progress.get(t.id) ? progress.get(t.id).pct : 0);
   const statusCol = statusColumnOf(board);
   const blocks = useMemo(() => groupBlocks(board.groups, items).map((b) => ({ ...b, dated: b.top.filter((t) => t.start_date || dueOf(t)) })).filter((b) => b.dated.length), [board.groups, items]);
   const span = useMemo(() => {
@@ -201,10 +206,60 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
     return <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>No task has a date yet. Give tasks a Due date or a Timeline and they show here.</Text>;
   }
 
-  const barOf = (t) => {
+  const baseOf = (t) => {
     const end = dueOf(t) || t.start_date;
     const start = t.start_date && t.start_date <= end ? t.start_date : end;
+    return { start, end };
+  };
+  const barOf = (t) => {
+    let { start, end } = baseOf(t);
+    if (drag && drag.id === t.id && drag.mode !== 'link') {
+      if (drag.mode === 'move') { start = addDays(start, drag.d); end = addDays(end, drag.d); }
+      else if (drag.mode === 'left') { start = addDays(start, drag.d); if (start > end) start = end; }
+      else if (drag.mode === 'right') { end = addDays(end, drag.d); if (end < start) end = start; }
+    }
     return { start, end, left: x(start), w: Math.max(px, (daysBetween(start, end) + 1) * px) };
+  };
+  // Everything the drag handlers need is read from here, so a handler bound once never goes stale.
+  live.current = { px, byId: new Map(items.map((t) => [t.id, t])), onChangeDates, onLink, onOpenItem, baseOf };
+  const grab = (t, mode) => (el) => {
+    if (!el || typeof el.addEventListener !== 'function' || el.__gantt === mode) return;
+    el.__gantt = mode;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const x0 = e.clientX;
+      let moved = false;
+      let d = 0;
+      const move = (ev) => {
+        const dx = ev.clientX - x0;
+        if (Math.abs(dx) > 3) moved = true;
+        d = mode === 'link' ? 0 : Math.round(dx / live.current.px);
+        setDrag({ id: t.id, mode, d, x: ev.clientX, y: ev.clientY });
+      };
+      const up = (ev) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        setDrag(null);
+        const L = live.current;
+        const cur = L.byId.get(t.id);
+        if (!cur) return;
+        if (mode === 'link') {
+          const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('[data-gantt-bar]');
+          const target = hit ? Number(hit.getAttribute('data-gantt-bar')) : null;
+          if (target && target !== t.id) L.onLink?.(t.id, target);
+          return;
+        }
+        if (!moved || !d) { if (!moved && mode === 'move') L.onOpenItem(t.id); return; }
+        const { start, end } = L.baseOf(cur);
+        if (mode === 'move') L.onChangeDates?.(cur, { due_date: addDays(end, d), ...(cur.start_date ? { start_date: addDays(start, d) } : {}) });
+        else if (mode === 'left') L.onChangeDates?.(cur, { start_date: addDays(start, d) > end ? end : addDays(start, d) });
+        else if (mode === 'right') L.onChangeDates?.(cur, { due_date: addDays(end, d) < start ? start : addDays(end, d) });
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
   };
   const showDays = px >= 40;
   const weeks = Array.from({ length: Math.ceil(span.days / 7) }, (_, i) => addDays(span.start, i * 7));
@@ -294,15 +349,25 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
                       const label = statusCol ? statusLabelOf(t, statusCol, board.values) : null;
                       return (
                         <View key={`t${t.id}`} style={{ position: 'absolute', top: i * ROW_H + 8, left: bar.left, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Pressable
-                            onPress={() => onOpenItem(t.id)}
-                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}${progress.get(t.id) ? `, ${progress.get(t.id).pct} percent of its steps done` : ''}`}
-                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 3, backgroundColor: paletteHex(label?.color || 'blue'), overflow: 'hidden' }}
+                          <View
+                            dataSet={{ ganttBar: String(t.id) }}
+                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}${pctOf(t) !== null ? `, ${pctOf(t)} percent done` : ''}`}
+                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 4, backgroundColor: paletteHex(label?.color || 'blue'), overflow: 'visible', flexDirection: 'row', alignItems: 'center', opacity: drag?.id === t.id && drag.mode !== 'link' ? 0.85 : 1 }}
                           >
-                            {/* how much of its sub-tasks are done: the left part of the bar is darker */}
-                            {!!progress.get(t.id)?.pct && <View style={{ width: `${progress.get(t.id).pct}%`, height: '100%', backgroundColor: 'rgba(0,0,0,0.28)' }} />}
-                          </Pressable>
-                          <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], width: 160 }}>{t.title}</Text>
+                            {/* how much is done: the left part of the bar is darker */}
+                            {!!pctOf(t) && <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pctOf(t)}%`, backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 4 }} />}
+                            <View ref={t.permissions?.can_edit && gantt ? grab(t, 'move') : undefined} style={{ flex: 1, height: '100%', justifyContent: 'center', paddingHorizontal: 6, cursor: t.permissions?.can_edit && gantt ? 'grab' : 'pointer' }}>
+                              {bar.w >= 54 && pctOf(t) !== null && <Text numberOfLines={1} pointerEvents="none" style={{ fontSize: 11, fontWeight: '600', color: paletteInk(label?.color || 'blue') }}>{pctOf(t)}%</Text>}
+                            </View>
+                            {gantt && t.permissions?.can_edit && (
+                              <>
+                                <View ref={grab(t, 'left')} style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 8, cursor: 'ew-resize' }} />
+                                <View ref={grab(t, 'right')} style={{ position: 'absolute', right: -3, top: 0, bottom: 0, width: 8, cursor: 'ew-resize' }} />
+                                <View ref={grab(t, 'link')} accessibilityLabel="Drag to another task to make it wait for this one" style={{ position: 'absolute', right: -16, top: '50%', marginTop: -6, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: BRAND, backgroundColor: colors.white, cursor: 'crosshair' }} />
+                              </>
+                            )}
+                          </View>
+                          {!gantt && <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], width: 160 }}>{t.title}</Text>}
                         </View>
                       );
                     }
@@ -331,11 +396,12 @@ export function BoardTimeline({ board, items, onOpenItem, gantt }) {
                         const x2 = b.left;
                         const y2 = ib * ROW_H + ROW_H / 2;
                         const mid = Math.max(x1 + 10, x2 - 10);
+                        const clash = !l.resolved && b.start <= a.end; // the task starts before what it waits for ends
                         return (
                           <Path
                             key={i}
                             d={`M ${x1} ${y1} H ${mid} V ${y2} H ${x2} M ${x2 - 5} ${y2 - 4} L ${x2} ${y2} L ${x2 - 5} ${y2 + 4}`}
-                            stroke={l.resolved ? colors.gray[400] : colors.gray[700]}
+                            stroke={clash ? colors.red[500] : l.resolved ? colors.gray[400] : colors.gray[700]}
                             strokeWidth={1.4}
                             fill="none"
                           />

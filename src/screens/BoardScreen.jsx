@@ -366,7 +366,12 @@ export default function BoardScreen({ route }) {
         ) : view.kind === 'calendar' ? (
           <BoardCalendar board={data} items={items} onOpenItem={openItem} onAddOnDay={data.access.add ? (e, day) => newTask(null, undefined, { due_date: day }) : null} />
         ) : view.kind === 'timeline' || view.kind === 'gantt' ? (
-          <BoardTimeline board={data} items={items} onOpenItem={openItem} gantt={view.kind === 'gantt'} />
+          <BoardTimeline
+            board={data} items={items} onOpenItem={openItem} gantt={view.kind === 'gantt'}
+            depMode={data.columns.find((c) => c.kind === 'dependency')?.settings?.mode || 'strict'}
+            onChangeDates={async (item, patch) => { await board.updateFields(item, patch); setTimeout(board.reload, 400); }}
+            onLink={(from, to) => { const t = data.items.find((x) => x.id === to); if (t && !(t.depends_on || []).some((d) => d.id === from)) board.setDepends(t, [...(t.depends_on || []).map((d) => d.id), from]); }}
+          />
         ) : view.kind === 'chart' ? (
           <BoardChart board={data} items={items} people={people} />
         ) : view.kind === 'workload' ? (
@@ -402,11 +407,15 @@ export default function BoardScreen({ route }) {
       <CellEditorHost editing={editing} onClose={() => setEditing(null)} board={data} people={people} actions={board} />
 
       {menu?.type === 'addColumn' && (
-        <AddColumnMenu anchor={menu.anchor} catalog={catalog} columns={columnsById} onPick={(spec) => board.addColumn(spec)} onClose={() => setMenu(null)} />
+        <AddColumnMenu anchor={menu.anchor} catalog={catalog} columns={columnsById} onPick={(spec) => board.addColumn(menu.after ? { ...spec, after: menu.after } : spec)} onClose={() => setMenu(null)} />
       )}
       {menu?.type === 'column' && (
         <ColumnMenu
           anchor={menu.anchor} column={menu.column} columns={columnsById} onClose={() => setMenu(null)}
+          onSort={(dir) => changeVs({ sort: { column_id: menu.column.id, dir } })}
+          onGroupBy={() => changeVs({ group_by: String(menu.column.id) })}
+          onHide={() => changeVs({ hidden: [...vs.hidden, menu.column.id] })}
+          onAddRight={(a) => setMenu({ type: 'addColumn', anchor: a, after: menu.column.id })}
           onRename={(title) => board.updateColumn(menu.column, { title })}
           onRemove={() => board.removeColumn(menu.column)}
           onToggleMobile={() => board.updateColumn(menu.column, { settings: { show_on_mobile: !menu.column.settings?.show_on_mobile } })}

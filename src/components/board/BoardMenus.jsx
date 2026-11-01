@@ -31,53 +31,75 @@ function MenuRow({ icon, label, onPress, danger, sub }) {
   );
 }
 
+const ESSENTIALS = ['status', 'dropdown', 'text', 'date', 'person', 'numbers'];
+const SUPER_USEFUL = ['files', 'long_text', 'board_relation', 'formula', 'mirror', 'timeline', 'checkbox', 'tags', 'ai'];
+const KIND_COLORS = { status: '#00c875', dropdown: '#00c875', text: '#fdab3d', date: '#a25ddc', person: '#579bfc', numbers: '#fdab3d', files: '#df2f4a', long_text: '#784bd1', board_relation: '#4eccc6', formula: '#4eccc6', mirror: '#4eccc6', timeline: '#a25ddc', checkbox: '#00c875', tags: '#ff158a', ai: '#a25ddc' };
+
 export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
   const colors = useColors();
+  const [q, setQ] = useState('');
+  const [more, setMore] = useState(false);
   if (!catalog) return null;
   const shown = new Set(columns.map((c) => c.system_key).filter(Boolean));
   const builtIns = BUILT_IN.filter((k) => catalog.system_columns[k] && !shown.has(k));
+  const kinds = (list) => list.filter((k) => catalog.kinds[k]);
+  const match = (label) => label.toLowerCase().includes(q.trim().toLowerCase());
+  const Tile = ({ k, label, icon, color, onPress }) => (
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }) => ({ width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+    >
+      <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: color || colors.gray[300], alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={13} color="#fff" />
+      </View>
+      <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[800] }}>{label}</Text>
+    </Pressable>
+  );
+  const Group = ({ title, list }) => {
+    const rows = kinds(list).filter((k) => match(catalog.kinds[k].label));
+    if (!rows.length) return null;
+    return (
+      <>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], padding: spacing.xs, marginTop: 4 }}>{title}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {rows.map((k) => <Tile key={k} k={k} label={catalog.kinds[k].label} icon={catalog.kinds[k].icon} color={KIND_COLORS[k]} onPress={() => { onPick({ kind: k, title: catalog.kinds[k].label }); onClose(); }} />)}
+        </View>
+      </>
+    );
+  };
+  const rest = kinds(COMMON).filter((k) => !ESSENTIALS.includes(k) && !SUPER_USEFUL.includes(k));
   return (
     <Popover visible anchor={anchor} onClose={onClose} width={420}>
-      <ScrollView style={{ maxHeight: 460 }}>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], padding: spacing.xs }}>COLUMN TYPES</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {COMMON.filter((k) => catalog.kinds[k]).map((k) => (
-            <Pressable
-              key={k}
-              onPress={() => { onPick({ kind: k, title: catalog.kinds[k].label }); onClose(); }}
-              style={({ hovered }) => ({ width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
-            >
-              <Ionicons name={catalog.kinds[k].icon} size={17} color={colors.brand[600]} />
-              <Text style={{ fontSize: 14, color: colors.gray[800] }}>{catalog.kinds[k].label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        {builtIns.length > 0 && (
+      <TextInput
+        value={q} onChangeText={setQ} autoFocus placeholder="Search or describe your column" placeholderTextColor={colors.gray[400]}
+        style={{ height: 34, borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: 10, fontSize: 14, color: colors.gray[900], outlineStyle: 'none', marginBottom: 4 }}
+      />
+      <ScrollView style={{ maxHeight: 420 }}>
+        <Group title="Essentials" list={ESSENTIALS} />
+        <Group title="Super useful" list={SUPER_USEFUL} />
+        {(more || q.trim()) && <Group title="More columns" list={rest} />}
+        {(more || q.trim()) && builtIns.filter((k) => match(catalog.system_columns[k].title)).length > 0 && (
           <>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], padding: spacing.xs, marginTop: spacing.sm }}>FROM THE ITEM ITSELF</Text>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], padding: spacing.xs, marginTop: 4 }}>From the task itself</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {builtIns.map((k) => {
+              {builtIns.filter((k) => match(catalog.system_columns[k].title)).map((k) => {
                 const def = catalog.system_columns[k];
-                return (
-                  <Pressable
-                    key={k}
-                    onPress={() => { onPick({ system_key: k }); onClose(); }}
-                    style={({ hovered }) => ({ width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
-                  >
-                    <Ionicons name={catalog.kinds[def.kind]?.icon || 'ellipse-outline'} size={17} color={colors.gray[600]} />
-                    <Text style={{ fontSize: 14, color: colors.gray[800] }}>{def.title}</Text>
-                  </Pressable>
-                );
+                return <Tile key={k} label={def.title} icon={catalog.kinds[def.kind]?.icon || 'ellipse-outline'} color={colors.gray[500]} onPress={() => { onPick({ system_key: k }); onClose(); }} />;
               })}
             </View>
           </>
+        )}
+        {!more && !q.trim() && (
+          <Pressable onPress={() => setMore(true)} style={{ alignItems: 'center', padding: 10 }}>
+            <Text style={{ fontSize: 13, color: colors.brand[600] }}>More columns</Text>
+          </Pressable>
         )}
       </ScrollView>
     </Popover>
   );
 }
 
-export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove, onToggleMobile, onSettings, onAiFillAll, aiEnabled, onClose }) {
+export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove, onToggleMobile, onSettings, onAiFillAll, aiEnabled, onClose, onSort, onGroupBy, onHide, onAddRight, onFilter }) {
   const [renaming, setRenaming] = useState(false);
   const [settings, setSettings] = useState(false);
   const idx = columns.findIndex((c) => c.id === column.id);
@@ -90,7 +112,13 @@ export function ColumnMenu({ anchor, column, columns, onRename, onRemove, onMove
       ) : (
         <View>
           <MenuRow icon="create-outline" label="Rename" onPress={() => setRenaming(true)} />
-          {!column.system_key && <MenuRow icon="options-outline" label="Settings" onPress={() => setSettings(true)} />}
+          {!!onFilter && <MenuRow icon="funnel-outline" label="Filter" onPress={() => { onClose(); onFilter(); }} />}
+          {!!onSort && <MenuRow icon="arrow-up" label="Sort ascending" onPress={() => { onSort('asc'); onClose(); }} />}
+          {!!onSort && <MenuRow icon="arrow-down" label="Sort descending" onPress={() => { onSort('desc'); onClose(); }} />}
+          {!!onGroupBy && <MenuRow icon="albums-outline" label="Group by" onPress={() => { onGroupBy(); onClose(); }} />}
+          {!!onAddRight && <MenuRow icon="add" label="Add column to the right" onPress={() => { const a = anchor; onClose(); onAddRight(a); }} />}
+          {!!onHide && <MenuRow icon="eye-off-outline" label="Hide column" onPress={() => { onHide(); onClose(); }} />}
+          {(!column.system_key || column.kind === 'dependency') && <MenuRow icon="options-outline" label="Settings" onPress={() => setSettings(true)} />}
           {column.kind === 'ai' && aiEnabled && <MenuRow icon="sparkles-outline" label="Fill every item with AI" onPress={() => { onAiFillAll(); onClose(); }} />}
           {idx > 0 && <MenuRow icon="arrow-back" label="Move left" onPress={() => { onMove(-1); onClose(); }} />}
           {idx < columns.length - 1 && <MenuRow icon="arrow-forward" label="Move right" onPress={() => { onMove(1); onClose(); }} />}
@@ -169,6 +197,28 @@ function ColumnSettings({ column, columns, onSave }) {
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
             {columns.filter((c) => c.id !== column.id).map((c) => chip(false, `{${c.title}}`, () => set({ expression: `${s.expression || ''}{${c.title}}` }), c.id))}
+          </View>
+        </>
+      )}
+      {column.kind === 'dependency' && (
+        <>
+          {label('CHOOSE DEPENDENCY MODE')}
+          {[
+            ['flexible', 'Flexible', 'A task moves only when it would start on or before the day what it waits for ends.'],
+            ['strict', 'Strict', 'A task always moves with what it waits for, by the same days, and never starts before it ends.'],
+            ['none', 'No action', 'The links are only shown. Nothing moves by itself; a clash shows in red on the Gantt.'],
+          ].map(([k, t, d]) => (
+            <Pressable key={k} onPress={() => set({ mode: k })} style={{ flexDirection: 'row', gap: 8, paddingVertical: 6 }}>
+              <Ionicons name={(s.mode || 'strict') === k ? 'radio-button-on' : 'radio-button-off'} size={18} color={(s.mode || 'strict') === k ? colors.brand[600] : colors.gray[400]} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, color: colors.gray[900], fontWeight: '600' }}>{t}</Text>
+                <Text style={{ fontSize: 12, color: colors.gray[500] }}>{d}</Text>
+              </View>
+            </Pressable>
+          ))}
+          {label('CHOOSE COLUMN FOR ITEM DEPENDENCE')}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {[['due', 'Due date'], ['timeline', 'Timeline (start to end)']].map(([k, t]) => chip((s.date_field || 'due') === k, t, () => set({ date_field: k }), k))}
           </View>
         </>
       )}
