@@ -4,7 +4,7 @@ import api from '../../api/client';
 import useBoards from '../../hooks/useBoards';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Popover from './Popover';
-import { TextEditor, PaletteGrid } from './Cells';
+import { TextEditor, PaletteGrid, OptionsListEditor } from './Cells';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
 import { confirmDialog, showToast } from '../../utils/events';
@@ -39,6 +39,7 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
   const colors = useColors();
   const [q, setQ] = useState('');
   const [more, setMore] = useState(false);
+  const [draft, setDraft] = useState(null); // a picked type waiting for its heading (and options)
   if (!catalog) return null;
   const shown = new Set(columns.map((c) => c.system_key).filter(Boolean));
   const builtIns = BUILT_IN.filter((k) => catalog.system_columns[k] && !shown.has(k));
@@ -62,12 +63,53 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
       <>
         <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], padding: spacing.xs, marginTop: 4 }}>{title}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {rows.map((k) => <Tile key={k} k={k} label={catalog.kinds[k].label} icon={catalog.kinds[k].icon} color={KIND_COLORS[k]} onPress={() => { onPick({ kind: k, title: catalog.kinds[k].label }); onClose(); }} />)}
+          {rows.map((k) => <Tile key={k} k={k} label={catalog.kinds[k].label} icon={catalog.kinds[k].icon} color={KIND_COLORS[k]} onPress={() => setDraft({ kind: k, title: catalog.kinds[k].label, options: [], multiple: false })} />)}
         </View>
       </>
     );
   };
   const rest = kinds(COMMON).filter((k) => !ESSENTIALS.includes(k) && !SUPER_USEFUL.includes(k));
+  if (draft) {
+    const def = catalog.kinds[draft.kind];
+    const create = () => {
+      const title = draft.title.trim() || def.label;
+      const spec = { kind: draft.kind, title };
+      if (draft.kind === 'dropdown') spec.settings = { multiple: draft.multiple, options: draft.options.filter((o) => o.label.trim()) };
+      onPick(spec);
+      onClose();
+    };
+    return (
+      <Popover visible anchor={anchor} onClose={onClose} width={360}>
+        <Pressable onPress={() => setDraft(null)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
+          <Ionicons name="chevron-back" size={16} color={colors.gray[500]} />
+          <View style={{ width: 20, height: 20, borderRadius: 5, backgroundColor: KIND_COLORS[draft.kind] || colors.gray[300], alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={def.icon} size={12} color="#fff" />
+          </View>
+          <Text style={{ fontSize: 13, color: colors.gray[600] }}>{def.label} column</Text>
+        </Pressable>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], marginBottom: 4 }}>HEADING</Text>
+        <TextInput
+          autoFocus selectTextOnFocus value={draft.title} onChangeText={(t) => setDraft({ ...draft, title: t })}
+          onSubmitEditing={draft.kind === 'dropdown' ? undefined : create}
+          placeholder="Name this column, e.g. Contractor" placeholderTextColor={colors.gray[400]}
+          style={{ height: 36, borderWidth: 1, borderColor: colors.brand[400], borderRadius: radius.md, paddingHorizontal: 10, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+        />
+        {draft.kind === 'dropdown' && (
+          <View style={{ marginTop: spacing.sm }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], marginBottom: 4 }}>OPTIONS PEOPLE CAN PICK</Text>
+            <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+              <OptionsListEditor options={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
+            </ScrollView>
+            <Toggle on={draft.multiple} label="Allow more than one choice" onPress={() => setDraft({ ...draft, multiple: !draft.multiple })} />
+            <Text style={{ fontSize: 11, color: colors.gray[500] }}>You can rename, recolour or add options later from the column menu or by clicking a cell.</Text>
+          </View>
+        )}
+        <Pressable onPress={create} style={{ marginTop: spacing.md, backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>Create column</Text>
+        </Pressable>
+      </Popover>
+    );
+  }
   return (
     <Popover visible anchor={anchor} onClose={onClose} width={420}>
       <TextInput
@@ -198,6 +240,13 @@ function ColumnSettings({ column, columns, onSave }) {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
             {columns.filter((c) => c.id !== column.id).map((c) => chip(false, `{${c.title}}`, () => set({ expression: `${s.expression || ''}{${c.title}}` }), c.id))}
           </View>
+        </>
+      )}
+      {column.kind === 'dropdown' && (
+        <>
+          {label('OPTIONS')}
+          <OptionsListEditor options={s.options || []} onChange={(options) => set({ options })} />
+          <Toggle on={!!s.multiple} label="Allow more than one choice" onPress={() => set({ multiple: !s.multiple })} />
         </>
       )}
       {column.kind === 'dependency' && (

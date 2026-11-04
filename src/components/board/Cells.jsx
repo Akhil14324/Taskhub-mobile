@@ -380,6 +380,61 @@ export function PaletteGrid({ value, onPick }) {
   );
 }
 
+const NEXT_COLORS = ['blue', 'green', 'orange', 'purple', 'red', 'aquamarine', 'pink', 'yellow'];
+
+/**
+ * Edit a dropdown's options in place: rename, recolour, remove, add. Controlled (`options` in, `onChange(options)`
+ * out) so the "new column" form, the column settings and the cell's "Edit options" all share it.
+ */
+export function OptionsListEditor({ options, onChange, autoFocusNew }) {
+  const colors = useColors();
+  const [adding, setAdding] = useState('');
+  const [palette, setPalette] = useState(null);
+  const patch = (id, p) => onChange(options.map((o) => (o.id === id ? { ...o, ...p } : o)));
+  const add = () => {
+    const label = adding.trim();
+    if (!label) return;
+    const id = `o${Date.now().toString(36)}${options.length}`;
+    onChange([...options, { id, label, color: NEXT_COLORS[options.length % NEXT_COLORS.length] }]);
+    setAdding('');
+  };
+  const box = { fontSize: 14, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4, borderWidth: 1, color: colors.gray[900], outlineStyle: 'none' };
+  return (
+    <View style={{ gap: 6 }}>
+      {options.map((o) => (
+        <View key={o.id}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Pressable onPress={() => setPalette(palette === o.id ? null : o.id)} accessibilityLabel="Colour" style={{ width: 22, height: 22, borderRadius: 4, backgroundColor: paletteHex(o.color) }} />
+            <TextInput
+              defaultValue={o.label}
+              onChangeText={(t) => patch(o.id, { label: t })}
+              placeholder="Option"
+              placeholderTextColor={colors.gray[400]}
+              style={{ ...box, flex: 1, minWidth: 0, borderColor: colors.gray[200] }}
+            />
+            <Pressable onPress={() => onChange(options.filter((x) => x.id !== o.id))} accessibilityLabel="Remove option" hitSlop={6}>
+              <Ionicons name="trash-outline" size={15} color={colors.gray[500]} />
+            </Pressable>
+          </View>
+          {palette === o.id && <PaletteGrid value={o.color} onPick={(c) => { setPalette(null); patch(o.id, { color: c }); }} />}
+        </View>
+      ))}
+      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+        <TextInput
+          autoFocus={autoFocusNew}
+          value={adding}
+          onChangeText={setAdding}
+          placeholder="Add an option, then Enter"
+          placeholderTextColor={colors.gray[400]}
+          onSubmitEditing={add}
+          style={{ ...box, flex: 1, minWidth: 0, borderColor: colors.gray[300] }}
+        />
+        <Pressable onPress={add} accessibilityLabel="Add option" hitSlop={6}><Ionicons name="add-circle" size={22} color={colors.brand[600]} /></Pressable>
+      </View>
+    </View>
+  );
+}
+
 export function PersonEditor({ selected, multiple, candidates, onDone }) {
   const colors = useColors();
   const [q, setQ] = useState('');
@@ -413,7 +468,7 @@ export function PersonEditor({ selected, multiple, candidates, onDone }) {
   );
 }
 
-export function OptionsEditor({ column, selected, onDone, onAddOption }) {
+export function OptionsEditor({ column, selected, onDone, onAddOption, onEditOptions }) {
   const colors = useColors();
   const opts = column.settings?.options || [];
   const multiple = !!column.settings?.multiple;
@@ -436,6 +491,7 @@ export function OptionsEditor({ column, selected, onDone, onAddOption }) {
         {!!q.trim() && onAddOption && !opts.some((o) => o.label.toLowerCase() === q.trim().toLowerCase()) && (
           <Row icon={<Ionicons name="add" size={16} color={colors.brand[600]} />} label={`Add "${q.trim()}"`} color={colors.brand[600]} onPress={() => { onAddOption(q.trim()); setQ(''); }} />
         )}
+        {!!onEditOptions && <Row icon={<Ionicons name="create-outline" size={16} color={colors.gray[500]} />} label="Edit options" onPress={onEditOptions} />}
       </ScrollView>
       {multiple && (
         <Pressable onPress={() => onDone(picked.length ? picked : null)} style={{ marginTop: 6, backgroundColor: BRAND, borderRadius: radius.md, paddingVertical: 8, alignItems: 'center' }}>

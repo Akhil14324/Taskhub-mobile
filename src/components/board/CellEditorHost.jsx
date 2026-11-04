@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Popover from './Popover';
 import DueDatePicker from '../DueDatePicker';
 import {
-  StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, TextEditor, PriorityEditor, PaletteGrid, BoardMeta,
+  StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, OptionsListEditor, TextEditor, PriorityEditor, PaletteGrid, BoardMeta,
 } from './Cells';
 import { cellValue, itemWordOf } from './model';
 import { formatDue } from '../../utils/dates';
@@ -296,8 +296,20 @@ export default function CellEditorHost({ editing, onClose, board, people, action
     body = <PriorityEditor value={item.priority} onDone={done((p) => actions.updateFields(item, { priority: p }))} />;
   } else if (column.kind === 'dropdown') {
     const canAdd = board?.access?.manage;
-    body = (
+    body = stage === 'options' ? (
+      <View style={{ gap: 8 }}>
+        <Pressable onPress={() => setStage('main')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="chevron-back" size={16} color={colors.gray[500]} />
+          <Text style={{ fontSize: 13, color: colors.gray[600] }}>Options of {column.title}</Text>
+        </Pressable>
+        <OptionsListEditor
+          options={column.settings?.options || []}
+          onChange={(options) => actions.updateColumn(column, { settings: { ...column.settings, options } })}
+        />
+      </View>
+    ) : (
       <OptionsEditor
+        onEditOptions={canAdd ? () => setStage('options') : null}
         column={column}
         selected={v || []}
         onDone={done((ids) => actions.setValue(item, column, ids))}

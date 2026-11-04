@@ -102,6 +102,7 @@ export default function BoardsSidebar({ boardId }) {
       )}
       <NewBoardDialog
         visible={creating} onClose={() => setCreating(false)} tree={tree} isLeader={!!user?.is_leader}
+        initialWhere={space.key === 'group' ? { scope: 'group' } : space.key.startsWith('b') ? { scope: 'business', business_id: Number(space.key.slice(1)) } : { scope: 'personal' }}
         onCreated={(b) => { setCreating(false); refreshBoards(); navigation.navigate('Board', { id: b.id }); }}
       />
     </View>
