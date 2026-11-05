@@ -396,6 +396,7 @@ export default function BoardScreen({ route }) {
             editNameId={nameEditId} onEditNameDone={() => setNameEditId(null)}
             onRenameItem={(item, title) => board.updateFields(item, { title })}
             onSetDone={(item) => board.setStatus(item, item.is_done ? 'todo' : 'done')}
+            onResizeColumn={(column, width) => board.updateColumn(column, { width })}
             onBulkDelete={async (rows) => {
               let n = 0;
               for (const t of rows) { if (!t.permissions?.can_delete) continue; try { await api.delete(`/todos/${t.id}`, { __skipOops: true }); n += 1; } catch { /* skipped */ } }

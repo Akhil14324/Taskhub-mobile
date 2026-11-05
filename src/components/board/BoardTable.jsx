@@ -18,7 +18,9 @@ import { confirmDialog } from '../../utils/events';
 
 export { anchorOf };
 
-const NAME_W = 340;
+const NAME_W = 340; // default width of the name column (people can drag it)
+const MIN_COL = 60;
+const MAX_COL = 600;
 const UPD_W = 46; // the "updates" column next to the name: opens the task window
 const ADD_W = 44;
 const ROW_H = 38;
@@ -94,7 +96,43 @@ const COLUMN_HINTS = {
   long_text: 'Free notes for this task.',
 };
 
-function HeaderCell({ column, canManage, onMenu, width, sticky }) {
+/** The thin grip on a header's right edge: drag it sideways to change the column's width, like a spreadsheet. */
+function ResizeGrip({ onResize, startWidth, height }) {
+  const ref = useRef(null);
+  const live = useRef({ startWidth });
+  live.current.startWidth = startWidth;
+  const attach = (node) => {
+    ref.current = node;
+    if (!node || typeof node.addEventListener !== 'function' || node.__grip) return;
+    node.__grip = true;
+    node.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const x0 = e.clientX; const w0 = live.current.startWidth;
+      const prevSelect = document.body.style.userSelect; const prevCursor = document.body.style.cursor;
+      document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+      const move = (ev) => onResizeRef.current(w0 + (ev.clientX - x0), false);
+      const up = (ev) => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        document.body.style.userSelect = prevSelect; document.body.style.cursor = prevCursor;
+        onResizeRef.current(w0 + (ev.clientX - x0), true);
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    });
+  };
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  return (
+    <View
+      ref={attach}
+      accessibilityLabel="Drag to resize the column"
+      style={{ position: 'absolute', right: -4, top: 0, width: 9, height, cursor: 'col-resize', zIndex: 6, alignItems: 'center' }}
+    >
+      <View style={{ width: 3, height: '60%', marginTop: '10%', borderRadius: 2, backgroundColor: 'transparent' }} dataSet={{ grip: '1' }} />
+    </View>
+  );
+}
+
+function HeaderCell({ column, canManage, onMenu, width, sticky, onResize }) {
   const colors = useColors();
   const { headH } = useContext(Metrics);
   const hint = column.description || COLUMN_HINTS[column.kind];
@@ -109,6 +147,7 @@ function HeaderCell({ column, canManage, onMenu, width, sticky }) {
         <Text numberOfLines={Math.round(headH / 20)} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500', textAlign: 'center' }}>{column.title}</Text>
       </Pressable>
       {!!hint && <Hint text={hint} size={14} style={{ marginRight: 6 }} />}
+      {!!onResize && <ResizeGrip onResize={(w, final) => onResize(column, w, final)} startWidth={width} height={headH} />}
     </View>
   );
 }
@@ -176,10 +215,25 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onResizeColumn,
 }) {
   const colors = useColors();
-  const { columns, groups, values, access } = board;
+  const { columns: savedColumns, groups, values, access } = board;
+  // Column widths: dragged live here, saved on the board's column for people who manage it (everyone's table follows).
+  const [liveW, setLiveW] = useState({});
+  const columns = useMemo(() => (Object.keys(liveW).length ? savedColumns.map((c) => (liveW[c.id] ? { ...c, width: liveW[c.id] } : c)) : savedColumns), [savedColumns, liveW]);
+  useEffect(() => { // once the saved width has arrived, stop overriding it
+    setLiveW((cur) => { const keys = Object.keys(cur); if (!keys.length) return cur; const n = { ...cur }; let changed = false; savedColumns.forEach((c) => { if (n[c.id] === c.width) { delete n[c.id]; changed = true; } }); return changed ? n : cur; });
+  }, [savedColumns]);
+  const nameKey = `board.nameW.${board.board?.id}`;
+  const [nameW, setNameW] = useState(() => { try { return Math.min(MAX_COL, Math.max(160, Number(window.localStorage.getItem(nameKey)) || NAME_W)); } catch { return NAME_W; } });
+  const resizeColumn = (column, width, final) => {
+    const w = Math.round(Math.min(MAX_COL, Math.max(MIN_COL, width)));
+    if (column === 'name') { setNameW(Math.max(160, w)); if (final) { try { window.localStorage.setItem(nameKey, String(Math.max(160, w))); } catch { /* private mode */ } } return; }
+    setLiveW((cur) => ({ ...cur, [column.id]: w }));
+    const saved = savedColumns.find((x) => x.id === column.id);
+    if (final && canManage && onResizeColumn && saved && w !== saved.width) onResizeColumn(saved, w);
+  };
   const rowH = ITEM_HEIGHTS[itemHeight] || ROW_H;
   const headH = HEADER_HEIGHTS[headerHeight] || 34;
   const metrics = useMemo(() => ({ rowH, headH, pinned }), [rowH, headH, pinned]);
@@ -194,7 +248,7 @@ export default function BoardTable({
   }, [items]);
   useEffect(() => { if (editNameId) { setNameEdit(editNameId); onEditNameDone?.(); } }, [editNameId]); // eslint-disable-line react-hooks/exhaustive-deps
   // The name block always stays in view when the table scrolls sideways, plus the first `pinned` columns.
-  const NAME_BLOCK = NAME_W + UPD_W;
+  const NAME_BLOCK = nameW + UPD_W;
   const stickyName = { position: 'sticky', left: 0, zIndex: 4 };
   const lefts = useMemo(() => { let x = NAME_BLOCK; return columns.map((c) => { const l = x; x += c.width; return l; }); }, [columns, NAME_BLOCK]);
   const stickyCol = (ci) => (ci < pinned ? { position: 'sticky', left: lefts[ci], zIndex: 3 } : null);
@@ -202,7 +256,7 @@ export default function BoardTable({
   const canAdd = !!access?.add;
   const word = itemWordOf(board);
   const progressMap = useMemo(() => progressMapOf(board.items), [board.items]);
-  const tableWidth = NAME_W + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
+  const tableWidth = nameW + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
   const [shown, setShown] = useState(() => new Map());
@@ -275,53 +329,63 @@ export default function BoardTable({
     const first = (pred) => columns.find(pred);
     return [first((c) => c.kind === 'person'), first((c) => c.kind === 'status'), first((c) => c.kind === 'date' || c.kind === 'timeline')].filter(Boolean);
   }, [columns]);
-  const SUB_NAME_W = NAME_W + UPD_W - 6 - 30;
+  // A task's steps are rows of the same table, indented inside the task: the name starts further right than the
+  // task's own, and Owner / Status / Date sit under the same columns, so columns line up from top to bottom.
+  const SUB_INDENT = 52;
+  const subIds = new Set(subColumns.map((c) => c.id));
+  const subBg = colors.gray[50];
 
-  // The rows of a task's steps. A step that has steps of its own shows its own ring and can be opened, to any depth.
   const renderSubRows = (kids, block, depth) => kids.map((k) => {
     const own = block.children.get(k.id) || [];
     const open = openParents.has(k.id);
     const prog = own.length ? progressMap.get(k.id) : null;
+    const left = SUB_INDENT + depth * 20;
     return (
       <View key={k.id}>
-        <View style={{ flexDirection: 'row', height: 34, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
-          <View style={{ width: SUB_NAME_W, height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: spacing.sm + depth * 18, paddingRight: spacing.sm }}>
-            {own.length ? (
-              <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
-                <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={13} color={colors.gray[600]} />
+        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
+          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: rowH }, stickyName]}>
+            <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
+            <View style={{ width: nameW - 6 + UPD_W, height: rowH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: left, paddingRight: spacing.sm, borderRightWidth: 1, borderColor: colors.gray[200] }}>
+              <View pointerEvents="none" style={{ position: 'absolute', left: left - 18, top: 0, bottom: 0, width: 2, backgroundColor: colors.gray[300] }} />
+              {own.length ? (
+                <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
+                  <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={13} color={colors.gray[600]} />
+                </Pressable>
+              ) : (
+                <Pressable onPress={() => mayEdit(k) && onSetDone?.(k)} hitSlop={6} accessibilityLabel={k.is_done ? 'Mark not done' : 'Mark done'}>
+                  <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={k.is_done ? colors.green[600] : colors.gray[400]} />
+                </Pressable>
+              )}
+              {nameEdit === k.id && mayEdit(k) ? (
+                <TextInput
+                  autoFocus selectTextOnFocus defaultValue={k.title} accessibilityLabel={`Name of ${k.title}`}
+                  onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                  onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                  onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
+                  style={{ flex: 1, height: rowH - 8, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
+                />
+              ) : (
+                <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'text' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+                </Pressable>
+              )}
+              {prog && (
+                <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <ProgressDot pct={prog.pct} size={16} stroke={2.5} />
+                  <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
+                </View>
+              )}
+              <Pressable onPress={() => onOpenItem(k.id)} hitSlop={4} accessibilityLabel={`Open ${k.title}`} style={({ hovered }) => ({ padding: 3, borderRadius: 4, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+                <Ionicons name="expand-outline" size={14} color={colors.gray[500]} />
               </Pressable>
-            ) : (
-              <Pressable onPress={() => mayEdit(k) && onToggleValue && onSetDone?.(k)} hitSlop={6} accessibilityLabel={k.is_done ? 'Mark not done' : 'Mark done'}>
-                <Ionicons name={k.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={k.is_done ? colors.green[600] : colors.gray[400]} />
-              </Pressable>
-            )}
-            {nameEdit === k.id && mayEdit(k) ? (
-              <TextInput
-                autoFocus selectTextOnFocus defaultValue={k.title} accessibilityLabel={`Name of ${k.title}`}
-                onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
-                onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
-                onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
-                style={{ flex: 1, height: 28, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
-              />
-            ) : (
-              <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: 34, justifyContent: 'center', cursor: 'text' }}>
-                <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
-              </Pressable>
-            )}
-            {prog && (
-              <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <ProgressDot pct={prog.pct} size={16} stroke={2.5} />
-                <Text style={{ fontSize: 11, color: colors.gray[600] }}>{prog.done}/{prog.total}</Text>
-              </View>
-            )}
-            <Pressable onPress={() => onOpenItem(k.id)} hitSlop={4} accessibilityLabel={`Open ${k.title}`} style={({ hovered }) => ({ padding: 3, borderRadius: 4, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
-              <Ionicons name="expand-outline" size={14} color={colors.gray[500]} />
-            </Pressable>
+            </View>
           </View>
-          {subColumns.map((c) => (
-            <View key={c.id} style={{ borderLeftWidth: 1, borderColor: colors.gray[200] }}>
-              <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
-                onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
+          {columns.map((c, ci) => (
+            <View key={c.id} style={[{ width: c.width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200] }, stickyCol(ci) ? [stickyCol(ci), { backgroundColor: subBg }] : null]}>
+              {subIds.has(c.id) ? (
+                <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
+                  onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
+              ) : null}
             </View>
           ))}
         </View>
@@ -331,28 +395,29 @@ export default function BoardTable({
   });
 
   const renderSubTasks = (parent, kids, block) => (
-    <View style={{ flexDirection: 'row', backgroundColor: colors.gray[50], paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
-      <View style={{ width: 6, backgroundColor: paletteHex(block.group.color) }} />
-      <View style={{ marginLeft: 24, position: 'sticky', left: 30, zIndex: 2, borderLeftWidth: 3, borderLeftColor: BRAND, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }}>
-        <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: colors.gray[200], alignItems: 'center' }}>
-          <View style={{ width: SUB_NAME_W, alignItems: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>Subitem</Text></View>
-          {subColumns.map((c) => <View key={c.id} style={{ width: c.width, alignItems: 'center', borderLeftWidth: 1, borderColor: colors.gray[200], height: 30, justifyContent: 'center' }}><Text style={{ fontSize: 12, color: colors.gray[600], fontWeight: '500' }}>{c.title}</Text></View>)}
+    <View>
+      {renderSubRows(kids, block, 0)}
+      {canAdd && (
+        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
+          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: rowH }, stickyName]}>
+            <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
+            <View style={{ width: nameW - 6 + UPD_W, height: rowH, justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+              <View pointerEvents="none" style={{ position: 'absolute', left: SUB_INDENT - 18, top: 0, bottom: '50%', width: 2, backgroundColor: colors.gray[300] }} />
+              <TextInput
+                placeholder="+ Add subitem"
+                placeholderTextColor={colors.gray[400]}
+                accessibilityLabel="Add a subitem"
+                onSubmitEditing={(e) => {
+                  const text = e.nativeEvent.text;
+                  if (text?.trim()) { onAddItem(text, block.group.id, { parent_id: parent.id }); e.target.clear?.(); }
+                }}
+                blurOnSubmit={false}
+                style={{ height: rowH - 4, paddingLeft: SUB_INDENT + 4, paddingRight: spacing.sm, fontSize: 13, color: colors.gray[900], outlineStyle: 'none' }}
+              />
+            </View>
+          </View>
         </View>
-        {renderSubRows(kids, block, 0)}
-        {canAdd && (
-          <TextInput
-            placeholder="+ Add subitem"
-            placeholderTextColor={colors.gray[400]}
-            accessibilityLabel="Add a subitem"
-            onSubmitEditing={(e) => {
-              const text = e.nativeEvent.text;
-              if (text?.trim()) { onAddItem(text, block.group.id, { parent_id: parent.id }); e.target.clear?.(); }
-            }}
-            blurOnSubmit={false}
-            style={{ height: 34, paddingHorizontal: spacing.md, fontSize: 13, color: colors.gray[900], outlineStyle: 'none', width: SUB_NAME_W + subColumns.reduce((n, c) => n + c.width, 0) }}
-          />
-        )}
-      </View>
+      )}
     </View>
   );
 
@@ -371,7 +436,7 @@ export default function BoardTable({
           <View
             dataSet={{ cell: `${t.id}:-1` }}
             style={{
-              width: NAME_W - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
+              width: nameW - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
               paddingRight: spacing.xs, borderRightWidth: 1, borderColor: colors.gray[200],
               backgroundColor: sel.has(t.id) ? colors.brand[50] : rule ? `${paletteHex(rule)}26` : 'transparent',
               outlineStyle: focusedHere && focus.col === -1 ? 'solid' : 'none', outlineWidth: 2, outlineColor: BRAND, outlineOffset: -2,
@@ -472,11 +537,12 @@ export default function BoardTable({
                   <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }}>
                     <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
                       <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
-                      <View style={{ width: NAME_W - 6 + UPD_W, height: headH, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+                      <View style={{ width: nameW - 6 + UPD_W, height: headH, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
                         <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>{word}</Text>
+                        <ResizeGrip onResize={(w, final) => resizeColumn('name', w, final)} startWidth={nameW} height={headH} />
                       </View>
                     </View>
-                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
+                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
                     <Pressable
                       disabled={!canManage}
                       onPress={(e) => onAddColumn(anchorOf(e))}
@@ -495,8 +561,8 @@ export default function BoardTable({
                       <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Show {Math.min(PAGE, b.top.length - limitOf(b.group.id))} more of {b.top.length - limitOf(b.group.id)}</Text>
                     </Pressable>
                   )}
-                  {canAdd && <AddItemRow color={b.group.color} word={word} width={NAME_W + UPD_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
-                  <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={NAME_W + UPD_W} />
+                  {canAdd && <AddItemRow color={b.group.color} word={word} width={nameW + UPD_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
+                  <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={nameW + UPD_W} />
                 </View>
               )}
             </View>
