@@ -220,8 +220,8 @@ export default function BoardToolbar({
             right={<Hint text={`Adds a ${lower} to the first group and lets you type its name at once.`} />} />
           <Item icon="layers-outline" label={busyGroup ? 'Adding group...' : 'New group'} onPress={() => { if (busyGroup) return; close(); onNewGroup(); }}
             right={<Hint text="A group is a section of the board, like To-Do or Completed. It is made at once; click its name to rename it." />} />
-          <Item icon="cloud-upload-outline" label={`Import ${lower}s from a file`} onPress={() => { close(); onImport(); }}
-            right={<Hint text="Bring many tasks in from a CSV file. You see what will happen before anything is added." />} />
+          <Item icon="cloud-upload-outline" label={`Import ${lower}s from Excel`} onPress={() => { close(); onImport(); }}
+            right={<Hint text="Paste cells copied from Excel or Google Sheets, or pick an .xlsx or .csv file. Each sheet column is matched to a board column, and you see what will happen before anything is added. You can also just press Ctrl+V on the board." />} />
         </Popover>
       )}
 

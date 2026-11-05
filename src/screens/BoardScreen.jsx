@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +35,7 @@ import useShortcuts from '../hooks/useShortcuts';
 import { showToast, confirmDialog } from '../utils/events';
 import api from '../api/client';
 import { toCsv, downloadText } from '../utils/csv';
+import { looksLikeCells, toTsv } from '../utils/sheet';
 
 // The views a board can show (F-VIW-00 .. F-VIW-13). Map, form and gallery come with their own steps.
 const VIEW_KINDS = [
@@ -88,7 +89,7 @@ export default function BoardScreen({ route }) {
   const [menu, setMenu] = useState(null); // { type: 'addColumn' | 'column' | 'group' | 'rename' | 'newItem' | 'newGroup', anchor, ... }
   const [openTodoId, setOpenTodoId] = useState(null);
   const [automate, setAutomate] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting] = useState(false); // true, or { text, groupId } when cells were pasted on the board
   // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
   // tab when they may change it, otherwise it lasts until they leave.
   const [localVs, setLocalVs] = useState({});
@@ -115,6 +116,35 @@ export default function BoardScreen({ route }) {
     }
     downloadText(`${data.board.name.replace(/[^\w\- ]+/g, '').trim() || 'board'} ${todayYmd()}.csv`, toCsv(rows));
   }, [data, people]);
+
+  /** Ticked rows as cells Excel / Sheets paste straight in: a header row, then one row per task. */
+  const rowsAsCells = useCallback((rows) => {
+    if (!data) return '';
+    const groupName = new Map(data.groups.map((g) => [g.id, g.name]));
+    const cols = data.columns.filter((c) => !c.archived_at);
+    return toTsv([
+      ['Name', 'Group', ...cols.map((c) => c.title)],
+      ...rows.map((t) => [t.title, groupName.get(t.business_section_id) || '', ...cols.map((c) => cellText(t, c, data.values, people))]),
+    ]);
+  }, [data, people]);
+
+  // Cells copied from Excel / Google Sheets and pasted anywhere on the board (not into a text box) open the
+  // import with them, into the group of the row that has the focus.
+  useEffect(() => {
+    if (typeof document === 'undefined' || !data?.access?.add) return undefined;
+    const onPaste = (e) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (importing || openTodoId || editing) return;
+      const text = e.clipboardData?.getData('text/plain') || '';
+      if (!looksLikeCells(text)) return;
+      e.preventDefault();
+      const it = focus?.itemId ? data.items.find((t) => t.id === focus.itemId) : null;
+      setImporting({ text, groupId: it?.business_section_id || null });
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [data, importing, openTodoId, editing, focus]);
 
   const views = useMemo(() => (data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), [data]);
   const view = views.find((v) => v.id === viewId) || views[0] || { kind: 'table' };
@@ -418,6 +448,7 @@ export default function BoardScreen({ route }) {
               board.reload();
               showToast({ message: n === rows.length ? `Deleted ${n}` : `Deleted ${n} of ${rows.length} (the rest you cannot delete)`, icon: 'trash', tone: n ? undefined : 'error' });
             }}
+            onBulkCopy={rowsAsCells}
             onBulkDuplicate={async (rows) => {
               for (const t of rows) await board.addItem(`${t.title} (copy)`, { groupId: t.business_section_id ?? undefined });
               showToast({ message: `Duplicated ${rows.length}`, tone: 'success', icon: 'copy' });
@@ -490,7 +521,10 @@ export default function BoardScreen({ route }) {
         />
       )}
       <BoardAutomate visible={automate} board={b} onClose={() => setAutomate(false)} />
-      <BoardImport visible={importing} board={data} onClose={() => setImporting(false)} onDone={board.reload} />
+      <BoardImport
+        visible={!!importing} board={data} onClose={() => setImporting(false)} onDone={board.reload}
+        initialText={importing?.text} initialGroupId={importing?.groupId}
+      />
       {menu?.type === 'addView' && (
         <Popover visible anchor={menu.anchor} onClose={() => setMenu(null)} width={260}>
           {VIEW_KINDS.map(([k, label, icon]) => (

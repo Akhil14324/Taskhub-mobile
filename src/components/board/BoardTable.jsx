@@ -14,7 +14,7 @@ import { progressMapOf } from '../../utils/progress';
 import { anchorOf } from './Popover';
 import { formatDue } from '../../utils/dates';
 import { glass } from '../../theme/glass';
-import { confirmDialog } from '../../utils/events';
+import { confirmDialog, showToast } from '../../utils/events';
 
 export { anchorOf };
 
@@ -236,7 +236,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, addingGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onResizeColumn,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onResizeColumn,
 }) {
   const colors = useColors();
   const { columns: savedColumns, groups, values, access } = board;
@@ -262,6 +262,20 @@ export default function BoardTable({
   const [nameEdit, setNameEdit] = useState(null);
   // Row selection (monday-style tick boxes) and the bulk bar that appears while anything is ticked.
   const [sel, setSel] = useState(() => new Set());
+  // Ctrl+C with rows ticked (and no text selected or being typed) copies them as cells for Excel.
+  useEffect(() => {
+    if (typeof document === 'undefined' || !sel.size || !onBulkCopy) return undefined;
+    const onCopy = (e) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (String(window.getSelection?.() || '').trim()) return;
+      e.preventDefault();
+      e.clipboardData?.setData('text/plain', onBulkCopy(items.filter((t) => sel.has(t.id))));
+      showToast({ message: `Copied ${sel.size}. Paste it into Excel or Google Sheets`, tone: 'success', icon: 'copy' });
+    };
+    document.addEventListener('copy', onCopy);
+    return () => document.removeEventListener('copy', onCopy);
+  }, [sel, items, onBulkCopy]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const toggleSel = (ids, on) => setSel((cur) => { const n = new Set(cur); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
   useEffect(() => { // forget ticks for rows that are gone (deleted, filtered out)
@@ -639,6 +653,14 @@ export default function BoardTable({
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{sel.size}</Text>
         </View>
         <Text style={{ fontSize: 14, color: colors.gray[800] }}>{sel.size === 1 ? `${word} selected` : `${plural(word)} selected`}</Text>
+        {!!onBulkCopy && (
+          <Pressable onPress={async () => {
+            const text = onBulkCopy(items.filter((t) => sel.has(t.id)));
+            try { await navigator.clipboard.writeText(text); showToast({ message: 'Copied. Paste it into Excel or Google Sheets', tone: 'success', icon: 'copy' }); } catch { showToast({ message: 'Could not copy. Press Ctrl+C instead', icon: 'alert-circle-outline' }); }
+          }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Ionicons name="clipboard-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Copy</Text>
+          </Pressable>
+        )}
         {canAdd && !!onBulkDuplicate && (
           <Pressable disabled={bulkBusy} onPress={async () => { setBulkBusy(true); await onBulkDuplicate(items.filter((t) => sel.has(t.id))); setBulkBusy(false); setSel(new Set()); }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
             <Ionicons name="copy-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Duplicate</Text>

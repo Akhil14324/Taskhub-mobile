@@ -1,10 +1,10 @@
 // CSV in and out for boards (F-IMP-01, F-EXP-01). Comma or semicolon separated, quotes as Excel writes them.
 
-/** Text of a CSV file -> rows of cells. The separator is guessed from the first line. */
-export function parseCsv(text) {
+/** Text of a CSV file -> rows of cells. The separator is guessed from the first line unless given. */
+export function parseCsv(text, given) {
   const src = String(text || '').replace(/^﻿/, '');
   const first = src.split(/\r?\n/, 1)[0] || '';
-  const sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : (first.includes('\t') && !first.includes(',') ? '\t' : ',');
+  const sep = given || ((first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : (first.includes('\t') && !first.includes(',') ? '\t' : ','));
   const rows = [];
   let row = [];
   let cell = '';
@@ -43,23 +43,4 @@ export function downloadText(name, text, type = 'text/csv;charset=utf-8') {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-/** Ask for a file and read it as text (web). */
-export function pickTextFile(accept = '.csv,text/csv') {
-  return new Promise((resolve) => {
-    if (typeof document === 'undefined') { resolve(null); return; }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = accept;
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) { resolve(null); return; }
-      const reader = new FileReader();
-      reader.onload = () => resolve({ name: file.name, text: String(reader.result || '') });
-      reader.onerror = () => resolve(null);
-      reader.readAsText(file);
-    };
-    input.click();
-  });
 }

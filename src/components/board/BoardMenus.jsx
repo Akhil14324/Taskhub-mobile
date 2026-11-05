@@ -442,7 +442,7 @@ export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onE
           <MenuRow icon="flash-outline" label="Automate" onPress={() => { onClose(); onAutomate(); }} />
           <MenuRow icon="copy-outline" label="Duplicate board" onPress={() => setStage('duplicate')} />
           <MenuRow icon="albums-outline" label="Save as a template" onPress={() => setStage('template')} />
-          {data.access.add && <MenuRow icon="cloud-upload-outline" label="Import from a spreadsheet" onPress={() => { onClose(); onImport(); }} />}
+          {data.access.add && <MenuRow icon="cloud-upload-outline" label="Import from Excel (paste or file)" onPress={() => { onClose(); onImport(); }} />}
           <MenuRow icon="download-outline" label="Export to a spreadsheet" onPress={() => { onClose(); onExport(); }} />
           {data.access.manage && !b.is_default && (
             <MenuRow
