@@ -137,6 +137,8 @@ function HeaderCell({ column, canManage, onMenu, width, sticky, onResize, onRena
   const { headH } = useContext(Metrics);
   const hint = column.description || COLUMN_HINTS[column.kind];
   const [editing, setEditing] = useState(false);
+  const clickTimer = useRef(null);
+  useEffect(() => () => clearTimeout(clickTimer.current), []);
   const [text, setText] = useState(column.title);
   const finish = (save) => { setEditing(false); const t = text.trim(); if (save && t && t !== column.title) onRename?.(column, t); else setText(column.title); };
   return (
@@ -150,8 +152,14 @@ function HeaderCell({ column, canManage, onMenu, width, sticky, onResize, onRena
       ) : (
       <Pressable
         disabled={!canManage}
-        onPress={(e) => onMenu(e, column)}
-        onLongPress={() => { setText(column.title); setEditing(true); }}
+        onPress={(e) => {
+          // Double-click renames in place; a single click opens the menu a moment later (unless a second click comes).
+          clearTimeout(clickTimer.current);
+          if ((e?.detail || e?.nativeEvent?.detail || 1) >= 2) { setText(column.title); setEditing(true); return; }
+          const r = e?.currentTarget?.getBoundingClientRect?.();
+          clickTimer.current = setTimeout(() => onMenu(r ? { currentTarget: { getBoundingClientRect: () => r } } : e, column), 230);
+        }}
+        onLongPress={() => { clearTimeout(clickTimer.current); setText(column.title); setEditing(true); }}
         delayLongPress={350}
         accessibilityLabel={`${column.title} column`}
         style={({ hovered }) => ({ flexShrink: 1, height: headH, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent' })}
