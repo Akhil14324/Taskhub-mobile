@@ -33,6 +33,7 @@ import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import BoardItemSheet from '../components/board/BoardItemSheet';
 import useShortcuts from '../hooks/useShortcuts';
 import { showToast, confirmDialog } from '../utils/events';
+import api from '../api/client';
 import { toCsv, downloadText } from '../utils/csv';
 
 // The views a board can show (F-VIW-00 .. F-VIW-13). Map, form and gallery come with their own steps.
@@ -395,6 +396,16 @@ export default function BoardScreen({ route }) {
             editNameId={nameEditId} onEditNameDone={() => setNameEditId(null)}
             onRenameItem={(item, title) => board.updateFields(item, { title })}
             onSetDone={(item) => board.setStatus(item, item.is_done ? 'todo' : 'done')}
+            onBulkDelete={async (rows) => {
+              let n = 0;
+              for (const t of rows) { if (!t.permissions?.can_delete) continue; try { await api.delete(`/todos/${t.id}`, { __skipOops: true }); n += 1; } catch { /* skipped */ } }
+              board.reload();
+              showToast({ message: n === rows.length ? `Deleted ${n}` : `Deleted ${n} of ${rows.length} (the rest you cannot delete)`, icon: 'trash', tone: n ? undefined : 'error' });
+            }}
+            onBulkDuplicate={async (rows) => {
+              for (const t of rows) await board.addItem(`${t.title} (copy)`, { groupId: t.business_section_id ?? undefined });
+              showToast({ message: `Duplicated ${rows.length}`, tone: 'success', icon: 'copy' });
+            }}
           />
         ) : (
           <BoardCards

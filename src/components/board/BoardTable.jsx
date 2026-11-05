@@ -13,6 +13,8 @@ import ProgressDot from '../ProgressDot';
 import { progressMapOf } from '../../utils/progress';
 import { anchorOf } from './Popover';
 import { formatDue } from '../../utils/dates';
+import { glass } from '../../theme/glass';
+import { confirmDialog } from '../../utils/events';
 
 export { anchorOf };
 
@@ -174,7 +176,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate,
 }) {
   const colors = useColors();
   const { columns, groups, values, access } = board;
@@ -183,6 +185,13 @@ export default function BoardTable({
   const metrics = useMemo(() => ({ rowH, headH, pinned }), [rowH, headH, pinned]);
   // Which task has its name open for typing (a click on the name, or a task that was just made).
   const [nameEdit, setNameEdit] = useState(null);
+  // Row selection (monday-style tick boxes) and the bulk bar that appears while anything is ticked.
+  const [sel, setSel] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleSel = (ids, on) => setSel((cur) => { const n = new Set(cur); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
+  useEffect(() => { // forget ticks for rows that are gone (deleted, filtered out)
+    setSel((cur) => { const have = new Set(items.map((t) => t.id)); const n = new Set([...cur].filter((id) => have.has(id))); return n.size === cur.size ? cur : n; });
+  }, [items]);
   useEffect(() => { if (editNameId) { setNameEdit(editNameId); onEditNameDone?.(); } }, [editNameId]); // eslint-disable-line react-hooks/exhaustive-deps
   // The name block always stays in view when the table scrolls sideways, plus the first `pinned` columns.
   const NAME_BLOCK = NAME_W + UPD_W;
@@ -364,10 +373,13 @@ export default function BoardTable({
             style={{
               width: NAME_W - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
               paddingRight: spacing.xs, borderRightWidth: 1, borderColor: colors.gray[200],
-              backgroundColor: rule ? `${paletteHex(rule)}26` : 'transparent',
+              backgroundColor: sel.has(t.id) ? colors.brand[50] : rule ? `${paletteHex(rule)}26` : 'transparent',
               outlineStyle: focusedHere && focus.col === -1 ? 'solid' : 'none', outlineWidth: 2, outlineColor: BRAND, outlineOffset: -2,
             }}
           >
+            <Pressable onPress={() => toggleSel([t.id], !sel.has(t.id))} hitSlop={6} accessibilityLabel={sel.has(t.id) ? `Unselect ${t.title}` : `Select ${t.title}`}>
+              <Ionicons name={sel.has(t.id) ? 'checkbox' : 'square-outline'} size={17} color={sel.has(t.id) ? BRAND : colors.gray[300]} />
+            </Pressable>
             <Pressable onPress={() => toggleParent(t.id)} hitSlop={6} accessibilityLabel={open ? 'Hide subtasks' : 'Show subtasks'}>
               <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={hasKids ? colors.gray[600] : colors.gray[300]} />
             </Pressable>
@@ -442,6 +454,14 @@ export default function BoardTable({
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
                 </Pressable>
+                {b.top.length > 0 && (() => {
+                  const ids = b.top.map((t) => t.id); const all = ids.every((id) => sel.has(id));
+                  return (
+                    <Pressable onPress={() => toggleSel(ids, !all)} hitSlop={6} accessibilityLabel={all ? 'Unselect the group' : 'Select the whole group'}>
+                      <Ionicons name={all ? 'checkbox' : 'square-outline'} size={16} color={all ? BRAND : colors.gray[400]} />
+                    </Pressable>
+                  );
+                })()}
                 <Pressable disabled={typeof b.group.id !== 'number' || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
                   <Text style={{ fontSize: 17, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
                 </Pressable>
@@ -491,6 +511,30 @@ export default function BoardTable({
         )}
       </View>
     </View>
+    {sel.size > 0 && (
+      <View {...glass('capsule')} style={{ position: 'fixed', bottom: 28, left: 0, right: 0, alignSelf: 'center', marginHorizontal: 'auto', width: 'fit-content', zIndex: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white }}>
+        <View style={{ minWidth: 26, height: 26, borderRadius: 13, backgroundColor: BRAND, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{sel.size}</Text>
+        </View>
+        <Text style={{ fontSize: 14, color: colors.gray[800] }}>{sel.size === 1 ? `${word} selected` : `${plural(word)} selected`}</Text>
+        {canAdd && !!onBulkDuplicate && (
+          <Pressable disabled={bulkBusy} onPress={async () => { setBulkBusy(true); await onBulkDuplicate(items.filter((t) => sel.has(t.id))); setBulkBusy(false); setSel(new Set()); }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Ionicons name="copy-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Duplicate</Text>
+          </Pressable>
+        )}
+        {!!onBulkDelete && (
+          <Pressable disabled={bulkBusy} onPress={async () => {
+            const rows = items.filter((t) => sel.has(t.id));
+            const ok = await confirmDialog({ title: `Delete ${rows.length} ${rows.length === 1 ? word.toLowerCase() : plural(word.toLowerCase())}?`, message: 'They go to the recycle bin for 90 days. Ones you may not delete are skipped.', confirmLabel: 'Delete', destructive: true });
+            if (!ok) return;
+            setBulkBusy(true); await onBulkDelete(rows); setBulkBusy(false); setSel(new Set());
+          }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.red[50] : 'transparent' })}>
+            <Ionicons name="trash-outline" size={16} color={colors.red[600]} /><Text style={{ fontSize: 14, color: colors.red[600] }}>Delete</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={() => setSel(new Set())} accessibilityLabel="Clear selection" hitSlop={6}><Ionicons name="close" size={18} color={colors.gray[500]} /></Pressable>
+      </View>
+    )}
     </Metrics.Provider>
   );
 }

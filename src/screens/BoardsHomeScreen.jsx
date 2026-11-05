@@ -13,26 +13,38 @@ import useBoards, { refreshBoards } from '../hooks/useBoards';
 import Modal from '../components/Modal';
 import NewWorkspaceDialog from '../components/board/NewWorkspaceDialog';
 import { showToast } from '../utils/events';
+import { paletteHex } from '../components/board/model';
 
 const SECTOR_ICONS = {
   food: 'restaurant-outline', liquor: 'wine-outline', mining: 'diamond-outline', real_estate: 'business-outline',
   healthcare: 'medkit-outline', software: 'code-slash-outline', other: 'briefcase-outline',
 };
 
-function BoardRow({ board, onPress }) {
+function BoardRow({ board, onPress, subtitle }) {
   const colors = useColors();
   return (
     <Pressable
       onPress={onPress}
       accessibilityLabel={board.name}
-      style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+      style={({ hovered }) => ({
+        width: '31.5%', minWidth: 230, flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm + 2,
+        borderRadius: radius.lg, borderWidth: 1, borderColor: hovered ? BRAND : colors.gray[200], backgroundColor: hovered ? colors.gray[50] : colors.white,
+      })}
     >
-      <Ionicons name={board.icon || 'grid-outline'} size={17} color={colors.gray[600]} />
-      <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, color: colors.gray[900] }}>{board.is_default ? `${board.name} · main board` : board.name}</Text>
+      <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: paletteHex(board.color || 'blue'), alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={board.icon || 'grid-outline'} size={20} color="#fff" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: '600', color: colors.gray[900] }}>{board.name}</Text>
+        <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{subtitle || (board.is_default ? 'Main board' : 'Board')}</Text>
+      </View>
       {board.privacy === 'private' && <Ionicons name="lock-closed-outline" size={14} color={colors.gray[500]} />}
-      <Ionicons name="chevron-forward" size={16} color={colors.gray[400]} />
     </Pressable>
   );
+}
+
+function Grid({ children }) {
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.xs }}>{children}</View>;
 }
 
 function Section({ icon, title, children }) {
@@ -187,6 +199,7 @@ export default function BoardsHomeScreen() {
   const [tree, setTree] = useState(null);
   const [creating, setCreating] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
+  const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
   const isLeader = !!user?.is_leader;
   const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards)).catch(() => setArchived([]));
@@ -206,11 +219,13 @@ export default function BoardsHomeScreen() {
   }, []);
 
   const open = (b) => navigation.navigate('Board', { id: b.id });
-  const personal = boards.filter((b) => b.scope === 'personal');
-  const leadership = boards.filter((b) => b.scope === 'group');
+  const q = query.trim().toLowerCase();
+  const visible = q ? boards.filter((b) => `${b.name} ${b.business_name || ''} ${b.site_name || ''}`.toLowerCase().includes(q)) : boards;
+  const personal = visible.filter((b) => b.scope === 'personal');
+  const leadership = visible.filter((b) => b.scope === 'group');
   const businesses = useMemo(() => {
     const map = new Map();
-    for (const b of boards.filter((x) => x.business_id)) {
+    for (const b of visible.filter((x) => x.business_id)) {
       if (!map.has(b.business_id)) map.set(b.business_id, { id: b.business_id, name: b.business_name, boards: [], sites: new Map() });
       const biz = map.get(b.business_id);
       if (b.site_id) {
@@ -219,7 +234,7 @@ export default function BoardsHomeScreen() {
       } else biz.boards.push(b);
     }
     return [...map.values()];
-  }, [boards]);
+  }, [visible]);
   const sectorOf = (id) => tree?.businesses?.find((x) => x.id === id)?.sector;
 
   return (
@@ -240,28 +255,39 @@ export default function BoardsHomeScreen() {
           <Text style={{ color: '#fff', fontWeight: '600' }}>New board</Text>
         </Pressable>
       </View>
+      <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingBottom: spacing.sm, maxWidth: 980 + 2 * spacing.xl, width: '100%', alignSelf: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: 12, backgroundColor: colors.white }}>
+          <Ionicons name="search" size={16} color={colors.gray[500]} />
+          <TextInput
+            value={query} onChangeText={setQuery} placeholder="Search boards and workspaces" placeholderTextColor={colors.gray[400]} accessibilityLabel="Search boards"
+            style={{ flex: 1, paddingVertical: 9, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+          />
+          {!!query && <Pressable onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={6}><Ionicons name="close-circle" size={16} color={colors.gray[400]} /></Pressable>}
+        </View>
+      </View>
       {loading && !boards.length ? <ActivityIndicator color={BRAND} style={{ marginTop: spacing.xl }} /> : (
         <ScrollView contentContainerStyle={{ padding: desktop ? spacing.xl : spacing.md, paddingTop: 0, gap: spacing.md, paddingBottom: 120, maxWidth: 980, width: '100%', alignSelf: 'center' }}>
           <Section icon="person-outline" title="My boards">
-            {personal.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}
-            {!personal.length && <Text style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, color: colors.gray[500] }}>Boards only you see. Make one with New board.</Text>}
+            <Grid>{personal.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}</Grid>
+            {!personal.length && !q && <Text style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, color: colors.gray[500] }}>Boards only you see. Make one with New board.</Text>}
           </Section>
           {leadership.length > 0 && (
             <Section icon="star-outline" title="Leadership">
-              {leadership.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}
+              <Grid>{leadership.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}</Grid>
             </Section>
           )}
           {businesses.map((biz) => (
             <Section key={biz.id} icon={SECTOR_ICONS[sectorOf(biz.id)] || 'briefcase-outline'} title={biz.name}>
-              {biz.boards.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}
+              <Grid>{biz.boards.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}</Grid>
               {[...biz.sites.values()].map((s) => (
-                <View key={s.name} style={{ paddingLeft: spacing.md }}>
-                  <Text style={{ fontSize: 12, color: colors.gray[500], paddingHorizontal: spacing.md, paddingTop: 6 }}>{s.name}</Text>
-                  {s.boards.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} />)}
+                <View key={s.name}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[500], paddingHorizontal: spacing.sm, paddingTop: 6 }}>{s.name.toUpperCase()}</Text>
+                  <Grid>{s.boards.map((b) => <BoardRow key={b.id} board={b} onPress={() => open(b)} subtitle={s.name} />)}</Grid>
                 </View>
               ))}
             </Section>
           ))}
+          {!!q && !visible.length && <Text style={{ color: colors.gray[500], textAlign: 'center', padding: spacing.lg }}>No board matches "{query}".</Text>}
           {archived === null ? (
             <Pressable onPress={loadArchived} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 }}>
               <Ionicons name="archive-outline" size={15} color={colors.gray[600]} />
