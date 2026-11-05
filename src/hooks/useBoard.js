@@ -194,9 +194,14 @@ export default function useBoard(boardId) {
     } catch (err) { fail(err, 'Could not fill it'); }
   }, [boardId, fail]);
 
+  // What is on its way to the server right now ({ item: 1, groups: 1, columns: 0 ...}): buttons read it to show a
+  // spinner and stay disabled until the answer is back.
+  const [pending, setPending] = useState({});
+  const mark = useCallback((k, d) => setPending((p) => ({ ...p, [k]: Math.max(0, (p[k] || 0) + d) })), []);
   const addItem = useCallback(async (title, { groupId = null, parentId = null, values = undefined, fields = {} } = {}) => {
     const clean = String(title || '').trim();
     if (!clean) return null;
+    mark('item', 1);
     try {
       const res = await api.post(`/boards/${boardId}/items`, { title: clean, group_id: groupId, parent_id: parentId, values, ...fields });
       if (res.data.todo) putItem(res.data.todo);
@@ -204,7 +209,8 @@ export default function useBoard(boardId) {
       reloadSoon(400);
       return res.data.todo || null;
     } catch (err) { fail(err, 'Could not add it'); return null; }
-  }, [boardId, putItem, reloadSoon, fail]);
+    finally { mark('item', -1); }
+  }, [boardId, putItem, reloadSoon, fail, mark]);
 
   // ---- board shape -----------------------------------------------------------------------------------
   const inflight = useRef(new Set());
@@ -212,14 +218,16 @@ export default function useBoard(boardId) {
     // A create (POST) that is still on its way is not sent twice, however many times the button is pressed.
     const key = method === 'post' ? `${method} ${path}` : null;
     if (key) { if (inflight.current.has(key)) return null; inflight.current.add(key); }
+    const kind = path.split('/')[1] || 'board'; // groups, columns, views ... (what is being changed)
+    mark(kind, 1);
     try {
       const res = await api[method](`/boards/${boardId}${path}`, body);
       await load();
       if (refreshList) refreshBoards();
       return res.data;
     } catch (err) { fail(err); return null; }
-    finally { if (key) inflight.current.delete(key); }
-  }, [boardId, load, fail]);
+    finally { if (key) inflight.current.delete(key); mark(kind, -1); }
+  }, [boardId, load, fail, mark]);
 
   const actions = {
     reload: load,
@@ -253,5 +261,5 @@ export default function useBoard(boardId) {
     removeView: (view) => shape('delete', `/views/${view.id}`),
   };
 
-  return { data, error, loading: !data && !error, ...actions };
+  return { data, error, loading: !data && !error, pending, ...actions };
 }

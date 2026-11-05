@@ -1,61 +1,58 @@
-import { useEffect, useRef, useState } from 'react';
-import { View, useWindowDimensions } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSpring, cancelAnimation, Easing } from 'react-native-reanimated';
+import { useEffect } from 'react';
 import { onBusy } from '../utils/busy';
 import { BRAND } from '../theme/theme';
-import { SPRING } from '../theme/motion';
 
 const SHOW_AFTER_MS = 120; // fast requests never flash the bar
-const MIN_SHOW_MS = 350;   // once shown it stays long enough to be seen
+const MIN_SHOW_MS = 400;   // once shown it stays long enough to be seen
+
+const CSS = `
+#th-busybar{position:fixed;top:0;left:0;right:0;height:3px;z-index:2147483646;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .18s ease-out}
+#th-busybar.on{opacity:1}
+#th-busybar>i{position:absolute;top:0;bottom:0;left:0;width:40%;border-radius:2px;background:${BRAND};animation:th-busy 1.05s ease-in-out infinite}
+@keyframes th-busy{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+html.th-busy, html.th-busy *{cursor:progress !important}
+@media (prefers-reduced-motion: reduce){#th-busybar>i{animation-duration:2.4s}}
+`;
 
 /**
  * A thin bar across the top of the screen while something the person did is waiting on the server
- * (every request in api/client.js without `__skipOops`). Without it a slow save looks like nothing happened.
+ * (every request in api/client.js without `__skipOops`), and a "progress" mouse cursor.
+ * It is a plain element on document.body, not a React Native View: react-native-web gives every View
+ * `z-index: 0`, which trapped the old bar under the screens, and it is switched on and off directly by the
+ * busy counter, so no React render (or a busy JS thread) can hold it back.
  */
 export default function BusyBar() {
-  const { width } = useWindowDimensions();
-  const [visible, setVisible] = useState(false);
-  const shownAt = useRef(0);
-  const showTimer = useRef(null);
-  const hideTimer = useRef(null);
-  const x = useSharedValue(-1);
-  const fade = useSharedValue(0);
-
-  useEffect(() => onBusy((n) => {
-    if (n > 0) {
-      clearTimeout(hideTimer.current);
-      if (!visible && !showTimer.current) {
-        showTimer.current = setTimeout(() => { showTimer.current = null; shownAt.current = Date.now(); setVisible(true); }, SHOW_AFTER_MS);
-      }
-    } else {
-      clearTimeout(showTimer.current);
-      showTimer.current = null;
-      const wait = Math.max(0, MIN_SHOW_MS - (Date.now() - shownAt.current));
-      hideTimer.current = setTimeout(() => setVisible(false), visible ? wait : 0);
-    }
-  }), [visible]);
-
   useEffect(() => {
-    if (visible) {
-      fade.value = withSpring(1, SPRING.smooth);
-      x.value = -1;
-      x.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.quad) }), -1, false);
-    } else {
-      fade.value = withSpring(0, SPRING.smooth);
-      const t = setTimeout(() => cancelAnimation(x), 400);
-      return () => clearTimeout(t);
+    if (typeof document === 'undefined') return undefined;
+    if (!document.getElementById('th-busybar-css')) {
+      const style = document.createElement('style');
+      style.id = 'th-busybar-css';
+      style.textContent = CSS;
+      document.head.appendChild(style);
     }
-    return undefined;
-  }, [visible, x, fade]);
+    const bar = document.createElement('div');
+    bar.id = 'th-busybar';
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Working');
+    bar.appendChild(document.createElement('i'));
+    document.body.appendChild(bar);
 
-  const style = useAnimatedStyle(() => ({
-    opacity: fade.value,
-    transform: [{ translateX: x.value * width }, { scaleX: 0.45 }],
-  }));
-
-  return (
-    <View pointerEvents="none" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 100000, overflow: 'hidden' }}>
-      <Animated.View style={[{ height: 3, width: '100%', backgroundColor: BRAND, borderRadius: 2 }, style]} />
-    </View>
-  );
+    let showTimer = null;
+    let hideTimer = null;
+    let shownAt = 0;
+    let on = false;
+    const show = () => { on = true; shownAt = Date.now(); bar.classList.add('on'); document.documentElement.classList.add('th-busy'); };
+    const hide = () => { on = false; bar.classList.remove('on'); document.documentElement.classList.remove('th-busy'); };
+    const off = onBusy((n) => {
+      if (n > 0) {
+        clearTimeout(hideTimer); hideTimer = null;
+        if (!on && !showTimer) showTimer = setTimeout(() => { showTimer = null; show(); }, SHOW_AFTER_MS);
+      } else {
+        clearTimeout(showTimer); showTimer = null;
+        if (on && !hideTimer) hideTimer = setTimeout(() => { hideTimer = null; hide(); }, Math.max(0, MIN_SHOW_MS - (Date.now() - shownAt)));
+      }
+    });
+    return () => { off(); clearTimeout(showTimer); clearTimeout(hideTimer); hide(); bar.remove(); };
+  }, []);
+  return null;
 }

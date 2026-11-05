@@ -16,6 +16,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import DialogHost from './components/DialogHost';
 import ToastHost from './components/ToastHost';
+import BusyBar from './components/BusyBar';
 import AppNavigator from './navigation/AppNavigator';
 
 // Prevent splash screen from auto-hiding so we can control the transition
@@ -129,6 +130,7 @@ function AppRoot() {
                     </ThemeCrossfade>
                   </ErrorBoundary>
                   <ToastHost />
+                  <BusyBar />
                   <DialogHost />
                 </LanguageProvider>
               </NotificationProvider>

@@ -262,7 +262,6 @@ export default function BoardScreen({ route }) {
     const gid = typeof groupId === 'number' ? groupId : (data?.groups[0]?.id ?? null);
     if (taskLock.current) return;
     taskLock.current = true;
-    showToast({ message: `Adding ${word.toLowerCase()}...`, icon: 'hourglass-outline', duration: 1500 });
     try {
       const made = await board.addItem(word, { groupId: gid, fields });
       if (made) { setNameEditId(made.id); applyDefaults(made); }
@@ -273,7 +272,6 @@ export default function BoardScreen({ route }) {
     if (groupLock.current) return;
     groupLock.current = true;
     const colorsList = ['blue', 'green', 'orange', 'purple', 'pink', 'aquamarine', 'red', 'yellow'];
-    showToast({ message: 'Adding group...', icon: 'hourglass-outline', duration: 1500 });
     try {
       const made = await board.addGroup({ name: 'New Group', color: colorsList[(data?.groups.length || 0) % colorsList.length] });
       if (made) showToast({ message: 'Group added. Click its name to rename or delete it.', tone: 'success', icon: 'checkmark-circle' });
@@ -365,6 +363,7 @@ export default function BoardScreen({ route }) {
             canAdd={data.access.add} kind={view.kind}
             onNew={() => newTask()}
             onNewGroup={newGroup}
+            busyNew={!!board.pending.item} busyGroup={!!board.pending.groups}
             searchCols={searchCols} onSearchCols={setSearchCols}
             items={items} canManage={data.access.manage}
             shownCount={items.filter((t) => !t.parent_id).length} totalCount={data.items.filter((t) => !t.parent_id).length}
@@ -400,10 +399,11 @@ export default function BoardScreen({ route }) {
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}
-            onAddColumn={(anchor) => setMenu({ type: 'addColumn', anchor })}
+            onAddColumn={(anchor, groupId) => setMenu({ type: 'addColumn', anchor, groupId })}
             onGroupMenu={(anchor, group) => setMenu({ type: 'group', anchor, group })}
             onAddItem={addItem}
             onAddGroup={newGroup}
+            addingGroup={!!board.pending.groups}
             focus={focus} setFocus={setFocus}
             pinned={vs.pinned} headerHeight={vs.header_height} itemHeight={vs.item_height}
             colorOf={colorOf}
@@ -428,6 +428,7 @@ export default function BoardScreen({ route }) {
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenItem={openItem} onOpenCell={openCell} onAddItem={addItem}
             onAddGroup={newGroup}
+            addingGroup={!!board.pending.groups}
             onGroupMenu={data.access.add ? (anchor, group) => setMenu({ type: 'group', anchor, group }) : null}
           />
         )}
@@ -436,7 +437,11 @@ export default function BoardScreen({ route }) {
       <CellEditorHost editing={editing} onClose={() => setEditing(null)} board={data} people={people} actions={board} />
 
       {menu?.type === 'addColumn' && (
-        <AddColumnMenu anchor={menu.anchor} catalog={catalog} columns={columnsById} onPick={(spec) => board.addColumn(menu.after ? { ...spec, after: menu.after } : spec)} onClose={() => setMenu(null)} />
+        <AddColumnMenu
+          anchor={menu.anchor} catalog={catalog} columns={columnsById} onClose={() => setMenu(null)}
+          groupName={menu.groupId ? data.groups.find((g) => g.id === menu.groupId)?.name : null}
+          onPick={(spec, opts) => board.addColumn({ ...spec, ...(menu.after ? { after: menu.after } : null), ...(opts?.onlyGroup && menu.groupId && !spec.system_key ? { group_id: menu.groupId } : null) })}
+        />
       )}
       {menu?.type === 'column' && (
         <ColumnMenu
@@ -444,7 +449,7 @@ export default function BoardScreen({ route }) {
           onSort={(dir) => changeVs({ sort: { column_id: menu.column.id, dir } })}
           onGroupBy={() => changeVs({ group_by: String(menu.column.id) })}
           onHide={() => changeVs({ hidden: [...vs.hidden, menu.column.id] })}
-          onAddRight={(a) => setMenu({ type: 'addColumn', anchor: a, after: menu.column.id })}
+          onAddRight={(a) => setMenu({ type: 'addColumn', anchor: a, after: menu.column.id, groupId: menu.column.group_id || null })}
           onRename={(title) => board.updateColumn(menu.column, { title })}
           onRemove={() => board.removeColumn(menu.column)}
           onToggleMobile={() => board.updateColumn(menu.column, { settings: { show_on_mobile: !menu.column.settings?.show_on_mobile } })}

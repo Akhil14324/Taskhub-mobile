@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import api from '../../api/client';
 import useBoards from '../../hooks/useBoards';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -35,11 +35,13 @@ const ESSENTIALS = ['status', 'dropdown', 'text', 'date', 'person', 'numbers'];
 const SUPER_USEFUL = ['files', 'long_text', 'board_relation', 'formula', 'mirror', 'timeline', 'checkbox', 'tags', 'ai'];
 const KIND_COLORS = { status: '#00c875', dropdown: '#00c875', text: '#fdab3d', date: '#a25ddc', person: '#579bfc', numbers: '#fdab3d', files: '#df2f4a', long_text: '#784bd1', board_relation: '#4eccc6', formula: '#4eccc6', mirror: '#4eccc6', timeline: '#a25ddc', checkbox: '#00c875', tags: '#ff158a', ai: '#a25ddc' };
 
-export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
+export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose, groupName }) {
   const colors = useColors();
   const [q, setQ] = useState('');
   const [more, setMore] = useState(false);
   const [draft, setDraft] = useState(null); // a picked type waiting for its heading (and options)
+  const [busy, setBusy] = useState(false);
+  const [onlyGroup, setOnlyGroup] = useState(!!groupName); // opened from a group's "+": the column is that group's own
   if (!catalog) return null;
   const shown = new Set(columns.map((c) => c.system_key).filter(Boolean));
   const builtIns = BUILT_IN.filter((k) => catalog.system_columns[k] && !shown.has(k));
@@ -71,11 +73,13 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
   const rest = kinds(COMMON).filter((k) => !ESSENTIALS.includes(k) && !SUPER_USEFUL.includes(k));
   if (draft) {
     const def = catalog.kinds[draft.kind];
-    const create = () => {
+    const create = async () => {
+      if (busy) return;
       const title = draft.title.trim() || def.label;
       const spec = { kind: draft.kind, title };
       if (draft.kind === 'dropdown') spec.settings = { multiple: draft.multiple, options: draft.options.filter((o) => o.label.trim()) };
-      onPick(spec);
+      setBusy(true);
+      try { await onPick(spec, { onlyGroup: !!groupName && onlyGroup }); } finally { setBusy(false); }
       onClose();
     };
     return (
@@ -104,8 +108,15 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
             <Text style={{ fontSize: 11, color: colors.gray[500] }}>You can rename, recolour or add options later from the column menu or by clicking a cell.</Text>
           </View>
         )}
-        <Pressable onPress={create} style={{ marginTop: spacing.md, backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '600' }}>Create column</Text>
+        {!!groupName && (
+          <View style={{ marginTop: spacing.sm }}>
+            <Toggle on={onlyGroup} label={`Only in "${groupName}"`} onPress={() => setOnlyGroup(!onlyGroup)} />
+            <Text style={{ fontSize: 11, color: colors.gray[500] }}>{onlyGroup ? 'The other groups do not get this column.' : 'Every group of the board gets this column.'}</Text>
+          </View>
+        )}
+        <Pressable disabled={busy} onPress={create} style={{ marginTop: spacing.md, backgroundColor: colors.brand[600], opacity: busy ? 0.6 : 1, borderRadius: radius.md, paddingVertical: 9, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, cursor: busy ? 'progress' : 'pointer' }}>
+          {busy && <ActivityIndicator size="small" color="#fff" />}
+          <Text style={{ color: '#fff', fontWeight: '600' }}>{busy ? 'Creating...' : 'Create column'}</Text>
         </Pressable>
       </Popover>
     );
@@ -126,7 +137,7 @@ export function AddColumnMenu({ anchor, catalog, columns, onPick, onClose }) {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {builtIns.filter((k) => match(catalog.system_columns[k].title)).map((k) => {
                 const def = catalog.system_columns[k];
-                return <Tile key={k} label={def.title} icon={catalog.kinds[def.kind]?.icon || 'ellipse-outline'} color={colors.gray[500]} onPress={() => { onPick({ system_key: k }); onClose(); }} />;
+                return <Tile key={k} label={def.title} icon={catalog.kinds[def.kind]?.icon || 'ellipse-outline'} color={colors.gray[500]} onPress={async () => { if (busy) return; setBusy(true); try { await onPick({ system_key: k }); } finally { setBusy(false); } onClose(); }} />;
               })}
             </View>
           </>

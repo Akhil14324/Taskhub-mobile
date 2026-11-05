@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
@@ -111,7 +111,7 @@ function AddLine({ word, onAdd }) {
 }
 
 /** The board on a phone: each group is a titled section of cards, collapsible, with an add line. */
-export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup, onGroupMenu }) {
+export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup, onGroupMenu, addingGroup }) {
   const colors = useColors();
   const blocks = useMemo(() => groupBlocks(board.groups, items), [board.groups, items]);
   const word = itemWordOf(board);
@@ -148,9 +148,9 @@ export default function BoardCards({ board, items, people, collapsed, onToggleGr
         );
       })}
       {board.access?.add && (
-        <Pressable onPress={onAddGroup} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}>
-          <Ionicons name="add-circle-outline" size={18} color={colors.brand[600]} />
-          <Text style={{ fontSize: 15, color: colors.brand[600], fontWeight: '500' }}>Add new group</Text>
+        <Pressable disabled={!!addingGroup} onPress={onAddGroup} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, opacity: addingGroup ? 0.6 : 1 }}>
+          {addingGroup ? <ActivityIndicator size="small" color={colors.brand[600]} /> : <Ionicons name="add-circle-outline" size={18} color={colors.brand[600]} />}
+          <Text style={{ fontSize: 15, color: colors.brand[600], fontWeight: '500' }}>{addingGroup ? 'Adding group...' : 'Add new group'}</Text>
         </Pressable>
       )}
     </ScrollView>

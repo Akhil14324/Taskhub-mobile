@@ -1,5 +1,5 @@
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
@@ -235,7 +235,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
  */
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
-  onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
+  onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, addingGroup, focus, setFocus,
   pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onResizeColumn,
 }) {
   const colors = useColors();
@@ -271,12 +271,29 @@ export default function BoardTable({
   // The name block always stays in view when the table scrolls sideways, plus the first `pinned` columns.
   const NAME_BLOCK = nameW + UPD_W;
   const stickyName = { position: 'sticky', left: 0, zIndex: 4 };
-  const lefts = useMemo(() => { let x = NAME_BLOCK; return columns.map((c) => { const l = x; x += c.width; return l; }); }, [columns, NAME_BLOCK]);
-  const stickyCol = (ci) => (ci < pinned ? { position: 'sticky', left: lefts[ci], zIndex: 3 } : null);
   const canManage = !!access?.manage;
   const canAdd = !!access?.add;
   const word = itemWordOf(board);
   const progressMap = useMemo(() => progressMapOf(board.items), [board.items]);
+  // A column with a group_id belongs to that group only; the others are shown in every group.
+  // Each group lays out its own columns: { c, ci (index in the board's list, for keyboard moves), sticky }.
+  const layoutOf = useMemo(() => {
+    const cache = new Map();
+    return (gid) => {
+      const key = gid ?? 'none';
+      if (cache.has(key)) return cache.get(key);
+      let x = NAME_BLOCK; let vi = 0;
+      const list = [];
+      columns.forEach((c, ci) => {
+        if (c.group_id && c.group_id !== gid) return;
+        list.push({ c, ci, sticky: vi < pinned ? { position: 'sticky', left: x, zIndex: 3 } : null });
+        x += c.width; vi += 1;
+      });
+      const out = { list, cols: list.map((e) => e.c), width: x + ADD_W };
+      cache.set(key, out);
+      return out;
+    };
+  }, [columns, NAME_BLOCK, pinned]);
   const tableWidth = nameW + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
@@ -312,7 +329,13 @@ export default function BoardTable({
       const colIdx = focus.col; // -1 = name
       const move = (dr, dc) => {
         const nr = Math.min(Math.max(rowIdx + dr, 0), r.length - 1);
-        const nc = Math.min(Math.max(colIdx + dc, -1), columns.length - 1);
+        // Skip columns that belong to another group than the row's.
+        const gid = r[nr]?.business_section_id ?? null;
+        const shows = (ci) => ci === -1 || (columns[ci] && (!columns[ci].group_id || columns[ci].group_id === gid));
+        let nc = Math.min(Math.max(colIdx + dc, -1), columns.length - 1);
+        const step = dc || 1;
+        while (!shows(nc) && nc > -1 && nc < columns.length - 1) nc += step;
+        if (!shows(nc)) nc = -1;
         if (r[nr]) setFocus({ itemId: r[nr].id, col: nc });
         e.preventDefault();
       };
@@ -413,8 +436,8 @@ export default function BoardTable({
               )}
             </Pressable>
           </View>
-          {columns.map((c, ci) => (
-            <View key={c.id} style={[{ width: c.width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200] }, stickyCol(ci) ? [stickyCol(ci), { backgroundColor: subBg }] : null]}>
+          {layoutOf(block.group.id).list.map(({ c, sticky }) => (
+            <View key={c.id} style={[{ width: c.width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200] }, sticky ? [sticky, { backgroundColor: subBg }] : null]}>
               {subIds.has(c.id) ? (
                 <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
                   onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
@@ -523,8 +546,8 @@ export default function BoardTable({
             )}
           </Pressable>
           </View>
-          {columns.map((c, ci) => (
-            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }} style={stickyCol(ci) ? [stickyCol(ci), { backgroundColor: colors.white, height: rowH }] : undefined}>
+          {layoutOf(block.group.id).list.map(({ c, ci, sticky }) => (
+            <View key={c.id} dataSet={{ cell: `${t.id}:${ci}` }} style={sticky ? [sticky, { backgroundColor: colors.white, height: rowH }] : undefined}>
               <Cell
                 item={t} column={c} values={values} people={people} width={c.width}
                 focused={focusedHere && focus.col === ci}
@@ -547,7 +570,7 @@ export default function BoardTable({
         {blocks.map((b) => {
           const isCollapsed = collapsed.has(b.group.id);
           return (
-            <View key={b.group.id ?? 'none'} style={{ marginBottom: spacing.xl, width: tableWidth }}>
+            <View key={b.group.id ?? 'none'} style={{ marginBottom: spacing.xl, width: layoutOf(b.group.id).width }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 }}>
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
@@ -575,11 +598,11 @@ export default function BoardTable({
                         <ResizeGrip onResize={(w, final) => resizeColumn('name', w, final)} startWidth={nameW} height={headH} />
                       </View>
                     </View>
-                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} onRename={onRenameColumn} />)}
+                    {layoutOf(b.group.id).list.map(({ c, sticky }) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={sticky} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} onRename={onRenameColumn} />)}
                     <Pressable
                       disabled={!canManage}
-                      onPress={(e) => onAddColumn(anchorOf(e))}
-                      accessibilityLabel="Add column"
+                      onPress={(e) => onAddColumn(anchorOf(e), typeof b.group.id === 'number' ? b.group.id : null)}
+                      accessibilityLabel={`Add column to ${b.group.name}`}
                       style={({ hovered }) => ({ width: ADD_W, height: headH, alignItems: 'center', justifyContent: 'center', backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
                     >
                       {canManage && <Ionicons name="add" size={18} color={colors.gray[600]} />}
@@ -595,16 +618,16 @@ export default function BoardTable({
                     </Pressable>
                   )}
                   {canAdd && <AddItemRow color={b.group.color} word={word} width={nameW + UPD_W} onAdd={(title) => onAddItem(title, b.group.id)} />}
-                  <SummaryRow items={b.top} columns={columns} values={values} colors={colors} nameWidth={nameW + UPD_W} />
+                  <SummaryRow items={b.top} columns={layoutOf(b.group.id).cols} values={values} colors={colors} nameWidth={nameW + UPD_W} />
                 </View>
               )}
             </View>
           );
         })}
         {canAdd && (
-          <Pressable onPress={onAddGroup} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : colors.white })}>
-            <Ionicons name="add" size={16} color={colors.gray[700]} />
-            <Text style={{ fontSize: 14, color: colors.gray[700] }}>Add new group</Text>
+          <Pressable disabled={!!addingGroup} onPress={onAddGroup} accessibilityState={{ busy: !!addingGroup, disabled: !!addingGroup }} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], opacity: addingGroup ? 0.6 : 1, cursor: addingGroup ? 'progress' : 'pointer', backgroundColor: hovered && !addingGroup ? colors.gray[100] : colors.white })}>
+            {addingGroup ? <ActivityIndicator size="small" color={colors.gray[700]} /> : <Ionicons name="add" size={16} color={colors.gray[700]} />}
+            <Text style={{ fontSize: 14, color: colors.gray[700] }}>{addingGroup ? 'Adding group...' : 'Add new group'}</Text>
             <Hint text="A group is a section of the board, like To-Do or Completed. Tasks live inside groups. You can rename, colour, move or duplicate a group from its name." size={14} />
           </Pressable>
         )}

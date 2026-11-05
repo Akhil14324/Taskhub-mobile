@@ -84,4 +84,21 @@ api.interceptors.response.use(
 );
 
 export { API_URL };
+// One click = one create. While a POST is on its way, the same POST (same address, same body) is not sent again:
+// the repeat gets the first one's answer. This is what stops "New group" pressed five times making five groups.
+// Toggles and reactions are left out (pressing them twice on purpose means "undo"), and so are uploads.
+const inflight = new Map();
+const REPEATABLE = /\/(toggle|react|vote)(\/|$|\?)/;
+const rawPost = api.post.bind(api);
+api.post = (url, data, config) => {
+  const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
+  if (isForm || config?.__allowRepeat || REPEATABLE.test(url)) return rawPost(url, data, config);
+  let key;
+  try { key = `${url}\n${JSON.stringify(data ?? null)}`; } catch { return rawPost(url, data, config); }
+  if (inflight.has(key)) return inflight.get(key);
+  const p = rawPost(url, data, config).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+};
+
 export default api;

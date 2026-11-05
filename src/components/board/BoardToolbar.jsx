@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
@@ -135,7 +135,7 @@ function FilterColumn({ title, options, picked, onToggle, onAll }) {
  * and the "..." menu. `vs` is the view's state; `onChange(patch)` saves a part of it.
  */
 export default function BoardToolbar({
-  data, vs, onChange, people, search, onSearch, searchCols, onSearchCols, word, onNew, onNewGroup, onImport, desktop, canAdd,
+  data, vs, onChange, people, search, onSearch, searchCols, onSearchCols, word, onNew, onNewGroup, onImport, desktop, canAdd, busyNew, busyGroup,
   kind = 'table', shownCount, totalCount, onSaveAsView, items = [], canManage,
 }) {
   const colors = useColors();
@@ -176,11 +176,14 @@ export default function BoardToolbar({
         {canAdd && (
           <View style={{ flexDirection: 'row', marginRight: spacing.sm }}>
             <Pressable
+              disabled={!!busyNew}
               onPress={(e) => onNew(anchorOf(e))}
               accessibilityLabel={`New ${lower}. Adds a ${lower} to the first group.`}
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: BRAND, paddingHorizontal: spacing.md, paddingVertical: 8, borderTopLeftRadius: radius.md, borderBottomLeftRadius: radius.md }}
+              accessibilityState={{ busy: !!busyNew, disabled: !!busyNew }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BRAND, opacity: busyNew ? 0.7 : 1, cursor: busyNew ? 'progress' : 'pointer', paddingHorizontal: spacing.md, paddingVertical: 8, borderTopLeftRadius: radius.md, borderBottomLeftRadius: radius.md }}
             >
-              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>New {lower}</Text>
+              {busyNew && <ActivityIndicator size="small" color="#fff" />}
+              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{busyNew ? 'Adding...' : `New ${lower}`}</Text>
             </Pressable>
             <Pressable
               onPress={open('new')}
@@ -215,7 +218,7 @@ export default function BoardToolbar({
         <Popover visible anchor={pop.anchor} onClose={close} width={260}>
           <Item icon="add-circle-outline" label={`New ${lower}`} onPress={() => { const a = pop.anchor; close(); onNew(a); }}
             right={<Hint text={`Adds a ${lower} to the first group and lets you type its name at once.`} />} />
-          <Item icon="layers-outline" label="New group" onPress={() => { close(); onNewGroup(); }}
+          <Item icon="layers-outline" label={busyGroup ? 'Adding group...' : 'New group'} onPress={() => { if (busyGroup) return; close(); onNewGroup(); }}
             right={<Hint text="A group is a section of the board, like To-Do or Completed. It is made at once; click its name to rename it." />} />
           <Item icon="cloud-upload-outline" label={`Import ${lower}s from a file`} onPress={() => { close(); onImport(); }}
             right={<Hint text="Bring many tasks in from a CSV file. You see what will happen before anything is added." />} />
