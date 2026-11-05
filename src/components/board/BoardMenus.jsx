@@ -323,7 +323,7 @@ function ColumnSettings({ column, columns, onSave }) {
   );
 }
 
-export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchive, onDuplicate, onClose }) {
+export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchive, onDuplicate, onDelete, onClose }) {
   const [stage, setStage] = useState('menu');
   return (
     <Popover visible anchor={anchor} onClose={onClose} width={260}>
@@ -342,6 +342,18 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
                 onClose();
                 const ok = await confirmDialog({ title: `Archive "${group.name}"?`, message: 'The group is hidden. Its items stay where they are and nothing is deleted.', confirmLabel: 'Archive' });
                 if (ok) onArchive();
+              }}
+            />
+          )}
+          {canManage && !!onDelete && (
+            <MenuRow
+              icon="trash-outline"
+              label="Delete group"
+              danger
+              onPress={async () => {
+                onClose();
+                const ok = await confirmDialog({ title: `Delete "${group.name}"?`, message: 'The group goes. Its tasks are not deleted; they move to "No group".', confirmLabel: 'Delete', destructive: true });
+                if (ok) onDelete();
               }}
             />
           )}

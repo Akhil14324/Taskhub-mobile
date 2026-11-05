@@ -207,13 +207,18 @@ export default function useBoard(boardId) {
   }, [boardId, putItem, reloadSoon, fail]);
 
   // ---- board shape -----------------------------------------------------------------------------------
+  const inflight = useRef(new Set());
   const shape = useCallback(async (method, path, body, { refreshList = false } = {}) => {
+    // A create (POST) that is still on its way is not sent twice, however many times the button is pressed.
+    const key = method === 'post' ? `${method} ${path}` : null;
+    if (key) { if (inflight.current.has(key)) return null; inflight.current.add(key); }
     try {
       const res = await api[method](`/boards/${boardId}${path}`, body);
       await load();
       if (refreshList) refreshBoards();
       return res.data;
     } catch (err) { fail(err); return null; }
+    finally { if (key) inflight.current.delete(key); }
   }, [boardId, load, fail]);
 
   const actions = {
@@ -240,6 +245,7 @@ export default function useBoard(boardId) {
     orderLabels: (col, ids) => shape('put', `/columns/${col.id}/labels/order`, { ids }),
     addGroup: (group) => shape('post', '/groups', group),
     updateGroup: (group, patch) => shape('patch', `/groups/${group.id}`, patch),
+    removeGroup: (group) => shape('delete', `/groups/${group.id}`),
     duplicateGroup: (group) => shape('post', `/groups/${group.id}/duplicate`, { with_items: true }),
     orderGroups: (ids) => shape('put', '/groups/order', { ids }),
     addView: (view) => shape('post', '/views', view),

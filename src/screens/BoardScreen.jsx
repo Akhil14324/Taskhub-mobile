@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -256,14 +256,28 @@ export default function BoardScreen({ route }) {
     }
   }, [vs.defaults, data, board]);
   // New task: made at once in the first group (or the one that has the focus) and its name is open for typing.
+  const taskLock = useRef(false);
+  const groupLock = useRef(false);
   const newTask = useCallback(async (anchor, groupId, fields) => {
     const gid = typeof groupId === 'number' ? groupId : (data?.groups[0]?.id ?? null);
-    const made = await board.addItem(word, { groupId: gid, fields });
-    if (made) { setNameEditId(made.id); applyDefaults(made); }
+    if (taskLock.current) return;
+    taskLock.current = true;
+    showToast({ message: `Adding ${word.toLowerCase()}...`, icon: 'hourglass-outline', duration: 1500 });
+    try {
+      const made = await board.addItem(word, { groupId: gid, fields });
+      if (made) { setNameEditId(made.id); applyDefaults(made); }
+    } finally { taskLock.current = false; }
   }, [board, data, word, applyDefaults]);
+  // One click makes one group: further clicks are ignored until the server has answered.
   const newGroup = useCallback(async () => {
+    if (groupLock.current) return;
+    groupLock.current = true;
     const colorsList = ['blue', 'green', 'orange', 'purple', 'pink', 'aquamarine', 'red', 'yellow'];
-    await board.addGroup({ name: 'New Group', color: colorsList[(data?.groups.length || 0) % colorsList.length] });
+    showToast({ message: 'Adding group...', icon: 'hourglass-outline', duration: 1500 });
+    try {
+      const made = await board.addGroup({ name: 'New Group', color: colorsList[(data?.groups.length || 0) % colorsList.length] });
+      if (made) showToast({ message: 'Group added. Click its name to rename or delete it.', tone: 'success', icon: 'checkmark-circle' });
+    } finally { groupLock.current = false; }
   }, [board, data]);
   const addItem = useCallback(async (title, groupId, fields) => {
     const made = await board.addItem(title, { groupId: typeof groupId === 'number' ? groupId : null, fields });
@@ -397,6 +411,7 @@ export default function BoardScreen({ route }) {
             onRenameItem={(item, title) => board.updateFields(item, { title })}
             onSetDone={(item) => board.setStatus(item, item.is_done ? 'todo' : 'done')}
             onResizeColumn={(column, width) => board.updateColumn(column, { width })}
+            onRenameColumn={(column, title) => board.updateColumn(column, { title })}
             onBulkDelete={async (rows) => {
               let n = 0;
               for (const t of rows) { if (!t.permissions?.can_delete) continue; try { await api.delete(`/todos/${t.id}`, { __skipOops: true }); n += 1; } catch { /* skipped */ } }
@@ -452,6 +467,10 @@ export default function BoardScreen({ route }) {
           onColor={(color) => board.updateGroup(menu.group, { color })}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
           onDuplicate={data.access.add && data.board.kind !== 'my_todos' ? () => board.duplicateGroup(menu.group) : null}
+          onDelete={async () => {
+            await board.removeGroup(menu.group);
+            showToast({ message: `Deleted "${menu.group.name}". Its tasks are kept.`, icon: 'trash' });
+          }}
         />
       )}
       {menu?.type === 'more' && (

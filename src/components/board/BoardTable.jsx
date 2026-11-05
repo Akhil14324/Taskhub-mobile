@@ -132,20 +132,33 @@ function ResizeGrip({ onResize, startWidth, height }) {
   );
 }
 
-function HeaderCell({ column, canManage, onMenu, width, sticky, onResize }) {
+function HeaderCell({ column, canManage, onMenu, width, sticky, onResize, onRename }) {
   const colors = useColors();
   const { headH } = useContext(Metrics);
   const hint = column.description || COLUMN_HINTS[column.kind];
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(column.title);
+  const finish = (save) => { setEditing(false); const t = text.trim(); if (save && t && t !== column.title) onRename?.(column, t); else setText(column.title); };
   return (
     <View style={[{ width, height: headH, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }, sticky && { backgroundColor: colors.white }, sticky]}>
+      {editing ? (
+        <TextInput
+          autoFocus selectTextOnFocus value={text} onChangeText={setText} onBlur={() => finish(true)}
+          onKeyPress={(e) => { if (e.nativeEvent.key === 'Enter') finish(true); else if (e.nativeEvent.key === 'Escape') finish(false); }}
+          style={{ flex: 1, height: headH - 10, marginHorizontal: 4, paddingHorizontal: 6, fontSize: 13, fontWeight: '500', textAlign: 'center', color: colors.gray[900], borderWidth: 1, borderColor: colors.brand[400], borderRadius: radius.sm, outlineStyle: 'none' }}
+        />
+      ) : (
       <Pressable
         disabled={!canManage}
         onPress={(e) => onMenu(e, column)}
+        onLongPress={() => { setText(column.title); setEditing(true); }}
+        delayLongPress={350}
         accessibilityLabel={`${column.title} column`}
         style={({ hovered }) => ({ flexShrink: 1, height: headH, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: hovered && canManage ? colors.gray[100] : 'transparent' })}
       >
         <Text numberOfLines={Math.round(headH / 20)} style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500', textAlign: 'center' }}>{column.title}</Text>
       </Pressable>
+      )}
       {!!hint && <Hint text={hint} size={14} style={{ marginRight: 6 }} />}
       {!!onResize && <ResizeGrip onResize={(w, final) => onResize(column, w, final)} startWidth={width} height={headH} />}
     </View>
@@ -214,7 +227,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
  */
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
-  onColumnMenu, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
+  onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, focus, setFocus,
   pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onResizeColumn,
 }) {
   const colors = useColors();
@@ -554,7 +567,7 @@ export default function BoardTable({
                         <ResizeGrip onResize={(w, final) => resizeColumn('name', w, final)} startWidth={nameW} height={headH} />
                       </View>
                     </View>
-                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} />)}
+                    {columns.map((c, ci) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={stickyCol(ci)} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} onRename={onRenameColumn} />)}
                     <Pressable
                       disabled={!canManage}
                       onPress={(e) => onAddColumn(anchorOf(e))}
