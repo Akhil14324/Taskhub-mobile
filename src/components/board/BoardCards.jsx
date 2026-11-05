@@ -1,6 +1,5 @@
 import { memo, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
-import { anchorOf } from './Popover';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
