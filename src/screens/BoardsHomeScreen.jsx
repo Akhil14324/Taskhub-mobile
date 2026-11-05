@@ -11,6 +11,7 @@ import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useBoards, { refreshBoards } from '../hooks/useBoards';
 import Modal from '../components/Modal';
+import NewWorkspaceDialog from '../components/board/NewWorkspaceDialog';
 import { showToast } from '../utils/events';
 
 const SECTOR_ICONS = {
@@ -185,6 +186,7 @@ export default function BoardsHomeScreen() {
   const { boards, loading } = useBoards();
   const [tree, setTree] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [creatingSpace, setCreatingSpace] = useState(false);
   const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
   const isLeader = !!user?.is_leader;
   const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards)).catch(() => setArchived([]));
@@ -227,6 +229,12 @@ export default function BoardsHomeScreen() {
           <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Back" hitSlop={8}><Ionicons name="chevron-back" size={22} color={colors.gray[700]} /></Pressable>
         )}
         <Text style={{ flex: 1, fontSize: desktop ? 26 : 22, fontWeight: '700', color: colors.gray[900] }}>Boards</Text>
+        {isLeader && (
+          <Pressable onPress={() => setCreatingSpace(true)} accessibilityLabel="New workspace" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Ionicons name="business-outline" size={16} color={colors.gray[700]} />
+            <Text style={{ color: colors.gray[800], fontWeight: '600' }}>New workspace</Text>
+          </Pressable>
+        )}
         <Pressable {...glass('accent')} onPress={() => setCreating(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BRAND, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md }}>
           <Ionicons name="add" size={17} color="#fff" />
           <Text style={{ color: '#fff', fontWeight: '600' }}>New board</Text>
@@ -273,6 +281,10 @@ export default function BoardsHomeScreen() {
           )}
         </ScrollView>
       )}
+      <NewWorkspaceDialog
+        visible={creatingSpace} onClose={() => setCreatingSpace(false)}
+        onCreated={(biz, board) => { setCreatingSpace(false); showToast({ message: `${biz.name} is ready`, tone: 'success' }); if (board) open(board); }}
+      />
       <NewBoardDialog
         visible={creating} onClose={() => setCreating(false)} tree={tree} isLeader={isLeader}
         onCreated={(b) => { setCreating(false); open(b); }}
