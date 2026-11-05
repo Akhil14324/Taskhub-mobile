@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable } from 'react-native';
+import { isSharedTodo } from '../utils/todoMeta';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
@@ -203,20 +204,30 @@ export default function PersonMonitorScreen() {
   );
 }
 
-/** A to-do and its sub-tasks, each level indented under the one above. */
+/** A to-do and its sub-tasks, each level indented under the one above, with a line down the side and a fold button. */
 function TodoBranch({ todo, depth, childrenOf, progress, personId, now, onOpen }) {
+  const colors = useColors();
   const kids = childrenOf.get(todo.id) || [];
+  const [folded, setFolded] = useState(false);
   return (
     <>
-      <TodoRow todo={todo} depth={depth} subCount={kids.length} progress={kids.length ? progress.get(todo.id) : null} personId={personId} now={now} onPress={() => onOpen(todo.id)} />
-      {depth < 4 && kids.map((k) => (
-        <TodoBranch key={k.id} todo={k} depth={depth + 1} childrenOf={childrenOf} progress={progress} personId={personId} now={now} onOpen={onOpen} />
-      ))}
+      <TodoRow
+        todo={todo} depth={depth} subCount={kids.length} progress={kids.length ? progress.get(todo.id) : null} personId={personId} now={now}
+        onPress={() => onOpen(todo.id)} folded={folded} onFold={kids.length ? () => setFolded((f) => !f) : null}
+      />
+      {!!kids.length && !folded && (
+        <View style={{ position: 'relative' }}>
+          <View pointerEvents="none" style={{ position: 'absolute', left: spacing.lg + (depth + 1) * 18 - 11, top: 0, bottom: 10, width: 2, borderRadius: 1, backgroundColor: colors.gray[200] }} />
+          {kids.map((k) => (
+            <TodoBranch key={k.id} todo={k} depth={depth + 1} childrenOf={childrenOf} progress={progress} personId={personId} now={now} onOpen={onOpen} />
+          ))}
+        </View>
+      )}
     </>
   );
 }
 
-function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now, onPress }) {
+function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now, onPress, folded = false, onFold = null }) {
   const colors = useColors();
   const health = todoHealth(todo, now);
   const m = todoMetrics(todo, now);
@@ -236,6 +247,11 @@ function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now
     }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        {!!onFold && (
+          <Pressable onPress={onFold} hitSlop={8} accessibilityLabel={folded ? 'Show steps' : 'Hide steps'} style={{ marginTop: 1 }}>
+            <Ionicons name={folded ? 'chevron-forward' : 'chevron-down'} size={16} color={colors.gray[600]} />
+          </Pressable>
+        )}
         <Ionicons name={STATUS[todo.is_done ? 'done' : todo.status].icon} size={18} color={colors.gray[500]} style={{ marginTop: 1 }} />
         <Text style={{ flex: 1, fontSize: fontSize.base, fontWeight: '600', color: todo.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: todo.is_done ? 'line-through' : 'none' }} numberOfLines={2}>{todo.title}</Text>
       </View>
@@ -244,7 +260,8 @@ function TodoRow({ todo, depth = 0, subCount = 0, progress = null, personId, now
         {!!pill && <HealthPill level={pill.level} label={pill.label} icon={pill.icon} compact />}
         <DueChip date={todo.due_date} time={todo.due_time} recurrence={todo.recurrence} done={todo.is_done} compact />
                 {!mine && !!todo.assignee_name && <Text style={{ fontSize: 11, color: colors.gray[500] }}>→ {todo.assignee_name.split(' ')[0]}</Text>}
-        {mine && todo.members?.length > 1 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>shared</Text>}
+        {mine && isSharedTodo(todo) && <Text style={{ fontSize: 11, color: colors.gray[500] }}>shared</Text>}
+        {subCount > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{folded ? `${subCount} ${subCount === 1 ? 'step' : 'steps'} hidden` : `${subCount} ${subCount === 1 ? 'step' : 'steps'}`}</Text>}
         {todo.comment_count > 0 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>{todo.comment_count} comments</Text>}
         {!!todo.business_name && <Text style={{ fontSize: 11, color: colors.gray[500], fontWeight: '600' }}>{todo.business_name}</Text>}
         {/* A step that is not done, or a task that has stalled: ask the person why, right here. */}

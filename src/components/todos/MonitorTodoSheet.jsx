@@ -12,6 +12,7 @@ import { Avatar, DueChip } from '../kit';
 import { STATUS, BLOCKER_KINDS, formatSeconds, healthColor } from '../../utils/timeline';
 import { showToast } from '../../utils/events';
 import { glass } from '../../theme/glass';
+import AskWhy from './AskWhy';
 
 const QUICK_QUESTIONS = [
   'Why is this taking so long?',
@@ -34,18 +35,21 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
   const [error, setError] = useState(null);
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
+  const [trail, setTrail] = useState([]); // steps opened from this sheet, so Back returns to the task above
+  const currentId = trail.length ? trail[trail.length - 1] : todoId;
 
   const load = useCallback(async () => {
-    if (!todoId) return;
+    if (!currentId) return;
     try {
-      const res = await api.get(`/monitor/todos/${todoId}`, { __skipOops: true });
+      const res = await api.get(`/monitor/todos/${currentId}`, { __skipOops: true });
       setData(res.data);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load this to-do');
     }
-  }, [todoId]);
+  }, [currentId]);
 
+  useEffect(() => { setTrail([]); }, [todoId]);
   useEffect(() => {
     setData(null);
     setQuestion('');
@@ -57,7 +61,7 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
     if (!message || sending) return;
     setSending(true);
     try {
-      await api.post(`/monitor/todos/${todoId}/questions`, { message });
+      await api.post(`/monitor/todos/${currentId}/questions`, { message });
       setQuestion('');
       showToast({ message: `Sent to ${data?.todo?.assignee_name?.split(' ')[0] || 'them'}`, tone: 'success', icon: 'help-circle' });
       load();
@@ -69,6 +73,33 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
   };
 
   const todo = data?.todo;
+  const stepsOf = useMemo(() => {
+    const map = new Map();
+    for (const t of data?.subtasks || []) {
+      if (!map.has(t.parent_id)) map.set(t.parent_id, []);
+      map.get(t.parent_id).push(t);
+    }
+    return map;
+  }, [data]);
+  const stepCount = data?.subtasks?.length || 0;
+  const stepsDone = (data?.subtasks || []).filter((t) => t.is_done).length;
+  const renderSteps = (parentId, depth) => (stepsOf.get(parentId) || []).map((t) => (
+    <View key={t.id}>
+      <AnimatedPressable onPress={() => setTrail((tr) => [...tr, t.id])} haptic="light" style={[styles.step, { marginLeft: spacing.sm + depth * 16 }]}>
+        <Ionicons name={STATUS[t.is_done ? 'done' : t.status].icon} size={16} color={t.is_done ? colors.green[600] : colors.gray[500]} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[styles.stepTitle, t.is_done && styles.titleDone]} numberOfLines={2}>{t.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
+            <DueChip date={t.due_date} time={t.due_time} recurrence={t.recurrence} done={t.is_done} compact />
+            {!!t.assignee_name && <Text style={styles.stepMeta}>{t.assignee_id === user?.id ? 'You' : t.assignee_name.split(' ')[0]}</Text>}
+            {t.status === 'blocked' && !t.is_done && <Text style={[styles.stepMeta, { color: colors.red[600], fontWeight: '700' }]}>Stuck</Text>}
+            {!t.is_done && <AskWhy todoId={t.id} suggestion={`Why is "${t.title}" not done yet?`} />}
+          </View>
+        </View>
+      </AnimatedPressable>
+      {renderSteps(t.id, depth + 1)}
+    </View>
+  ));
   const openBlockers = (data?.blockers || []).filter((b) => !b.resolved_at);
 
   return (
@@ -77,6 +108,12 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
         <Text style={styles.loading}>{error || 'Loading…'}</Text>
       ) : (
         <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {trail.length > 0 && (
+            <AnimatedPressable onPress={() => setTrail((tr) => tr.slice(0, -1))} haptic="light" style={styles.back}>
+              <Ionicons name="chevron-back" size={16} color={colors.brand[700]} />
+              <Text style={styles.backText}>Back</Text>
+            </AnimatedPressable>
+          )}
           <Text style={[styles.title, todo.is_done && styles.titleDone]}>{todo.title}</Text>
           {!!todo.notes && <Text style={styles.notes}>{todo.notes}</Text>}
 
@@ -111,6 +148,13 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
               </View>
             );
           })}
+
+          {stepCount > 0 && (
+            <>
+              <Text style={styles.label}>Steps · {stepsDone} of {stepCount} done</Text>
+              {renderSteps(todo.id, 0)}
+            </>
+          )}
 
           <Text style={styles.label}>Numbers</Text>
           <MetricsGrid todo={todo} now={now} reschedules={data.metrics?.reschedules || 0} />
@@ -148,6 +192,11 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
 }
 
 const createStyles = (colors) => StyleSheet.create({
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 8, paddingHorizontal: spacing.sm, marginRight: spacing.sm, marginBottom: 4, borderRadius: radius.md, backgroundColor: colors.gray[50] },
+  stepTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] },
+  stepMeta: { fontSize: 11, color: colors.gray[500] },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.sm, paddingBottom: 6 },
+  backText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[700] },
   loading: { padding: spacing.xl, textAlign: 'center', color: colors.gray[500] },
   title: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900], paddingHorizontal: spacing.sm },
   titleDone: { textDecorationLine: 'line-through', color: colors.gray[400] },

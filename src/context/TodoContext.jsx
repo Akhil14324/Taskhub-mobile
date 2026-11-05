@@ -40,6 +40,8 @@ export function TodoProvider({ children }) {
   const [insights, setInsights] = useState(null);
   // The Dump: the person's own to-dos they sent out of their lists (hidden from `todos` by the server).
   const [dump, setDump] = useState([]);
+  // To-dos I handed to someone and still follow (with their sub-tasks): shown in the Assigned view only.
+  const [watched, setWatched] = useState([]);
   const pendingDeletes = useRef(new Map());
   const refetchTimer = useRef(null);
   // Read inside callbacks without making them change on every fetch.
@@ -53,6 +55,7 @@ export function TodoProvider({ children }) {
       const res = await api.get('/todos', { __skipOops: true });
       const hidden = pendingDeletes.current;
       setTodos(sortTodos((res.data.todos || []).filter((t) => !hidden.has(t.id))));
+      setWatched(sortTodos(res.data.watching || []));
       setLists(res.data.lists || []);
       setSections(res.data.sections || []);
       setFilters(res.data.filters || []);
@@ -93,6 +96,7 @@ export function TodoProvider({ children }) {
       setBusinesses([]);
       setInsights(null);
       setDump([]);
+      setWatched([]);
       setLoading(true);
       return;
     }
@@ -122,11 +126,13 @@ export function TodoProvider({ children }) {
             const freshIds = new Set(fresh.map((t) => t.id));
             // A to-do in the Dump belongs in the Dump list, not in the lists.
             setDump((d) => [...d.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => t.dumped_at)]);
-            return sortTodos([...prev.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => !t.dumped_at && !pendingDeletes.current.has(t.id))]);
+            // One I only follow (handed to someone) belongs in the watched list, not in my lists.
+            setWatched((w) => sortTodos([...w.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => t.watching && !t.dumped_at)]));
+            return sortTodos([...prev.filter((t) => !freshIds.has(t.id)), ...fresh.filter((t) => !t.dumped_at && !t.watching && !pendingDeletes.current.has(t.id))]);
           });
         } catch (err) {
           // Gone or no longer visible to us: drop it. Anything else: fall back to a full reload.
-          if ([403, 404].includes(err.response?.status)) setTodos((prev) => prev.filter((t) => t.id !== id));
+          if ([403, 404].includes(err.response?.status)) { setTodos((prev) => prev.filter((t) => t.id !== id)); setWatched((w) => w.filter((t) => t.id !== id)); }
           else fetchTodos();
         }
       }));
@@ -149,13 +155,20 @@ export function TodoProvider({ children }) {
       setDump((prev) => [...prev.filter((t) => t.id !== todo.id), todo]);
       return;
     }
+    if (todo.watching) {
+      setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+      setWatched((prev) => sortTodos([...prev.filter((t) => t.id !== todo.id), todo]));
+      return;
+    }
     setDump((prev) => (prev.some((t) => t.id === todo.id) ? prev.filter((t) => t.id !== todo.id) : prev));
     setTodos((prev) => sortTodos([...prev.filter((t) => t.id !== todo.id), todo]));
   }, []);
 
   /** The server round trip behind createTodo. `tempId` is the optimistic row to swap for the real one. */
-  const createRemote = useCallback(async (payload, { silent = false, tempId = null } = {}) => {
+  const createRemote = useCallback(async (payload, { silent = false, tempId = null, onId = null } = {}) => {
     const res = await api.post('/todos', payload);
+    // Whoever asked (the sub-tasks typed with a new to-do) gets the new id, also when the to-do went to someone else.
+    if (onId) { try { onId(res.data.id ?? res.data.todo?.id ?? null); } catch { /* the caller's own problem */ } }
     // An assigned to-do goes to the other people's lists, so there is nothing to add to mine.
     if (!res.data.todo) {
       if (tempId) setTodos((prev) => prev.filter((t) => t.id !== tempId));
@@ -689,7 +702,7 @@ export function TodoProvider({ children }) {
   }, [fetchTodos, fetchDump, restoreFromDump]);
 
   const value = useMemo(() => ({
-    dump, fetchDump, dumpEverything, restoreFromDump, sendToDump,
+    dump, watched, fetchDump, dumpEverything, restoreFromDump, sendToDump,
     todos,
     lists,
     sections,
@@ -747,7 +760,7 @@ export function TodoProvider({ children }) {
     fetchAssignees,
     shareTodos,
     importTodos,
-  }), [dump, fetchDump, dumpEverything, restoreFromDump, sendToDump, favorites, isFavorite, toggleFavorite, renameLabel, removeLabel, duplicateFilter, updateSection, duplicateSection, reorderSections, todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
+  }), [dump, watched, fetchDump, dumpEverything, restoreFromDump, sendToDump, favorites, isFavorite, toggleFavorite, renameLabel, removeLabel, duplicateFilter, updateSection, duplicateSection, reorderSections, todos, lists, sections, filters, businesses, labels, loading, reviewTodo, approveTodo, rejectTodo, warnTodo, requestDelete, fetchAssignees, insights, fetchTodos, fetchInsights, createTodo, updateTodo,
     toggleTodo, deleteTodo, deleteTodos, duplicateTodo, moveToBusiness, mergeTodos, removeMember, reorderTodos, saveBoardOrder, createList, updateList, deleteList,
     createSection, renameSection, deleteSection, saveFilter, deleteFilter, fetchComments, addComment, deleteComment,
     fetchCompleted, setDailyGoal, fetchTimeline, setTodoStatus, assignTodoTo, raiseBlocker, resolveBlocker, postUpdate,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Platform, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -73,6 +73,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
 
   const [text, setText] = useState('');
   const [notes, setNotes] = useState('');
+  const [steps, setSteps] = useState([]); // sub-tasks typed together with the new to-do
   // Explicit picks from the buttons win over what the parser finds; `false` = cleared.
   const [override, setOverride] = useState({});
   const [extraLabels, setExtraLabels] = useState([]);
@@ -97,6 +98,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
     if (visible) {
       setText(initialText || '');
       setNotes('');
+      setSteps([]);
       setOverride({});
       setExtraLabels(defaults.labels || []);
       setAssignId(null);
@@ -251,6 +253,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         inputRef.current?.focus();
         return;
       }
+      const stepTitles = steps.map((x) => x.trim()).filter(Boolean);
       await createTodo({
         title: parsed.title,
         notes,
@@ -269,12 +272,22 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         deadline_date: deadline,
         duration_minutes: duration,
         ...peopleFields(mentionedPeople, meTagged, effectiveAssignId),
-      });
+      }, stepTitles.length ? {
+        // Once the to-do exists (also when it was handed to someone), each typed line becomes a sub-task of it, in order.
+        onId: (id) => {
+          if (!id) return;
+          stepTitles.forEach((t) => {
+            Promise.resolve(createTodo({ title: t, parent_id: id }, { silent: true }))
+              .catch((err) => showToast({ message: err?.response?.data?.error || `Could not add the sub-task "${t}"`, tone: 'error' }));
+          });
+        },
+      } : undefined);
       setGiveTo(null);
       setAssignId(null);
       setDelegateOff(false);
       setText('');
       setNotes('');
+      setSteps([]);
       setOverride((o) => ({ business_id: o.business_id }));
       setExtraLabels(defaults.labels || []);
       inputRef.current?.focus();
@@ -406,6 +419,35 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           }}
         />
         </View>
+        {(menu === 'steps' || (steps.some((x) => x.trim()) && !multi)) && !multi && (
+          <View style={{ gap: 4, paddingVertical: spacing.xs }}>
+            <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.gray[500], textTransform: 'uppercase', letterSpacing: 0.6 }}>Sub-tasks</Text>
+            {[...steps, ''].map((val, i) => {
+              const last = i === steps.length;
+              return (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name={last ? 'add-circle-outline' : 'ellipse-outline'} size={16} color={last ? colors.brand[600] : colors.gray[400]} />
+                  <TextInput
+                    value={val}
+                    autoFocus={last && menu === 'steps' && steps.length === 0}
+                    onChangeText={(t) => setSteps((cur) => { const n = [...cur]; n[i] = t; return n; })}
+                    onSubmitEditing={() => { if (!last && !val.trim()) setSteps((cur) => cur.filter((_, k) => k !== i)); }}
+                    onKeyPress={(e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault?.(); e.stopPropagation?.(); } }}
+                    placeholder={last ? (steps.length ? 'Another sub-task' : 'Add a sub-task, then press Enter for the next') : 'Sub-task'}
+                    placeholderTextColor={colors.gray[400]}
+                    blurOnSubmit={false}
+                    style={{ flex: 1, fontSize: fontSize.base, color: colors.gray[800], paddingVertical: 4, outlineStyle: 'none' }}
+                  />
+                  {!last && (
+                    <Pressable onPress={() => setSteps((cur) => cur.filter((_, k) => k !== i))} hitSlop={6} accessibilityLabel="Remove sub-task">
+                      <Ionicons name="close" size={15} color={colors.gray[400]} />
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
         {menu === 'notes' && (
           <TextInput
             value={notes}
@@ -497,6 +539,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
               <Chip icon="alert-circle-outline" label={deadline ? `Deadline ${formatDue(deadline)}` : 'Deadline'} active={!!deadline} onPress={() => setDeadlineOpen(true)} />
               <Chip icon="repeat" label={recurrence ? RECURRENCE_LABELS[recurrence] : 'Repeat'} active={!!recurrence} onPress={cycleRecurrence} />
               <Chip icon="document-text-outline" label="Description" onPress={() => setMenu('notes')} />
+              {!multi && <Chip icon="git-branch-outline" label={steps.some((x) => x.trim()) ? `Sub-tasks (${steps.filter((x) => x.trim()).length})` : 'Sub-tasks'} active={steps.some((x) => x.trim())} onPress={() => setMenu('steps')} />}
               {!!businessId && !isSubtask && (
                 <Chip icon="eye-outline" label="Needs review when done" active={review === true} onPress={() => setReview(review === true ? null : true)} />
               )}
@@ -632,6 +675,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
                 }}
               />
             )}
+            {!multi && <ToolButton icon="git-branch-outline" label="Sub-tasks" open={menu === 'steps'} has={steps.some((x) => x.trim())} onPress={() => setMenu(menu === 'steps' ? null : 'steps')} />}
             {ai && !isSubtask && <ToolButton icon="camera-outline" label="Photo" open={false} onPress={pickPhoto} />}
             {voice.supported && (
               <ToolButton icon={listening ? 'mic' : 'mic-outline'} label="Speak" open={listening} onPress={toggleListening} />

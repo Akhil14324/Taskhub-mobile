@@ -99,7 +99,7 @@ export default function TodosScreen() {
     todos, lists, sections: allSections, filters, businesses, labels, loading, fetchTodos, toggleTodo, deleteTodo, deleteTodos, dump, dumpEverything,
     updateTodo, duplicateTodo, createList, updateList, deleteList, createSection, updateSection, deleteSection, saveFilter,
     deleteFilter, shareTodos, reorderTodos, fetchCompleted, mergeTodos, setTodoStatus, assignTodoTo, requestDelete,
-    saveBoardOrder, favorites, reorderSections,
+    saveBoardOrder, favorites, reorderSections, watched,
   } = useTodos();
 
   // today | upcoming | inbox | shared | done | list:<id> | filter:<id> | label:<name> | biz:<id>
@@ -256,13 +256,16 @@ export default function TodosScreen() {
   const bizToMe = useMemo(() => todos.filter((t) => t.business_id && t.assignee_id === meId && t.review_state === 'accepted'), [todos, meId]);
   const openBizToMe = useMemo(() => bizToMe.filter((t) => !t.is_done), [bizToMe]);
 
+  // What I handed to someone and follow: shown in Assigned (with its sub-tasks), never in Inbox / Today / lists.
+  const openWatched = useMemo(() => watched.filter((t) => !t.is_done), [watched]);
+  const treeTodos = useMemo(() => (view === 'assigned' && watched.length ? [...todos, ...watched] : todos), [view, todos, watched]);
   const counts = useMemo(() => ({
     today: open.filter((t) => t.due_date && t.due_date <= today).length,
     inbox: [...openPersonal, ...openBizToMe].filter((t) => !t.list_id && !t.parent_id).length,
     shared: openPersonal.filter((t) => isSharedTodo(t) && !t.parent_id).length,
-    assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length + openBizToMe.filter((t) => !t.parent_id && t.created_by !== meId).length,
+    assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length + openBizToMe.filter((t) => !t.parent_id && t.created_by !== meId).length + openWatched.filter((t) => !t.parent_id).length,
     lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
-  }), [open, openPersonal, openBizToMe, lists, today, meId]);
+  }), [open, openPersonal, openBizToMe, openWatched, lists, today, meId]);
 
   const bizCounts = useMemo(() => {
     const out = {};
@@ -492,7 +495,7 @@ export default function TodosScreen() {
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
       done = personal.filter((t) => t.is_done && isSharedTodo(t));
     } else if (view === 'assigned') {
-      const assignedAll = [...openPersonal.filter((t) => isAssignedTodo(t)), ...openBizToMe.filter((t) => t.created_by !== meId)].filter((t) => !t.parent_id && match(t));
+      const assignedAll = [...openPersonal.filter((t) => isAssignedTodo(t)), ...openBizToMe.filter((t) => t.created_by !== meId), ...openWatched].filter((t) => !t.parent_id && match(t));
       const toMe = assignedAll.filter((t) => t.assignee_id === meId);
       const byMe = assignedAll.filter((t) => t.assignee_id !== meId);
       const group = (list, label, nameOf) => {
@@ -507,7 +510,7 @@ export default function TodosScreen() {
       group(toMe, 'From', (t) => t.created_by_name);
       group(byMe, 'Assigned to', (t) => t.assignee_name);
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
-      done = [...personal.filter((t) => t.is_done && isAssignedTodo(t)), ...bizToMe.filter((t) => t.is_done && t.created_by !== meId)];
+      done = [...personal.filter((t) => t.is_done && isAssignedTodo(t)), ...bizToMe.filter((t) => t.is_done && t.created_by !== meId), ...watched.filter((t) => t.is_done)];
     } else if (currentList) {
       manualOrder = true;
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
@@ -708,7 +711,7 @@ export default function TodosScreen() {
     }
     if (!business) {
       // Today, Upcoming, filters and labels: the same work laid out by where it stands.
-      const pool = (view === 'assigned' ? [...openPersonal.filter(isAssignedTodo), ...openBizToMe.filter((t) => t.created_by !== meId)]
+      const pool = (view === 'assigned' ? [...openPersonal.filter(isAssignedTodo), ...openBizToMe.filter((t) => t.created_by !== meId), ...openWatched]
         : view === 'shared' ? openPersonal.filter(isSharedTodo)
         : activeFilter ? applyFilter(open, activeFilter.config, { userId: meId, today })
           : labelName ? open.filter((t) => (t.labels || []).includes(labelName))
@@ -772,7 +775,7 @@ export default function TodosScreen() {
     if (currentList) return personal.filter((t) => t.list_id === currentList.id && notNested(t));
     if (view === 'inbox') return [...personal, ...bizToMe].filter((t) => !t.list_id && notNested(t));
     if (view === 'shared') return personal.filter((t) => isSharedTodo(t) && notNested(t));
-    if (view === 'assigned') return [...personal.filter(isAssignedTodo), ...bizToMe.filter((t) => t.created_by !== meId)].filter(notNested);
+    if (view === 'assigned') return [...personal.filter(isAssignedTodo), ...bizToMe.filter((t) => t.created_by !== meId), ...watched].filter(notNested);
     if (activeFilter) return applyFilter(open, activeFilter.config, { userId: meId, today }).filter(notNested);
     if (labelName) return mine.filter((t) => (t.labels || []).includes(labelName) && notNested(t));
     return mine.filter(notNested);
@@ -1268,7 +1271,7 @@ export default function TodosScreen() {
               <Text style={styles.dayHead}>{formatDayHeader(g.day)} · {g.items.length}</Text>
               <TodoTreeList
                 sections={[{ key: `done:${g.day}`, items: g.items.filter((t) => !t.parent_id || !g.items.some((p) => p.id === t.parent_id)) }]}
-                todos={todos}
+                todos={treeTodos}
                 listById={listById}
                 collapsed={collapsed}
                 onToggleCollapse={toggleCollapse}
@@ -1299,7 +1302,7 @@ export default function TodosScreen() {
           <View ref={listAreaRef}>
             <TodoTreeList
               sections={sectionsWithRight}
-              todos={todos}
+              todos={treeTodos}
               listById={listById}
               collapsed={collapsed}
               onToggleCollapse={toggleCollapse}
@@ -1339,7 +1342,7 @@ export default function TodosScreen() {
               {showDone && (
                 <TodoTreeList
                   sections={[{ key: 'done', items: doneItems.filter((t) => !t.parent_id || !doneItems.some((p) => p.id === t.parent_id)) }]}
-                  todos={todos}
+                  todos={treeTodos}
                   listById={listById}
                   collapsed={collapsed}
                   onToggleCollapse={toggleCollapse}
