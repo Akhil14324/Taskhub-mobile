@@ -345,7 +345,7 @@ export default function BoardTable({
         <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
           <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: rowH }, stickyName]}>
             <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
-            <View style={{ width: nameW - 6 + UPD_W, height: rowH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: left, paddingRight: spacing.sm, borderRightWidth: 1, borderColor: colors.gray[200] }}>
+            <View style={{ width: nameW - 6, height: rowH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: left, paddingRight: spacing.sm, borderRightWidth: 1, borderColor: colors.gray[200] }}>
               <View pointerEvents="none" style={{ position: 'absolute', left: left - 18, top: 0, bottom: 0, width: 2, backgroundColor: colors.gray[300] }} />
               {own.length ? (
                 <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
@@ -379,6 +379,18 @@ export default function BoardTable({
                 <Ionicons name="expand-outline" size={14} color={colors.gray[500]} />
               </Pressable>
             </View>
+            <Pressable
+              onPress={() => onOpenItem(k.id, 'updates')}
+              accessibilityLabel={`Updates of ${k.title}`}
+              style={({ hovered }) => ({ width: UPD_W, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.brand[50] : 'transparent' })}
+            >
+              <Ionicons name={k.comment_count > 0 ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={17} color={k.comment_count > 0 ? BRAND : colors.gray[400]} />
+              {k.comment_count > 0 && (
+                <View style={{ position: 'absolute', top: 4, right: 6, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: BRAND, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{k.comment_count}</Text>
+                </View>
+              )}
+            </Pressable>
           </View>
           {columns.map((c, ci) => (
             <View key={c.id} style={[{ width: c.width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200] }, stickyCol(ci) ? [stickyCol(ci), { backgroundColor: subBg }] : null]}>
