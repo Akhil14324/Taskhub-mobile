@@ -428,6 +428,7 @@ export default function BoardScreen({ route }) {
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenItem={openItem} onOpenCell={openCell} onAddItem={addItem}
             onAddGroup={newGroup}
+            onGroupMenu={data.access.add ? (anchor, group) => setMenu({ type: 'group', anchor, group }) : null}
           />
         )}
       </View>

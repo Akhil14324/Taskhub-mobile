@@ -340,6 +340,11 @@ export default function BoardKanban({ board, items, people, onOpenItem, onMove, 
               <MenuItem icon="create-outline" label="Rename" onPress={() => { setRenaming(laneMenu.label.id); setLaneMenu(null); }} />
               <MenuItem icon="color-palette-outline" label="Change colour" onPress={() => setLaneMenu({ ...laneMenu, stage: 'color' })} />
               <MenuItem icon="add" label="Add a task here" onPress={() => { setAdding(laneMenu.label.id); setLaneMenu(null); }} />
+              <MenuItem icon="trash-outline" label="Delete column" danger onPress={async () => {
+                const label = laneMenu.label; setLaneMenu(null);
+                const ok = await confirmDialog({ title: `Delete "${label.label}"?`, message: 'The column goes. If tasks are still in it you are told, and nothing is lost.', confirmLabel: 'Delete', destructive: true });
+                if (ok) actions.removeLabel(statusCol, label);
+              }} />
             </>
           )}
         </Popover>

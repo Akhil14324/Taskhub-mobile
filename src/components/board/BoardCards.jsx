@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { anchorOf } from './Popover';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { glass } from '../../theme/glass';
@@ -111,7 +112,7 @@ function AddLine({ word, onAdd }) {
 }
 
 /** The board on a phone: each group is a titled section of cards, collapsible, with an add line. */
-export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup }) {
+export default function BoardCards({ board, items, people, collapsed, onToggleGroup, onOpenItem, onOpenCell, onAddItem, onAddGroup, onGroupMenu }) {
   const colors = useColors();
   const blocks = useMemo(() => groupBlocks(board.groups, items), [board.groups, items]);
   const word = itemWordOf(board);
@@ -128,6 +129,12 @@ export default function BoardCards({ board, items, people, collapsed, onToggleGr
               <Ionicons name={shut ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
               <Text style={{ fontSize: 16, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
               <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length}</Text>
+              <View style={{ flex: 1 }} />
+              {!!onGroupMenu && typeof b.group.id === 'number' && (
+                <Pressable onPress={(e) => onGroupMenu(anchorOf(e), b.group)} hitSlop={10} accessibilityLabel={`${b.group.name} group menu`}>
+                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[500]} />
+                </Pressable>
+              )}
             </Pressable>
             {!shut && b.top.slice(0, limitOf(b.group.id)).map((t) => (
               <ItemCard key={t.id} item={t} board={board} people={people} groupColor={b.group.color} onOpenItem={onOpenItem} onOpenCell={onOpenCell} />
