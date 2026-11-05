@@ -506,7 +506,7 @@ export default function BoardScreen({ route }) {
       <BoardItemSheet
         item={sheetId ? data.items.find((t) => t.id === sheetId) : null}
         board={data} people={people} actions={board}
-        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull} initialTab={sheetTab}
+        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull} onOpenItem={openItem} initialTab={sheetTab}
       />
       <TodoDetailSheet todoId={openTodoId} onClose={() => { setOpenTodoId(null); board.reload(); }} />
     </View>

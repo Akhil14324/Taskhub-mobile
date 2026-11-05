@@ -243,16 +243,16 @@ export default function BoardsHomeScreen() {
         {!desktop && navigation.canGoBack() && (
           <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Back" hitSlop={8}><Ionicons name="chevron-back" size={22} color={colors.gray[700]} /></Pressable>
         )}
-        <Text style={{ flex: 1, fontSize: desktop ? 26 : 22, fontWeight: '700', color: colors.gray[900] }}>Boards</Text>
+        <Text numberOfLines={1} style={{ flex: 1, fontSize: desktop ? 26 : 22, fontWeight: '700', color: colors.gray[900] }}>Boards</Text>
         {isLeader && (
           <Pressable onPress={() => setCreatingSpace(true)} accessibilityLabel="New workspace" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
             <Ionicons name="business-outline" size={16} color={colors.gray[700]} />
-            <Text style={{ color: colors.gray[800], fontWeight: '600' }}>New workspace</Text>
+            {desktop && <Text style={{ color: colors.gray[800], fontWeight: '600' }}>New workspace</Text>}
           </Pressable>
         )}
         <Pressable {...glass('accent')} onPress={() => setCreating(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BRAND, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md }}>
           <Ionicons name="add" size={17} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '600' }}>New board</Text>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>{desktop ? 'New board' : 'New'}</Text>
         </Pressable>
       </View>
       <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingBottom: spacing.sm, maxWidth: 980 + 2 * spacing.xl, width: '100%', alignSelf: 'center' }}>

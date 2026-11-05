@@ -15,6 +15,7 @@ import { canEditColumn, itemWordOf, paletteHex } from './model';
 import Popover, { anchorOf } from './Popover';
 import Hint from './Hint';
 import ProgressDot from '../ProgressDot';
+import { Avatar } from '../kit';
 import { progressOf } from '../../utils/progress';
 import TodoComments from '../todos/TodoComments';
 import { TimelineEntries } from '../todos/TimeHealth';
@@ -64,7 +65,7 @@ function Field({ onPress, children, tall, stretch }) {
  * files ...) and, on the right, Updates (the conversation), Files and the Activity Log. Every value is the
  * board's own cell, so it changes through the same editors and rules as in the table.
  */
-export default function BoardItemSheet({ item, board, people, actions, onClose, onOpenCell, onOpenFull, initialTab = 'updates' }) {
+export default function BoardItemSheet({ item, board, people, actions, onClose, onOpenCell, onOpenFull, onOpenItem, initialTab = 'updates' }) {
   const colors = useColors();
   const desktop = useIsDesktop();
   const win = useWindowDimensions();
@@ -76,10 +77,11 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const [log, setLog] = useState(null);
   const [groupAnchor, setGroupAnchor] = useState(null);
   const [name, setName] = useState(item?.title || '');
+  const [newStep, setNewStep] = useState('');
   const word = itemWordOf(board);
   const id = item?.id;
 
-  useEffect(() => { setName(item?.title || ''); setTab(initialTab || 'updates'); setFiles(null); setLog(null); }, [id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setName(item?.title || ''); setNewStep(''); setTab(initialTab || 'updates'); setFiles(null); setLog(null); }, [id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFiles = useCallback(async () => {
     if (!id) return;
@@ -96,10 +98,26 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   useEffect(() => { if (tab === 'activity') loadLog(); }, [tab, loadLog, item?.updated_at, item?.status]);
 
   const prog = useMemo(() => (item ? progressOf(item, board.items) : null), [item, board.items]);
+  // Every sub-task under this task, at any depth, in order, with how deep each sits.
+  const steps = useMemo(() => {
+    if (!item) return [];
+    const kids = new Map();
+    for (const t of board.items) { if (t.parent_id) { if (!kids.has(t.parent_id)) kids.set(t.parent_id, []); kids.get(t.parent_id).push(t); } }
+    const out = [];
+    const walk = (pid, depth) => (kids.get(pid) || []).forEach((t) => { out.push({ t, depth }); if (depth < 5) walk(t.id, depth + 1); });
+    walk(item.id, 0);
+    return out;
+  }, [board.items, item]);
   const group = useMemo(() => board.groups.find((g) => g.id === item?.business_section_id) || null, [board.groups, item]);
   if (!item) return null;
 
   const canEdit = !!item.permissions?.can_edit;
+  const addStep = async () => {
+    const title = newStep.trim();
+    if (!title) return;
+    setNewStep('');
+    await actions.addItem(title, { groupId: item.business_section_id ?? undefined, parentId: item.id });
+  };
   const saveName = () => {
     const t = name.trim();
     if (t && t !== item.title && canEdit) actions.updateFields(item, { title: t });
@@ -149,9 +167,39 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           </Row>
         );
       })}
+      <View style={{ marginTop: spacing.md, gap: 4 }}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray[600] }}>
+          Sub-tasks{steps.length ? ` · ${steps.filter((x) => x.t.is_done).length} of ${steps.length} done` : ''}
+        </Text>
+        {steps.map(({ t, depth }) => (
+          <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingLeft: depth * 18, borderRadius: radius.sm }}>
+            <Pressable onPress={() => mayEdit(t) && actions.setStatus(t, t.is_done ? 'todo' : 'done')} hitSlop={8} accessibilityLabel={t.is_done ? `Reopen ${t.title}` : `Finish ${t.title}`}>
+              <Ionicons name={t.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={t.is_done ? colors.green[600] : colors.gray[400]} />
+            </Pressable>
+            <Pressable onPress={() => (onOpenItem ? onOpenItem(t.id) : onOpenFull(t.id))} style={{ flex: 1, minHeight: 38, justifyContent: 'center' }}>
+              <Text numberOfLines={2} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
+            </Pressable>
+            {!!t.assignee_name && <Avatar name={t.assignee_name} size={20} />}
+            {t.is_done && !!t.done_at ? null : !!t.due_date && <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.due_date.slice(5)}</Text>}
+          </View>
+        ))}
+        {board.access.add && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm }}>
+            <Ionicons name="add" size={18} color={colors.gray[500]} />
+            <TextInput
+              value={newStep} onChangeText={setNewStep} onSubmitEditing={addStep} blurOnSubmit={false}
+              placeholder="Add a sub-task, then Enter" placeholderTextColor={colors.gray[400]} accessibilityLabel="Add a sub-task"
+              style={{ flex: 1, minHeight: 40, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+            />
+            {!!newStep.trim() && (
+              <Pressable onPress={addStep} hitSlop={8} accessibilityLabel="Add sub-task"><Ionicons name="arrow-up-circle" size={24} color={BRAND} /></Pressable>
+            )}
+          </View>
+        )}
+      </View>
       <Pressable onPress={() => onOpenFull(item.id)} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent', marginTop: spacing.sm })}>
         <Ionicons name="options-outline" size={16} color={colors.brand[600]} />
-        <Text style={{ fontSize: 14, color: colors.brand[600] }}>More options (sub-tasks, share, reminder)</Text>
+        <Text style={{ fontSize: 14, color: colors.brand[600] }}>More options (share, reminder, repeat)</Text>
       </Pressable>
     </ScrollView>
   );
