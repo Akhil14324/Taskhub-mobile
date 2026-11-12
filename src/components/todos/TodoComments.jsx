@@ -19,6 +19,7 @@ import { glass } from '../../theme/glass';
 import useVoiceInput from '../../hooks/useVoiceInput';
 import VoiceLive from '../VoiceLive';
 import { useLang } from '../../context/LanguageContext';
+import { useFreshness } from '../../utils/freshness';
 
 // People can drop a few ready-made symbols into a comment (the picker is the only place emoji appear).
 const EMOJIS = ['👍', '👏', '🙏', '🎉', '✅', '❌', '🔥', '💯', '❤️', '😀', '😂', '😅', '🤔', '😮', '😢', '👀', '💪', '🚀', '⭐', '⚠️', '📌', '📎', '⏰', '👌', '🙌', '😊', '😍', '🤝', '👋', '📞'];
@@ -49,18 +50,25 @@ export default function TodoComments({ todo }) {
   const { lang } = useLang();
   const voice = useVoiceInput({ lang: lang === 'te' ? 'te-IN' : 'en-IN' });
 
+  // A refresh that was already on its way when a comment was posted, deleted or reacted to would put the old
+  // list back for a moment; the guard drops it and asks again.
+  const guard = useFreshness();
   const load = useCallback(async () => {
     try {
-      const [list, extra] = await Promise.all([
-        fetchComments(todo.id),
-        api.get(`/collab/todos/${todo.id}`, { __skipOops: true }).then((r) => r.data).catch(() => null),
-      ]);
-      setComments(list);
-      if (extra) setCollab({ reactions: extra.reactions, attachments: extra.attachments });
+      await guard.fresh(
+        () => Promise.all([
+          fetchComments(todo.id),
+          api.get(`/collab/todos/${todo.id}`, { __skipOops: true }).then((r) => r.data).catch(() => null),
+        ]),
+        ([list, extra]) => {
+          setComments(list);
+          if (extra) setCollab({ reactions: extra.reactions, attachments: extra.attachments });
+        },
+      );
     } catch {
       // keep what we have
     }
-  }, [fetchComments, todo.id]);
+  }, [fetchComments, todo.id, guard]);
 
   useEffect(() => { load(); }, [load, todo.comment_count]);
   useEffect(() => subscribe('todo:changed', (e) => { if (Number(e?.todoId) === Number(todo.id)) load(); }), [subscribe, todo.id, load]);
@@ -87,7 +95,7 @@ export default function TodoComments({ todo }) {
     if ((!body && !pending.length) || sending) return;
     setSending(true);
     try {
-      const comment = await addComment(todo.id, body, [], { parentId: replyTo?.id, attachmentIds: pending.map((a) => a.id) });
+      const comment = await guard.edit(() => addComment(todo.id, body, [], { parentId: replyTo?.id, attachmentIds: pending.map((a) => a.id) }));
       setComments((prev) => [...prev, comment]);
       if (replyTo) setExpanded((e) => ({ ...e, [replyTo.id]: true }));
       setText('');
@@ -104,7 +112,7 @@ export default function TodoComments({ todo }) {
     const ok = await confirmDialog({ title: 'Delete this comment?', message: replies[comment.id]?.length ? 'Its replies go with it.' : undefined, confirmLabel: 'Delete', destructive: true });
     if (!ok) return;
     try {
-      await deleteComment(todo.id, comment.id);
+      await guard.edit(() => deleteComment(todo.id, comment.id));
       setComments((prev) => prev.filter((c) => c.id !== comment.id && c.parent_id !== comment.id));
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not delete the comment', tone: 'error' });
@@ -113,7 +121,7 @@ export default function TodoComments({ todo }) {
 
   const react = async (comment, kind) => {
     try {
-      const res = await api.post(`/collab/comments/${comment.id}/react`, { kind });
+      const res = await guard.edit(() => api.post(`/collab/comments/${comment.id}/react`, { kind }));
       setComments((prev) => prev.map((c) => (c.id === comment.id ? { ...c, reactions: res.data.reactions } : c)));
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not react', tone: 'error' });

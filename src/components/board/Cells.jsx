@@ -261,7 +261,7 @@ function CheckBox({ checked, onPress }) {
 // Editors: what opens in the popover. `onDone(value)` saves, `onClose()` cancels.
 // ---------------------------------------------------------------------------------------------------
 
-function Row({ icon, label, active, onPress, color, right }) {
+export function Row({ icon, label, active, onPress, color, right }) {
   const colors = useColors();
   return (
     <Pressable
@@ -280,7 +280,7 @@ function Row({ icon, label, active, onPress, color, right }) {
   );
 }
 
-function SearchBox({ value, onChange, placeholder }) {
+export function SearchBox({ value, onChange, placeholder }) {
   const colors = useColors();
   return (
     <TextInput

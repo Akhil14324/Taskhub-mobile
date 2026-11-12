@@ -59,6 +59,33 @@ export function resize(blocks, index, delta) {
   return blocks.map((x, i) => (i === index ? { ...x, end: toHM(end) } : x));
 }
 
+/** Move a block so it starts at `start`, keeping its length. Null when it would not fit. */
+export function moveBlock(blocks, index, start) {
+  const b = blocks[index];
+  if (!b) return null;
+  const len = toMin(b.end) - toMin(b.start);
+  if (start < 0 || start + len > 24 * 60 || !isFree(blocks, start, start + len, index)) return null;
+  return sorted(blocks.map((x, i) => (i === index ? { ...x, start: toHM(start), end: toHM(start + len) } : x)));
+}
+
+/** The latest a block can end before it meets the next one (or midnight). */
+export function maxEnd(blocks, index) {
+  const b = blocks[index];
+  const end = toMin(b.end);
+  const next = blocks.filter((x, i) => i !== index && toMin(x.start) >= end).map((x) => toMin(x.start));
+  return next.length ? Math.min(...next) : 24 * 60;
+}
+
+/** Stretch or shrink a block to end at `end` (never below 30 minutes, never into the next block). */
+export function setEnd(blocks, index, end) {
+  const b = blocks[index];
+  const to = Math.min(maxEnd(blocks, index), Math.max(toMin(b.start) + STEP, Math.round(end / STEP) * STEP));
+  return blocks.map((x, i) => (i === index ? { ...x, end: toHM(to) } : x));
+}
+
+/** How long a task should be on the schedule: its estimate rounded up to half hours, one hour when unknown. */
+export const slotMinutes = (estimate) => (estimate ? Math.min(8 * 60, Math.max(STEP, Math.ceil(estimate / STEP) * STEP)) : 60);
+
 export function summarize(box) {
   const mins = (b) => toMin(b.end) - toMin(b.start);
   const planned = box.blocks.reduce((s, b) => s + mins(b), 0);

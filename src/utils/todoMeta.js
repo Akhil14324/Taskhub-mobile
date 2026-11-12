@@ -149,10 +149,15 @@ export function isBusinessTodo(todo) {
   return !!todo?.business_id;
 }
 
-/** Manually ordered to-dos first (by sort_order), the rest keep their existing order. */
+/**
+ * Manually ordered to-dos first (by sort_order). The rest follow in the order they were added, so a
+ * new to-do always lands at the bottom (not wherever its due date / priority happens to put it).
+ */
 export function manualSort(items) {
   const ordered = items.filter((t) => t.sort_order != null).sort((a, b) => a.sort_order - b.sort_order);
-  const rest = items.filter((t) => t.sort_order == null);
+  const rest = items
+    .filter((t) => t.sort_order == null)
+    .sort((a, b) => (new Date(a.created_at) - new Date(b.created_at)) || (a.id - b.id));
   return [...ordered, ...rest];
 }
 

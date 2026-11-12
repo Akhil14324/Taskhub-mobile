@@ -151,7 +151,7 @@ function HeaderCell({ column, canManage, onMenu, width, sticky, onResize, onRena
         />
       ) : (
       <Pressable
-        disabled={!canManage}
+        disabled={!canManage || column.pending}
         onPress={(e) => {
           // Double-click renames in place; a single click opens the menu a moment later (unless a second click comes).
           clearTimeout(clickTimer.current);
@@ -500,7 +500,7 @@ export default function BoardTable({
     const rule = colorOf ? colorOf(t) : null;
     return (
       <View key={t.id}>
-        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
+        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white, opacity: t.pending ? 0.55 : 1 }}>
           <View style={[{ flexDirection: 'row', backgroundColor: colors.white, height: rowH }, stickyName]}>
           <View style={{ width: 6, backgroundColor: paletteHex(rule || block.group.color) }} />
           <View
@@ -585,7 +585,8 @@ export default function BoardTable({
           const isCollapsed = collapsed.has(b.group.id);
           return (
             <View key={b.group.id ?? 'none'} style={{ marginBottom: spacing.xl, width: layoutOf(b.group.id).width }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 }}>
+              {/* Sticky: scrolling the columns sideways leaves the group name where it is. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, position: 'sticky', left: 0, alignSelf: 'flex-start', zIndex: 5 }}>
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
                 </Pressable>

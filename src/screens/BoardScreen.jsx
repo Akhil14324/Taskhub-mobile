@@ -365,6 +365,12 @@ export default function BoardScreen({ route }) {
             {data.access.manage && <Ionicons name="chevron-down" size={16} color={colors.gray[500]} />}
           </Pressable>
           <View style={{ flex: 1 }} />
+          {board.busy.length > 0 && (
+            <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: colors.brand[50] }}>
+              <ActivityIndicator size="small" color={BRAND} />
+              <Text style={{ fontSize: 13, color: BRAND, fontWeight: '500' }}>{board.busy[board.busy.length - 1]}</Text>
+            </View>
+          )}
           {desktop && (
             <Pressable onPress={() => setAutomate(true)} accessibilityLabel="Automate. Rules that act for you, like notifying someone when a task is late." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="flash-outline" size={16} color={colors.gray[700]} />
@@ -504,10 +510,10 @@ export default function BoardScreen({ route }) {
           onColor={(color) => board.updateGroup(menu.group, { color })}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
           onDuplicate={data.access.add && data.board.kind !== 'my_todos' ? () => board.duplicateGroup(menu.group) : null}
-          onDelete={async () => {
-            await board.removeGroup(menu.group);
-            showToast({ message: `Deleted "${menu.group.name}". Its tasks are kept.`, icon: 'trash' });
-          }}
+          onDelete={menu.group.id && data.access.manage && data.board.kind !== 'my_todos' ? async () => {
+            const ok = await board.removeGroup(menu.group);
+            if (ok) showToast({ message: `Deleted "${menu.group.name}". Its tasks are kept.`, icon: 'trash' });
+          } : null}
         />
       )}
       {menu?.type === 'more' && (

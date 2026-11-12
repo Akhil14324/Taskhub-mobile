@@ -18,17 +18,33 @@ export default function useBoard(boardId) {
   const dataRef = useRef(null);
   dataRef.current = data;
   const reloadTimer = useRef(null);
+  // A reload that was already on its way when the person changed something carries the OLD state; showing
+  // it made a finished task pop back under "Hide done" until the next reload fixed it. `inflight` counts
+  // the changes still being saved and `version` ticks whenever one starts or ends: a reload that began
+  // before that (or while one is saving) is dropped and asked again a moment later.
+  const inflight = useRef(0);
+  const version = useRef(0);
+  const loadRef = useRef(null);
 
-  const load = useCallback(async () => {
+  // `force` is for a reload that is itself the last step of a change (the answer must be shown).
+  const load = useCallback(async (opts) => {
     if (!boardId) return;
+    const force = opts?.force === true;
+    const startedAt = version.current;
     try {
       const res = await api.get(`/boards/${boardId}`, { __skipOops: true });
+      if (!force && (inflight.current > 0 || version.current !== startedAt)) {
+        clearTimeout(reloadTimer.current);
+        reloadTimer.current = setTimeout(() => loadRef.current?.(), 300);
+        return;
+      }
       setData(res.data);
       setError(null);
     } catch (err) {
       setError(err.response?.status === 404 ? 'This board is not there, or it is not shared with you.' : 'Could not load this board.');
     }
   }, [boardId]);
+  loadRef.current = load;
 
   const reloadSoon = useCallback((ms = 250) => {
     clearTimeout(reloadTimer.current);
@@ -201,65 +217,173 @@ export default function useBoard(boardId) {
   const addItem = useCallback(async (title, { groupId = null, parentId = null, values = undefined, fields = {} } = {}) => {
     const clean = String(title || '').trim();
     if (!clean) return null;
+    // The row appears at once (greyed until the server answers); the real one replaces it. `pending.item`
+    // keeps the New task button disabled meanwhile, so one click makes one task.
     mark('item', 1);
+    const tempId = -Date.now();
+    const now = new Date().toISOString();
+    setData((d) => d && {
+      ...d,
+      items: [...d.items, {
+        id: tempId, title: clean, board_id: Number(boardId), business_section_id: groupId, parent_id: parentId,
+        is_done: false, status: 'todo', priority: 4, labels: [], members: [], created_at: now, updated_at: now,
+        subtask_done_count: 0, comment_count: 0, open_blocker_count: 0, pending: true, ...fields,
+      }],
+    });
     try {
       const res = await api.post(`/boards/${boardId}/items`, { title: clean, group_id: groupId, parent_id: parentId, values, ...fields });
+      setData((d) => d && { ...d, items: d.items.filter((t) => t.id !== tempId) });
       if (res.data.todo) putItem(res.data.todo);
       else showToast({ message: `Sent to ${res.data.assigned_to?.name || 'them'}`, tone: 'success', icon: 'person-add' });
-      reloadSoon(400);
+      reloadSoon(800);
       return res.data.todo || null;
-    } catch (err) { fail(err, 'Could not add it'); return null; }
-    finally { mark('item', -1); }
+    } catch (err) {
+      setData((d) => d && { ...d, items: d.items.filter((t) => t.id !== tempId) });
+      fail(err, 'Could not add it');
+      return null;
+    } finally {
+      mark('item', -1);
+    }
   }, [boardId, putItem, reloadSoon, fail, mark]);
 
   // ---- board shape -----------------------------------------------------------------------------------
-  const inflight = useRef(new Set());
-  const shape = useCallback(async (method, path, body, { refreshList = false } = {}) => {
-    // A create (POST) that is still on its way is not sent twice, however many times the button is pressed.
-    const key = method === 'post' ? `${method} ${path}` : null;
-    if (key) { if (inflight.current.has(key)) return null; inflight.current.add(key); }
-    const kind = path.split('/')[1] || 'board'; // groups, columns, views ... (what is being changed)
-    mark(kind, 1);
+  // What the board is busy with right now ("Creating column…"), so the screen can show progress instead of
+  // leaving people to click again. Several can run at once; each label is removed when its work ends.
+  const [busy, setBusy] = useState([]);
+  const track = useCallback(async (label, fn) => {
+    setBusy((b) => [...b, label]);
+    inflight.current += 1;
+    version.current += 1;
+    try {
+      return await fn();
+    } finally {
+      inflight.current -= 1;
+      version.current += 1;
+      setBusy((b) => {
+        const i = b.indexOf(label);
+        return i < 0 ? b : [...b.slice(0, i), ...b.slice(i + 1)];
+      });
+    }
+  }, []);
+
+  const shape = useCallback((method, path, body, { refreshList = false, label = 'Saving…' } = {}) => track(label, async () => {
     try {
       const res = await api[method](`/boards/${boardId}${path}`, body);
-      await load();
+      await load({ force: true });
       if (refreshList) refreshBoards();
       return res.data;
     } catch (err) { fail(err); return null; }
-    finally { if (key) inflight.current.delete(key); mark(kind, -1); }
-  }, [boardId, load, fail, mark]);
+  }), [boardId, load, fail, track]);
+
+  const saving = (label, fn) => (...args) => track(label, () => fn(...args));
+
+  /**
+   * Shape changes show at once: `apply` edits the board in memory, the request runs behind it, `reconcile`
+   * swaps in the server's answer, and a refused change puts everything back. No full reload is waited for.
+   */
+  const instant = useCallback((label, apply, send, reconcile) => track(label, async () => {
+    const before = dataRef.current;
+    setData((d) => d && apply(d));
+    try {
+      const res = await send();
+      if (reconcile) setData((d) => d && reconcile(d, res.data));
+      return res.data;
+    } catch (err) {
+      setData(before);
+      fail(err);
+      return null;
+    }
+  }), [track, fail]);
+
+  const byOrder = (list, ids) => {
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    return [...list].sort((a, b) => (rank.has(a.id) ? rank.get(a.id) : 1e9) - (rank.has(b.id) ? rank.get(b.id) : 1e9));
+  };
 
   const actions = {
     reload: load,
     undo,
     canUndo: () => history.current.length > 0,
-    updateFields,
-    setStatus,
-    setDepends,
-    assign,
-    setValue,
-    vote,
+    updateFields: saving('Saving…', updateFields),
+    setStatus: saving('Saving…', setStatus),
+    setDepends: saving('Saving…', setDepends),
+    assign: saving('Saving…', assign),
+    setValue: saving('Saving…', setValue),
+    vote: saving('Saving…', vote),
     aiFill,
-    addItem,
-    rename: (name) => shape('patch', '', { name }, { refreshList: true }),
+    addItem: saving('Adding…', addItem),
+    rename: (name) => shape('patch', '', { name }, { refreshList: true, label: 'Renaming…' }),
     updateBoard: (patch) => shape('patch', '', patch, { refreshList: true }),
-    addColumn: (spec) => shape('post', '/columns', spec),
-    updateColumn: (col, patch) => shape('patch', `/columns/${col.id}`, patch),
-    removeColumn: (col) => shape('delete', `/columns/${col.id}`),
-    orderColumns: (ids) => shape('put', '/columns/order', { ids }),
+    addColumn: (spec) => {
+      const tempId = -Date.now();
+      return instant(
+        'Creating column…',
+        (d) => ({ ...d, columns: [...d.columns, {
+          id: tempId, board_id: Number(boardId), kind: spec.kind || 'text', title: spec.title || 'New column', width: 160,
+          settings: spec.settings || {}, system_key: spec.system_key || null, pending: true,
+          sort_order: (d.columns[d.columns.length - 1]?.sort_order || 0) + 1,
+        }] }),
+        () => api.post(`/boards/${boardId}/columns`, spec),
+        (d, body) => ({ ...d, columns: d.columns.map((c) => (c.id === tempId ? body.column : c)) }),
+      );
+    },
+    updateColumn: (col, patch) => instant(
+      'Saving column…',
+      (d) => ({ ...d, columns: d.columns.map((c) => (c.id === col.id ? { ...c, ...patch } : c)) }),
+      () => api.patch(`/boards/${boardId}/columns/${col.id}`, patch),
+    ),
+    removeColumn: (col) => instant(
+      'Deleting column…',
+      (d) => ({ ...d, columns: d.columns.filter((c) => c.id !== col.id) }),
+      () => api.delete(`/boards/${boardId}/columns/${col.id}`),
+    ),
+    orderColumns: (ids) => instant(
+      'Moving column…',
+      (d) => ({ ...d, columns: byOrder(d.columns, ids) }),
+      () => api.put(`/boards/${boardId}/columns/order`, { ids }),
+    ),
     addLabel: (col, label) => shape('post', `/columns/${col.id}/labels`, label),
     updateLabel: (col, label, patch) => shape('patch', `/columns/${col.id}/labels/${label.id}`, patch),
     removeLabel: (col, label) => shape('delete', `/columns/${col.id}/labels/${label.id}`),
     orderLabels: (col, ids) => shape('put', `/columns/${col.id}/labels/order`, { ids }),
-    addGroup: (group) => shape('post', '/groups', group),
-    updateGroup: (group, patch) => shape('patch', `/groups/${group.id}`, patch),
-    removeGroup: (group) => shape('delete', `/groups/${group.id}`),
-    duplicateGroup: (group) => shape('post', `/groups/${group.id}/duplicate`, { with_items: true }),
-    orderGroups: (ids) => shape('put', '/groups/order', { ids }),
-    addView: (view) => shape('post', '/views', view),
+    addGroup: async (group) => {
+      const tempId = -Date.now();
+      mark('groups', 1);
+      try {
+        return await instant(
+        'Creating group…',
+        (d) => ({ ...d, groups: [...d.groups, { id: tempId, description: '', archived: false, ...group, sort_order: (d.groups[d.groups.length - 1]?.sort_order || 0) + 1 }] }),
+        () => api.post(`/boards/${boardId}/groups`, group),
+        (d, body) => (body?.group ? { ...d, groups: d.groups.map((g) => (g.id === tempId ? body.group : g)) } : d),
+        );
+      } finally {
+        mark('groups', -1);
+      }
+    },
+    updateGroup: (group, patch) => instant(
+      'Saving group…',
+      (d) => ({ ...d, groups: patch.archived ? d.groups.filter((g) => g.id !== group.id) : d.groups.map((g) => (g.id === group.id ? { ...g, ...patch } : g)) }),
+      () => api.patch(`/boards/${boardId}/groups/${group.id}`, patch),
+    ),
+    duplicateGroup: (group) => shape('post', `/groups/${group.id}/duplicate`, { with_items: true }, { label: 'Duplicating group…' }),
+    removeGroup: (group) => instant(
+      'Deleting group…',
+      (d) => ({
+        ...d,
+        groups: d.groups.filter((g) => g.id !== group.id),
+        items: d.items.map((t) => (t.business_section_id === group.id ? { ...t, business_section_id: null } : t)),
+      }),
+      () => api.delete(`/boards/${boardId}/groups/${group.id}`),
+    ),
+    orderGroups: (ids) => instant(
+      'Moving group…',
+      (d) => ({ ...d, groups: byOrder(d.groups, ids) }),
+      () => api.put(`/boards/${boardId}/groups/order`, { ids }),
+    ),
+    addView: (view) => shape('post', '/views', view, { label: 'Adding view…' }),
     updateView: (view, patch) => shape('patch', `/views/${view.id}`, patch),
     removeView: (view) => shape('delete', `/views/${view.id}`),
   };
 
-  return { data, error, loading: !data && !error, pending, ...actions };
+  return { data, error, loading: !data && !error, busy, pending, ...actions };
 }

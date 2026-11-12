@@ -356,14 +356,14 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
               }}
             />
           )}
-          {canManage && !!onDelete && (
+          {canManage && onDelete && (
             <MenuRow
               icon="trash-outline"
               label="Delete group"
               danger
               onPress={async () => {
                 onClose();
-                const ok = await confirmDialog({ title: `Delete "${group.name}"?`, message: 'The group goes. Its tasks are not deleted; they move to "No group".', confirmLabel: 'Delete', destructive: true });
+                const ok = await confirmDialog({ title: `Delete "${group.name}"?`, message: 'Only the group goes. Its items are kept and move to "No group".', confirmLabel: 'Delete group', destructive: true });
                 if (ok) onDelete();
               }}
             />
