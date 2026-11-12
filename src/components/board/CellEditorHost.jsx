@@ -4,6 +4,7 @@ import api from '../../api/client';
 import { showToast } from '../../utils/events';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Popover from './Popover';
+import DependencyEditor from './DependencyEditor';
 import DueDatePicker from '../DueDatePicker';
 import {
   StatusEditor, LabelsEditor, PersonEditor, OptionsEditor, OptionsListEditor, TextEditor, PriorityEditor, PaletteGrid, BoardMeta,
@@ -15,6 +16,7 @@ import { spacing, radius } from '../../theme/theme';
 
 /** Who may change which part of an item (server flags; see todo.permissions). */
 export function mayEdit(item, column) {
+  if (item.pending) return false; // still being saved
   const p = item.permissions || {};
   if (!column) return !!p.can_edit;
   if (column.system_key === 'status' || column.kind === 'status') return !!(p.can_change_status || p.can_edit);
@@ -291,7 +293,15 @@ export default function CellEditorHost({ editing, onClose, board, people, action
       </View>
     );
   } else if (column.kind === 'dependency') {
-    body = <DependsEditor board={board} item={item} ids={(v || []).map((d) => d.id)} onDone={done((ids) => actions.setDepends(item, ids))} />;
+    body = (
+      <View style={{ gap: spacing.sm }}>
+        <DependsEditor board={board} item={item} ids={(v || []).map((d) => d.id)} onDone={done((ids) => actions.setDepends(item, ids))} />
+        {/* A person can be waited on too: they are told, with your comment, and the task shows as stuck until they are done. */}
+        <View style={{ borderTopWidth: 1, borderColor: colors.gray[200], paddingTop: spacing.sm }}>
+          <DependencyEditor item={item} candidates={candidates} personOnly onChanged={() => actions.reload()} />
+        </View>
+      </View>
+    );
   } else if (column.kind === 'priority') {
     body = <PriorityEditor value={item.priority} onDone={done((p) => actions.updateFields(item, { priority: p }))} />;
   } else if (column.kind === 'dropdown') {

@@ -13,6 +13,7 @@ import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import DraftReviewSheet from '../components/drafts/DraftReviewSheet';
 import { TodoCheckbox } from '../components/kit';
 import { formatDue } from '../utils/dates';
+import { useFreshness } from '../utils/freshness';
 import { paletteHex, paletteInk } from '../components/board/model';
 
 // Stage colours of the to-do statuses, the same as a board's default status labels.
@@ -77,14 +78,14 @@ export default function MyWorkScreen() {
   const [review, setReview] = useState(false);
   const timer = useRef(null);
 
+  const guard = useFreshness();
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/me/work', { __skipOops: true });
-      setData(res.data);
+      await guard.fresh(() => api.get('/me/work', { __skipOops: true }), (res) => setData(res.data));
     } catch {
       setData((d) => d || { overdue: [], due_today: [], waiting_on_me: [], upcoming: [], drafts: { count: 0 } });
     }
-  }, []);
+  }, [guard]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribe('todo:changed', () => {
@@ -105,7 +106,11 @@ export default function MyWorkScreen() {
   }, [data, review, openId]);
 
   const open = useCallback((id) => { if (todos.some((t) => t.id === id)) setOpenId(id); }, [todos]);
-  const tick = useCallback(async (t) => { await toggleTodo(t); load(); }, [toggleTodo, load]);
+  // The ticked item leaves its section at once; the reload (held back until the tick is saved) confirms it.
+  const tick = useCallback(async (t) => {
+    setData((d) => d && Object.fromEntries(Object.entries(d).map(([k, v]) => [k, Array.isArray(v) ? v.filter((x) => x.id !== t.id) : v])));
+    try { await guard.edit(() => toggleTodo(t)); } finally { load(); }
+  }, [toggleTodo, load, guard]);
   const total = useMemo(() => (data ? data.overdue.length + data.due_today.length + data.waiting_on_me.length : 0), [data]);
 
   return (

@@ -40,6 +40,7 @@ export const EDITABLE_KINDS = new Set([
 export const IN_CELL_KINDS = new Set(['checkbox', 'rating', 'vote']);
 
 export function canEditColumn(column) {
+  if (column.pending) return false; // still being created
   return column.system_key ? EDITABLE_SYSTEM.has(column.system_key) : EDITABLE_KINDS.has(column.kind);
 }
 

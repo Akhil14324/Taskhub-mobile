@@ -1,17 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, Platform } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import api from '../../api/client';
 import { useColors } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { useTodos } from '../../context/TodoContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
 import { glass } from '../../theme/glass';
 import useIsDesktop from '../../hooks/useBreakpoint';
+import useTimeboxDnd, { makeDraggable } from '../../hooks/useTimeboxDnd';
 import { Avatar } from '../kit';
-import { formatTime, todayYmd } from '../../utils/dates';
+import { formatTime, formatDue, todayYmd } from '../../utils/dates';
+import { showToast } from '../../utils/events';
 import { paletteHex, paletteInk } from '../board/model';
+import DayReportSheet from './DayReportSheet';
 import {
   STEP, MAX_PRIORITIES, PRIORITY_COLORS, toMin, toHM, rangeOf, addBlock, firstFree, resize, summarize, hours, nowMin,
+  moveBlock, maxEnd, setEnd, slotMinutes,
 } from './model';
+
+const isWeb = Platform.OS === 'web';
+/** Marks something as draggable onto the schedule (web). */
+const dragProps = (payload) => (isWeb ? { ref: makeDraggable, dataSet: { tbDrag: JSON.stringify(payload) } } : {});
 
 const SLOT_H = 40;
 const noOutline = Platform.OS === 'web' ? { outlineStyle: 'none' } : null;
@@ -84,7 +93,12 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
               style={[{ flex: 1, fontSize: 15, color: colors.gray[900], paddingVertical: 4, textDecorationLine: p.done ? 'line-through' : 'none' }, noOutline]}
             />
           )}
-          {!readOnly && !!p.text && <IconBtn icon="time-outline" label="Give it a time" active={placing?.priority === i} onPress={() => onPlace({ text: p.text, priority: i, todo_id: p.todo_id || null, minutes: 60 })} />}
+          {!readOnly && !!p.text && isWeb && (
+            <View {...dragProps({ kind: 'task', text: p.text, priority: i, todo_id: p.todo_id || null, minutes: 60 })} style={{ cursor: 'grab', padding: 4 }}>
+              <Ionicons name="reorder-two-outline" size={18} color={colors.gray[400]} />
+            </View>
+          )}
+          {!readOnly && !!p.text && <IconBtn icon="time-outline" label="Give it a time" active={placing?.priority === i} onPress={() => onPlace({ text: p.text, priority: i, todo_id: p.todo_id || null, minutes: 60 })} />}}
           <Pressable onPress={readOnly || !p.text ? undefined : () => set(i, { done: !p.done })} accessibilityLabel={p.done ? 'Done' : 'Not done yet'} hitSlop={6}>
             <Ionicons name={p.done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={p.done ? colors.green[600] : colors.gray[400]} />
           </Pressable>
@@ -97,7 +111,10 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
 function BrainDump({ box, update, readOnly, onPlace, placing }) {
   const colors = useColors();
   const [draft, setDraft] = useState('');
-  const [work, setWork] = useState(null);
+  const [showWork, setShowWork] = useState(false);
+  const [q, setQ] = useState('');
+  const { user } = useAuth();
+  const { todos } = useTodos();
   const add = (item) => update((b) => ({ ...b, brain_dump: [...b.brain_dump, { done: false, todo_id: null, ...item }] }));
   const edit = (i, fields) => update((b) => ({ ...b, brain_dump: b.brain_dump.map((x, j) => (j === i ? { ...x, ...fields } : x)) }));
   const remove = (i) => update((b) => ({ ...b, brain_dump: b.brain_dump.filter((_, j) => j !== i) }));
@@ -109,39 +126,68 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
   });
   const full = box.priorities.filter((p) => p.text).length >= MAX_PRIORITIES;
 
-  const loadWork = async () => {
-    if (work) { setWork(null); return; }
-    try {
-      const res = await api.get('/me/work', { __skipOops: true });
-      const seen = new Set([...box.brain_dump, ...box.priorities].map((x) => x.todo_id).filter(Boolean));
-      const list = [...res.data.overdue, ...res.data.due_today, ...res.data.waiting_on_me, ...res.data.upcoming].filter((t, i, a) => a.findIndex((x) => x.id === t.id) === i);
-      setWork(list.filter((t) => !seen.has(t.id)).slice(0, 30));
-    } catch {
-      setWork([]);
-    }
-  };
+  // Everything open that is mine, not just today: overdue first, then by date, undated last. Sub-tasks show
+  // under the name of their parent.
+  const today = todayYmd();
+  const allWork = useMemo(() => {
+    if (!showWork) return [];
+    const byId = new Map(todos.map((t) => [t.id, t]));
+    const mine = (t) => (t.assignee_id ? t.assignee_id === user?.id : t.created_by === user?.id || (t.members || []).some((m) => m.id === user?.id));
+    return todos
+      .filter((t) => !t.is_done && mine(t) && t.review_state !== 'rejected')
+      .map((t) => ({ ...t, parentTitle: t.parent_id ? byId.get(t.parent_id)?.title : null }))
+      .sort((a, b) => {
+        const ad = a.due_date || a.deadline_date || '9999-12-31';
+        const bd = b.due_date || b.deadline_date || '9999-12-31';
+        return ad < bd ? -1 : ad > bd ? 1 : (a.priority ?? 4) - (b.priority ?? 4);
+      });
+  }, [showWork, todos, user]);
+  const work = useMemo(() => {
+    const seen = new Set([...box.brain_dump, ...box.priorities, ...box.blocks].map((x) => x.todo_id).filter(Boolean));
+    const s = q.trim().toLowerCase();
+    return allWork.filter((t) => !seen.has(t.id) && (!s || t.title.toLowerCase().includes(s) || (t.business_name || '').toLowerCase().includes(s)));
+  }, [allWork, box.brain_dump, box.priorities, box.blocks, q]);
 
   return (
     <Card
       title="Brain dump"
       icon="cloud-outline"
       right={!readOnly && (
-        <Pressable onPress={loadWork} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name={work ? 'chevron-up' : 'briefcase-outline'} size={14} color={BRAND} />
-          <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>{work ? 'Hide' : 'From my work'}</Text>
+        <Pressable onPress={() => setShowWork((s) => !s)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name={showWork ? 'chevron-up' : 'briefcase-outline'} size={14} color={BRAND} />
+          <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>{showWork ? 'Hide' : 'From my work'}</Text>
         </Pressable>
       )}
     >
-      {work && (
+      {showWork && (
         <View style={{ backgroundColor: colors.gray[50], borderBottomWidth: 1, borderColor: colors.gray[200], paddingVertical: 4 }}>
-          {!work.length && <Text style={{ padding: spacing.md, color: colors.gray[500] }}>Nothing open on your plate.</Text>}
-          {work.map((t) => (
-            <Pressable key={t.id} onPress={() => { add({ text: t.title, todo_id: t.id }); setWork((w) => w.filter((x) => x.id !== t.id)); }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 7, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
-              <Ionicons name="add" size={16} color={BRAND} />
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[800] }}>{t.title}</Text>
-              <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.business_name || 'Personal'}</Text>
-            </Pressable>
-          ))}
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder={`Search all ${allWork.length} open tasks`}
+            placeholderTextColor={colors.gray[400]}
+            style={[{ marginHorizontal: spacing.md, marginVertical: 4, borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 6, fontSize: 14, color: colors.gray[900], backgroundColor: colors.white }, noOutline]}
+          />
+          {isWeb && !!work.length && <Text style={{ fontSize: 12, color: colors.gray[500], paddingHorizontal: spacing.md, paddingBottom: 2 }}>Drag a task onto the schedule, or tap + to put it in your brain dump.</Text>}
+          <ScrollView style={{ maxHeight: 320 }} nestedScrollEnabled>
+            {!work.length && <Text style={{ padding: spacing.md, color: colors.gray[500] }}>{allWork.length ? 'Nothing matches.' : 'Nothing open on your plate.'}</Text>}
+            {work.map((t) => {
+              const late = t.due_date && t.due_date < today;
+              return (
+                <View key={t.id} {...dragProps({ kind: 'task', text: t.title, todo_id: t.id, minutes: slotMinutes(t.duration_minutes) })} style={{ cursor: isWeb ? 'grab' : 'auto' }}>
+                  <Pressable onPress={() => add({ text: t.title, todo_id: t.id })} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 7, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+                    <Ionicons name="add" size={16} color={BRAND} />
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[800] }}>{t.title}</Text>
+                      {!!t.parentTitle && <Text numberOfLines={1} style={{ fontSize: 11, color: colors.gray[500] }}>in {t.parentTitle}</Text>}
+                    </View>
+                    <Text style={{ fontSize: 12, color: late ? colors.red[600] : colors.gray[500] }}>{t.due_date ? `${late ? 'Overdue · ' : ''}${formatDue(t.due_date)}` : 'No date'}</Text>
+                    <Text style={{ fontSize: 12, color: colors.gray[400], maxWidth: 90 }} numberOfLines={1}>{t.business_name || 'Personal'}</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
       {!box.brain_dump.length && readOnly && <Text style={{ padding: spacing.md, color: colors.gray[500] }}>Nothing here.</Text>}
@@ -156,6 +202,11 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
             <TextInput value={item.text} onChangeText={(t) => edit(i, { text: t })} style={[{ flex: 1, fontSize: 14, color: colors.gray[800], paddingVertical: 2, textDecorationLine: item.done ? 'line-through' : 'none' }, noOutline]} />
           )}
           {!!item.todo_id && <Ionicons name="link-outline" size={14} color={colors.gray[400]} />}
+          {!readOnly && isWeb && !!item.text && (
+            <View {...dragProps({ kind: 'task', text: item.text, todo_id: item.todo_id || null, minutes: 60 })} style={{ cursor: 'grab', padding: 4 }}>
+              <Ionicons name="reorder-two-outline" size={18} color={colors.gray[400]} />
+            </View>
+          )}
           {!readOnly && !full && <IconBtn icon="star-outline" label="Make it a top priority" onPress={() => promote(i)} />}
           {!readOnly && <IconBtn icon="time-outline" label="Give it a time" active={placing?.dump === i} onPress={() => onPlace({ text: item.text, todo_id: item.todo_id || null, dump: i })} />}
           {!readOnly && <IconBtn icon="close" label="Remove" onPress={() => remove(i)} />}
@@ -176,9 +227,44 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
   );
 }
 
-function Block({ block, index, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus }) {
+function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus }) {
   const colors = useColors();
-  const slots = (toMin(block.end) - toMin(block.start)) / STEP;
+  // While the bottom edge is being pulled, the block shows the length it would get; it is saved on release.
+  const [draftEnd, setDraftEnd] = useState(null);
+  const endMin = draftEnd ?? toMin(block.end);
+  const startMin = toMin(block.start);
+  const slots = (endMin - startMin) / STEP;
+  const live = useRef(null);
+  live.current = { block, index, blocks, update };
+  const grip = useCallback((node) => {
+    if (!node || !isWeb) return;
+    node.style.touchAction = 'none';
+    node.onclick = (e) => e.stopPropagation();
+    node.onpointerdown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { block: b, index: i, blocks: all } = live.current;
+      const startY = e.clientY;
+      const from = toMin(b.end);
+      const lo = toMin(b.start) + STEP;
+      const hi = maxEnd(all, i);
+      let cur = from;
+      const move = (ev) => {
+        const next = Math.min(hi, Math.max(lo, from + Math.round((ev.clientY - startY) / SLOT_H) * STEP));
+        if (next !== cur) { cur = next; setDraftEnd(next); }
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        setDraftEnd(null);
+        if (cur !== from) live.current.update((bx) => ({ ...bx, blocks: setEnd(bx.blocks, live.current.index, cur) }));
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    };
+  }, []);
   const color = block.priority !== null && block.priority !== undefined ? PRIORITY_COLORS[block.priority] : null;
   const set = (fields) => update((b) => ({ ...b, blocks: b.blocks.map((x, i) => (i === index ? { ...x, ...fields } : x)) }));
   // A selected block grows to hold its controls (a 30 minute block is too short for them); it shrinks back when deselected.
@@ -186,10 +272,18 @@ function Block({ block, index, readOnly, canMark, selected, onSelect, update, on
   const cycle = () => set({ done: block.done === null || block.done === undefined ? true : block.done === true ? false : null });
   return (
     <Pressable
+      dataSet={{ tbRow: "1" }}
       onPress={() => onSelect(selected ? null : index)}
       style={[{ marginVertical: 2, flexDirection: 'row', borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: selected ? BRAND : colors.gray[200], backgroundColor: block.done === true ? colors.green[50] : colors.white }, showTools ? { minHeight: slots * SLOT_H - 4 } : { height: slots * SLOT_H - 4 }]}
     >
-      <View style={{ width: 5, backgroundColor: color ? paletteHex(color) : colors.gray[300] }} />
+      {!readOnly && isWeb ? (
+        // The handle: drag the whole block to another time.
+        <View {...dragProps({ kind: 'block', index })} accessibilityLabel="Drag to another time" style={{ width: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: color ? paletteHex(color) : colors.gray[300], cursor: 'grab' }}>
+          <Ionicons name="reorder-two-outline" size={14} color={color ? paletteInk(color) : colors.gray[600]} />
+        </View>
+      ) : (
+        <View style={{ width: 5, backgroundColor: color ? paletteHex(color) : colors.gray[300] }} />
+      )}
       <View style={{ flex: 1, paddingHorizontal: 8, paddingVertical: 4, justifyContent: slots > 1 || showTools ? 'flex-start' : 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {readOnly ? (
@@ -208,6 +302,11 @@ function Block({ block, index, readOnly, canMark, selected, onSelect, update, on
           {!!block.todo_id && <IconBtn icon="open-outline" label="Open the to-do" onPress={() => onOpenTodo(block.todo_id)} />}
           {canMark && <DoneMark value={block.done} onPress={cycle} disabled={readOnly} />}
         </View>
+        {(slots > 1 || draftEnd) && (
+          <Text style={{ fontSize: 11, color: draftEnd ? BRAND : colors.gray[500], fontWeight: draftEnd ? '700' : '400' }}>
+            {formatTime(block.start)} – {formatTime(toHM(endMin))} · {hours(endMin - startMin)}{block.todo_id ? ' · updates the task' : ''}
+          </Text>
+        )}
         {showTools && (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4, marginBottom: 2 }}>
             {[null, 0, 1, 2].map((p) => (
@@ -222,6 +321,12 @@ function Block({ block, index, readOnly, canMark, selected, onSelect, update, on
           </View>
         )}
       </View>
+      {!readOnly && isWeb && (
+        // Pull the bottom edge down or up to say how long it takes.
+        <View ref={grip} accessibilityLabel="Pull to change how long it takes" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 12, alignItems: 'center', justifyContent: 'center', cursor: 'ns-resize' }}>
+          <View style={{ width: 34, height: 4, borderRadius: 2, backgroundColor: draftEnd ? BRAND : colors.gray[300] }} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -250,6 +355,31 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
     setPlacing(null);
   };
 
+  // Drag a task onto a half hour, or drag a block to another time. A task already on the schedule moves
+  // instead of being added twice.
+  useTimeboxDnd({
+    enabled: !readOnly,
+    onDrop: (p, start) => {
+      if (p.kind === 'block') {
+        if (!moveBlock(box.blocks, p.index, start)) { showToast({ message: 'That time is taken', icon: 'alert-circle-outline' }); return; }
+        update((b) => ({ ...b, blocks: moveBlock(b.blocks, p.index, start) || b.blocks }));
+        setSelected(null);
+        return;
+      }
+      const existing = p.todo_id ? box.blocks.findIndex((x) => x.todo_id === p.todo_id) : -1;
+      if (existing >= 0) {
+        if (!moveBlock(box.blocks, existing, start)) { showToast({ message: 'That time is taken', icon: 'alert-circle-outline' }); return; }
+        update((b) => ({ ...b, blocks: moveBlock(b.blocks, existing, start) || b.blocks }));
+        return;
+      }
+      const fields = { text: p.text, todo_id: p.todo_id || null, priority: p.priority ?? null };
+      const minutes = p.minutes || 60;
+      if (!addBlock(box.blocks, start, fields, minutes)) { showToast({ message: 'That time is taken', icon: 'alert-circle-outline' }); return; }
+      update((b) => ({ ...b, blocks: addBlock(b.blocks, start, fields, minutes) || b.blocks }));
+      setSelected(null);
+    },
+  });
+
   const rows = [];
   for (let m = from; m < to;) {
     const idx = box.blocks.findIndex((b) => toMin(b.start) === m);
@@ -263,7 +393,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
             <Text key={k} style={{ height: SLOT_H, fontSize: 12, color: colors.gray[500], paddingTop: 2 }}>{(m + k * STEP) % 60 === 0 ? formatTime(toHM(m + k * STEP)) : ''}</Text>
           ))}</View>
           <View style={{ flex: 1 }}>
-            <Block block={b} index={idx} readOnly={readOnly} canMark={canMark} selected={selected === idx} onSelect={setSelected} update={update} onOpenTodo={onOpenTodo} autoFocus={fresh === idx} />
+            <Block block={b} index={idx} blocks={box.blocks} readOnly={readOnly} canMark={canMark} selected={selected === idx} onSelect={setSelected} update={update} onOpenTodo={onOpenTodo} autoFocus={fresh === idx} />
           </View>
         </View>
       );
@@ -274,6 +404,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
         <View key={m} style={{ flexDirection: 'row', height: SLOT_H }}>
           <Text style={{ width: 62, fontSize: 12, color: colors.gray[500], paddingTop: 2 }}>{label}</Text>
           <Pressable
+            dataSet={{ tbSlot: String(slot) }}
             onPress={() => place(slot)}
             disabled={readOnly}
             accessibilityLabel={`Plan ${formatTime(toHM(slot))}`}
@@ -294,7 +425,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
     <Card
       title="Schedule"
       icon="time-outline"
-      right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>{sum.planned ? `${hours(sum.planned)} planned${canMark && sum.done ? ` · ${hours(sum.done)} done` : ''}` : 'Tap a half hour to plan it'}</Text>}
+      right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>{sum.planned ? `${hours(sum.planned)} planned${canMark && sum.done ? ` · ${hours(sum.done)} done` : ''}` : isWeb ? 'Drag a task here, pull the bottom edge of a block to stretch it' : 'Tap a half hour to plan it'}</Text>}
     >
       {placing && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand[50], paddingHorizontal: spacing.md, paddingVertical: 8 }}>
@@ -322,6 +453,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
 function EndOfDay({ data, box, update, readOnly, onSend, mine }) {
   const colors = useColors();
   const [sending, setSending] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const sum = summarize(box);
   const sent = data?.status === 'sent';
   return (
@@ -343,6 +475,16 @@ function EndOfDay({ data, box, update, readOnly, onSend, mine }) {
             style={[{ minHeight: 72, fontSize: 14, color: colors.gray[900], borderWidth: 1, borderColor: colors.gray[200], borderRadius: radius.md, padding: spacing.sm, textAlignVertical: 'top' }, noOutline]}
           />
         )}
+        {mine && (
+          <Pressable
+            onPress={() => setReportOpen(true)}
+            style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brand[200], backgroundColor: hovered ? colors.brand[100] : colors.brand[50] })}
+          >
+            <Ionicons name="document-text-outline" size={16} color={BRAND} />
+            <Text style={{ color: BRAND, fontWeight: '600' }}>{data?.report ? 'Open my day report' : 'Make my day report'}</Text>
+          </Pressable>
+        )}
+        {mine && <DayReportSheet open={reportOpen} onClose={() => setReportOpen(false)} date={data?.date} box={box} initial={data?.report || null} />}
         {sent ? (
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -396,6 +538,39 @@ export default function TimeboxDay({ data, box, update, onSend, onOpenTodo }) {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [placing]);
+
+  // What is planned here is written back to the to-do itself: its date, its start time and how long it takes
+  // (the length of the block). It runs after the box has saved, only for blocks that changed since the day was
+  // opened, so merely looking at a day never rewrites anything. A task the person may not edit is reported.
+  const { updateTodo } = useTodos();
+  const synced = useRef({ date: null, sig: new Map() });
+  useEffect(() => {
+    if (!data?.mine || !data.can_edit || data.date !== date) return undefined;
+    const sigOf = (b) => `${date}|${b.start}|${b.end}`;
+    if (synced.current.date !== date) {
+      // First look at this day: remember how things are, write nothing.
+      synced.current = { date, sig: new Map(box.blocks.filter((b) => b.todo_id).map((b) => [b.todo_id, sigOf(b)])) };
+      return undefined;
+    }
+    const changed = box.blocks.filter((b) => b.todo_id && synced.current.sig.get(b.todo_id) !== sigOf(b));
+    if (!changed.length) return undefined;
+    const timer = setTimeout(async () => {
+      let ok = 0;
+      const failed = [];
+      for (const b of changed) {
+        synced.current.sig.set(b.todo_id, sigOf(b)); // one try per change; a refusal is not retried in a loop
+        try {
+          await updateTodo(b.todo_id, { due_date: date, due_time: b.start, duration_minutes: toMin(b.end) - toMin(b.start) });
+          ok += 1;
+        } catch {
+          failed.push(b.text || 'a task');
+        }
+      }
+      if (ok) showToast({ message: ok === 1 ? 'Task updated with its time' : `${ok} tasks updated with their time`, icon: 'time-outline', tone: 'success' });
+      if (failed.length) showToast({ message: `Could not change the time of "${failed[0]}"${failed.length > 1 ? ` and ${failed.length - 1} more` : ''}. You may not be allowed to edit it.`, tone: 'error', icon: 'alert-circle-outline' });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [box.blocks, date, data, updateTodo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPlace = useCallback((item) => setPlacing((p) => (p && p.text === item.text ? null : item)), []);
   const parts = useMemo(() => ({

@@ -12,6 +12,8 @@ import {
 
 const TodoContext = createContext(null);
 const DELETE_UNDO_MS = 4000;
+const EDIT_SETTLE_MS = 2500;
+const fetchTodosRef = { current: null };
 
 function sortTodos(list) {
   return [...list].sort((a, b) => {
@@ -30,7 +32,16 @@ function sortTodos(list) {
 export function TodoProvider({ children }) {
   const { user } = useAuth();
   const { subscribe } = useChat();
-  const [todos, setTodos] = useState([]);
+  const [todos, setTodosRaw] = useState([]);
+  // When the person last changed a to-do on screen. A fetch that comes back within EDIT_SETTLE_MS of that may
+  // have been asked for before the change reached the server, so it would put the old state back (a finished
+  // to-do reappearing for a few seconds). Such an answer is dropped and asked again once things settle.
+  const lastEdit = useRef(0);
+  const settleTimer = useRef(null);
+  const setTodos = useCallback((next) => {
+    lastEdit.current = Date.now();
+    setTodosRaw(next);
+  }, []);
   const [lists, setLists] = useState([]);
   const [sections, setSections] = useState([]);
   const [filters, setFilters] = useState([]);
@@ -53,8 +64,14 @@ export function TodoProvider({ children }) {
   const fetchTodos = useCallback(async () => {
     try {
       const res = await api.get('/todos', { __skipOops: true });
+      const sinceEdit = Date.now() - lastEdit.current;
+      if (sinceEdit < EDIT_SETTLE_MS) {
+        clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(() => fetchTodosRef.current?.(), EDIT_SETTLE_MS - sinceEdit + 100);
+        return;
+      }
       const hidden = pendingDeletes.current;
-      setTodos(sortTodos((res.data.todos || []).filter((t) => !hidden.has(t.id))));
+      setTodosRaw(sortTodos((res.data.todos || []).filter((t) => !hidden.has(t.id))));
       setWatched(sortTodos(res.data.watching || []));
       setLists(res.data.lists || []);
       setSections(res.data.sections || []);
@@ -67,6 +84,8 @@ export function TodoProvider({ children }) {
       setLoading(false);
     }
   }, []);
+
+  fetchTodosRef.current = fetchTodos;
 
   const fetchDump = useCallback(async () => {
     try {
@@ -88,7 +107,7 @@ export function TodoProvider({ children }) {
 
   useEffect(() => {
     if (!user) {
-      setTodos([]);
+      setTodosRaw([]); // not a person's edit: the first fetch after sign-in must not be held back
       setLists([]);
       setSections([]);
       setFilters([]);
@@ -121,7 +140,15 @@ export function TodoProvider({ children }) {
       await Promise.all(ids.map(async (id) => {
         try {
           const res = await api.get(`/todos/${id}`, { __skipOops: true });
-          setTodos((prev) => {
+          // Asked for before my own latest change could have reached the server: it may be the old state. Ask again later.
+          const sinceEdit = Date.now() - lastEdit.current;
+          if (sinceEdit < EDIT_SETTLE_MS) {
+            dirtyIds.current.add(id);
+            clearTimeout(refetchTimer.current);
+            refetchTimer.current = setTimeout(flush, EDIT_SETTLE_MS - sinceEdit + 100);
+            return;
+          }
+          setTodosRaw((prev) => {
             const fresh = [res.data.todo, ...(res.data.subtasks || [])].filter(Boolean);
             const freshIds = new Set(fresh.map((t) => t.id));
             // A to-do in the Dump belongs in the Dump list, not in the lists.
@@ -132,7 +159,7 @@ export function TodoProvider({ children }) {
           });
         } catch (err) {
           // Gone or no longer visible to us: drop it. Anything else: fall back to a full reload.
-          if ([403, 404].includes(err.response?.status)) { setTodos((prev) => prev.filter((t) => t.id !== id)); setWatched((w) => w.filter((t) => t.id !== id)); }
+          if ([403, 404].includes(err.response?.status)) { setTodosRaw((prev) => prev.filter((t) => t.id !== id)); setWatched((w) => w.filter((t) => t.id !== id)); }
           else fetchTodos();
         }
       }));
