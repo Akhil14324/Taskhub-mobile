@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
 import api from '../../api/client';
@@ -45,6 +45,8 @@ function Chip({ item, board, onOpenItem, compact }) {
 export function BoardCalendar({ board, items, onOpenItem, onAddOnDay }) {
   const colors = useColors();
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const phone = useWindowDimensions().width < 700;
+  const [sel, setSel] = useState(() => todayYmd());
   const today = todayYmd();
   const days = useMemo(() => {
     const first = new Date(month);
@@ -87,19 +89,37 @@ export function BoardCalendar({ board, items, onOpenItem, onAddOnDay }) {
           return (
             <Pressable
               key={d}
-              onPress={(e) => onAddOnDay && onAddOnDay(e, d)}
+              onPress={(e) => (phone ? setSel(d) : onAddOnDay && onAddOnDay(e, d))}
               style={({ hovered }) => ({
-                width: `${100 / 7}%`, minHeight: 104, padding: 4, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.gray[200],
-                backgroundColor: d === today ? colors.brand[50] : hovered ? colors.gray[50] : inMonth ? colors.white : colors.gray[100],
+                width: `${100 / 7}%`, minHeight: phone ? 52 : 104, padding: phone ? 2 : 4, alignItems: phone ? 'center' : undefined, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.gray[200],
+                backgroundColor: phone && d === sel ? colors.brand[100] : d === today ? colors.brand[50] : hovered ? colors.gray[50] : inMonth ? colors.white : colors.gray[100],
               })}
             >
               <Text style={{ fontSize: 12, fontWeight: d === today ? '700' : '400', color: d === today ? BRAND : inMonth ? colors.gray[700] : colors.gray[400], marginBottom: 2 }}>{parseYmd(d).getDate()}</Text>
-              {list.slice(0, 3).map((t) => <Chip key={t.id} item={t} board={board} onOpenItem={onOpenItem} compact />)}
-              {list.length > 3 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>+{list.length - 3} more</Text>}
+              {phone ? (
+                <View style={{ flexDirection: 'row', gap: 2, flexWrap: 'wrap', justifyContent: 'center', marginTop: 2 }}>
+                  {list.slice(0, 4).map((t) => <View key={t.id} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: paletteHex(statusColumnOf(board) ? (statusLabelOf(t, statusColumnOf(board), board.values)?.color || 'grey') : 'blue') }} />)}
+                </View>
+              ) : (
+                <>
+                  {list.slice(0, 3).map((t) => <Chip key={t.id} item={t} board={board} onOpenItem={onOpenItem} compact />)}
+                  {list.length > 3 && <Text style={{ fontSize: 11, color: colors.gray[500] }}>+{list.length - 3} more</Text>}
+                </>
+              )}
             </Pressable>
           );
         })}
       </View>
+      {phone && (
+        <View style={{ gap: 6, paddingTop: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.gray[900] }}>{formatDue(sel)}</Text>
+            {!!onAddOnDay && <Pressable onPress={(e) => onAddOnDay(e, sel)} accessibilityLabel="Add a task on this day" style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, backgroundColor: BRAND }}><Ionicons name="add" size={16} color="#fff" /><Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Add</Text></Pressable>}
+          </View>
+          {(byDay.get(sel) || []).map((t) => <Chip key={t.id} item={t} board={board} onOpenItem={onOpenItem} />)}
+          {!(byDay.get(sel) || []).length && <Text style={{ fontSize: 13, color: colors.gray[500] }}>Nothing on this day.</Text>}
+        </View>
+      )}
       <StatusLegend board={board} items={items} />
     </ScrollView>
   );
@@ -148,7 +168,9 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
   // A bar being dragged: { id, mode: 'move' | 'left' | 'right' | 'link', d: days, x, y }. Shown at once, saved on release.
   const [drag, setDrag] = useState(null);
   const live = useRef({});
-  const [zoomIdx, setZoomIdx] = useState(0);
+  const phone = useWindowDimensions().width < 700;
+  const labelW = phone ? 120 : LABEL_W;
+  const [zoomIdx, setZoomIdx] = useState(phone ? 1 : 0);
   const [width, setWidth] = useState(0);
   const [fit, setFit] = useState(false);
   const [shut, setShut] = useState(() => new Set());
@@ -178,7 +200,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
     return { start, days: Math.max(21, daysBetween(start, addDays(last, 9))) };
   }, [blocks, today]);
 
-  const px = fit && width > 0 ? Math.max(4, Math.min(96, Math.floor((width - LABEL_W - 24) / span.days))) : ZOOMS[zoomIdx][2];
+  const px = fit && width > 0 ? Math.max(4, Math.min(96, Math.floor((width - labelW - 24) / span.days))) : ZOOMS[zoomIdx][2];
   const x = (ymd) => daysBetween(span.start, ymd) * px;
   const gridW = span.days * px;
 
@@ -225,6 +247,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
   const grab = (t, mode) => (el) => {
     if (!el || typeof el.addEventListener !== 'function' || el.__gantt === mode) return;
     el.__gantt = mode;
+    el.style.touchAction = 'none'; // a finger drags the bar instead of scrolling the page
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -265,9 +288,9 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
   const weeks = Array.from({ length: Math.ceil(span.days / 7) }, (_, i) => addDays(span.start, i * 7));
 
   return (
-    <View style={{ flex: 1, padding: spacing.md }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={{ flex: 1, padding: phone ? spacing.xs : spacing.md }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <View style={{ flex: 1, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], overflow: 'hidden' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: phone ? spacing.sm : spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
           <Text style={{ fontSize: 20, fontWeight: '600', color: colors.gray[900], flex: 1 }}>{gantt ? 'Gantt' : 'Timeline'}</Text>
           <Pressable onPress={() => scrollRef.current?.scrollTo({ x: Math.max(0, x(today) - 160), animated: true })} accessibilityLabel="Scroll to today" style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
             <Text style={{ fontSize: 14, color: colors.gray[800] }}>Today</Text>
@@ -290,7 +313,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
         </View>
         <ScrollView style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row' }}>
-            <View style={{ width: LABEL_W, borderRightWidth: 1, borderColor: colors.gray[200] }}>
+            <View style={{ width: labelW, borderRightWidth: 1, borderColor: colors.gray[200] }}>
               <View style={{ height: HEAD_H, borderBottomWidth: 1, borderColor: colors.gray[200] }} />
               {rows.map((r, i) => (
                 <View key={i} style={{ height: ROW_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, gap: 8 }}>
@@ -303,7 +326,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
                   ) : (
                     <Pressable onPress={() => onOpenItem(r.item.id)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingLeft: 22 }}>
                       <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[800], flex: 1 }}>{r.item.title}</Text>
-                      <Text style={{ fontSize: 13, color: colors.gray[600] }}>{shortDay(dueOf(r.item) || r.item.start_date)}</Text>
+                      {!phone && <Text style={{ fontSize: 13, color: colors.gray[600] }}>{shortDay(dueOf(r.item) || r.item.start_date)}</Text>}
                     </Pressable>
                   )}
                 </View>
@@ -427,6 +450,7 @@ const CHART_BY = [['status', 'Status'], ['person', 'Person'], ['group', 'Group']
 
 export function BoardChart({ board, items, people }) {
   const colors = useColors();
+  const phone = useWindowDimensions().width < 700;
   const [by, setBy] = useState('status');
   const top = items.filter((t) => !t.parent_id);
   const bars = useMemo(() => {
@@ -443,7 +467,7 @@ export function BoardChart({ board, items, people }) {
   }, [top, by, board, people]);
   const max = Math.max(1, ...bars.map((b) => b.count));
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, maxWidth: 900 }}>
+    <ScrollView contentContainerStyle={{ padding: phone ? spacing.md : spacing.lg, gap: spacing.md, maxWidth: 900 }}>
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         {CHART_BY.map(([k, l]) => (
           <Pressable key={k} onPress={() => setBy(k)} style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, backgroundColor: by === k ? colors.brand[100] : colors.gray[100] }}>
@@ -454,7 +478,7 @@ export function BoardChart({ board, items, people }) {
       <Text style={{ fontSize: 13, color: colors.gray[600] }}>{top.length} items</Text>
       {bars.map((b) => (
         <View key={`${b.label}`} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <Text numberOfLines={1} style={{ width: 150, fontSize: 13, color: colors.gray[800] }}>{b.label}</Text>
+          <Text numberOfLines={1} style={{ width: phone ? 92 : 150, fontSize: 13, color: colors.gray[800] }}>{b.label}</Text>
           <View style={{ flex: 1, height: 22, backgroundColor: colors.gray[100], borderRadius: 4 }}>
             <View style={{ width: `${(b.count / max) * 100}%`, height: 22, backgroundColor: paletteHex(b.color), borderRadius: 4 }} />
           </View>
@@ -470,6 +494,7 @@ export function BoardChart({ board, items, people }) {
 // ---------------------------------------------------------------------------------------------------
 export function BoardWorkload({ board, items, people, onOpenItem }) {
   const colors = useColors();
+  const phone = useWindowDimensions().width < 700;
   const today = todayYmd();
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i));
   const open = items.filter((t) => !t.parent_id && !t.is_done && t.assignee_id);
@@ -490,7 +515,7 @@ export function BoardWorkload({ board, items, people, onOpenItem }) {
     <ScrollView horizontal contentContainerStyle={{ padding: spacing.md }}>
       <View>
         <View style={{ flexDirection: 'row' }}>
-          <View style={{ width: 180 }} />
+          <View style={{ width: phone ? 110 : 180 }} />
           <Text style={{ width: 70, fontSize: 11, color: colors.red[600], textAlign: 'center' }}>Overdue</Text>
           {days.map((d) => (
             <Text key={d} style={{ width: 56, fontSize: 11, color: d === today ? BRAND : colors.gray[500], textAlign: 'center' }}>
@@ -500,7 +525,7 @@ export function BoardWorkload({ board, items, people, onOpenItem }) {
         </View>
         {rows.map((r) => (
           <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderColor: colors.gray[200], paddingVertical: 6 }}>
-            <View style={{ width: 180, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: phone ? 110 : 180, flexDirection: 'row', alignItems: 'center', gap: phone ? 4 : 8 }}>
               <Avatar name={r.name} size={24} />
               <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: colors.gray[900] }}>{r.name}</Text>
             </View>
