@@ -370,7 +370,7 @@ export default function BoardScreen({ route }) {
           {board.busy.length > 0 && (
             <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: colors.brand[50] }}>
               <ActivityIndicator size="small" color={BRAND} />
-              <Text style={{ fontSize: 13, color: BRAND, fontWeight: '500' }}>{board.busy[board.busy.length - 1]}</Text>
+              {desktop && <Text style={{ fontSize: 13, color: BRAND, fontWeight: '500' }}>{board.busy[board.busy.length - 1]}</Text>}
             </View>
           )}
           {desktop && (

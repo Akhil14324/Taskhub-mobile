@@ -467,7 +467,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
                   const who = d.assignee_name || (unsure ? `"${d.assignee_said || 'someone'}"` : 'Me');
                   return (
                     <View key={d.id} {...glass('card')} style={styles.task}>
-                      <View style={{ flex: 1, gap: 5 }}>
+                      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 0, gap: 5 }}>
                         <Text style={styles.taskTitle}>{d.title}</Text>
                         <View style={styles.taskMeta}>
                           <View style={[styles.who, unsure && { backgroundColor: colors.red[50] }]}>
@@ -567,7 +567,7 @@ const createStyles = (colors) => StyleSheet.create({
   badge: { backgroundColor: colors.brand[50], borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontSize: 12, fontWeight: '600', color: colors.brand[700] },
   tabs: { flexDirection: 'row', gap: 4, borderBottomWidth: 1, borderBottomColor: colors.gray[200] },
-  tab: { paddingHorizontal: spacing.md, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  tab: { flexShrink: 1, paddingHorizontal: spacing.sm + 2, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
   tabOn: { borderBottomColor: colors.brand[600] },
   tabText: { fontSize: fontSize.base, color: colors.gray[600] },
   tabTextOn: { color: colors.gray[900], fontWeight: '600' },
@@ -578,7 +578,7 @@ const createStyles = (colors) => StyleSheet.create({
   task: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md, padding: spacing.md, borderRadius: radius.xl },
   taskTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900], lineHeight: 20 },
   taskMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
-  taskActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  taskActions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
   who: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.gray[100], borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   whoText: { fontSize: 12, fontWeight: '600', color: colors.gray[700] },
   metaText: { fontSize: 12, color: colors.gray[500] },

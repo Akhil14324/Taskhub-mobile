@@ -157,10 +157,10 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
         translateY.value = withSpring(0, SPRING.sheet);
         materialize.value = withSpring(1, SPRING.sheet);
       }
-      overlayOpacity.value = withTiming(1, { duration: 260 });
+      overlayOpacity.value = withTiming(1, { duration: 170 });
     } else if (shouldRenderRef.current) {
       clearTimeout(openTimerRef.current);
-      overlayOpacity.value = withTiming(0, { duration: 260 });
+      overlayOpacity.value = withTiming(0, { duration: 170 });
       // Let go of the field now so the keyboard starts leaving with the dialog (and nothing re-focuses a hidden input later).
       if (typeof document !== 'undefined' && document.activeElement && document.activeElement.blur && document.activeElement.tagName !== 'BODY') document.activeElement.blur();
       if (phaseRef.current !== 'plain') {
@@ -327,7 +327,7 @@ export default function BottomSheet({ visible, onClose, children, maxHeight: req
       const heading = translateY.value + project(s.vy, 0.99);
       if (dy > 110 || heading > maxHeight * 0.45) {
         translateY.value = withSpring(maxHeight, { ...CLOSE_SPRING, velocity: s.vy });
-        overlayOpacity.value = withTiming(0, { duration: 220 });
+        overlayOpacity.value = withTiming(0, { duration: 150 });
         onClose();
       } else {
         translateY.value = withSpring(0, { ...SPRING.sheet, velocity: s.vy });

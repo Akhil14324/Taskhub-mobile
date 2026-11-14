@@ -45,11 +45,11 @@ export default function Modal({ open, onClose, title, children, width = 460 }) {
         translateY.value = withSpring(0, SPRING.sheet);
         materialize.value = 1;
       }
-      overlayOpacity.value = withTiming(1, { duration: 220 });
+      overlayOpacity.value = withTiming(1, { duration: 150 });
     } else {
       translateY.value = desktop ? 0 : withSpring(SCREEN_HEIGHT, CLOSE_SPRING);
       materialize.value = withSpring(0, CLOSE_SPRING);
-      overlayOpacity.value = withTiming(0, { duration: 220 });
+      overlayOpacity.value = withTiming(0, { duration: 150 });
       timer.current = setTimeout(() => setMounted(false), CLOSE_MS);
     }
     return () => clearTimeout(timer.current);
