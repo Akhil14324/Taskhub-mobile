@@ -7,7 +7,6 @@ import { spacing, radius, BRAND } from '../../theme/theme';
 import Modal from '../Modal';
 import useDirectory from '../../hooks/useDirectory';
 import { showToast } from '../../utils/events';
-import { navigate } from '../../navigation/navigationRef';
 // The six stored stages, in the words a board shows by default.
 const STATUS_KEYS_LABELS = { todo: 'Not started', in_progress: 'Working on it', blocked: 'Stuck', in_review: 'In review', on_hold: 'On hold', done: 'Done' };
 
@@ -123,10 +122,6 @@ export default function BoardAutomate({ visible, board, onClose }) {
           )}
           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray[500] }}>READY-MADE</Text>
           {data.recipes.map((r) => <Recipe key={r.id} recipe={r} onAdd={add} busy={busy} />)}
-          <Pressable onPress={() => { onClose(); navigate('Automations'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}>
-            <Ionicons name="construct-outline" size={15} color={BRAND} />
-            <Text style={{ color: BRAND, fontWeight: '600', fontSize: 13 }}>Build your own in Automations</Text>
-          </Pressable>
         </ScrollView>
       )}
     </Modal>

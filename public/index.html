@@ -44,7 +44,7 @@
       #root { display: flex; height: 100%; flex: 1; }
       /* Keyboard users get a visible focus ring; mouse users do not. */
       [role="button"]:focus-visible, a:focus-visible, button:focus-visible, [tabindex="0"]:not(input):not(textarea):focus-visible {
-        outline: 2px solid #0073ea; outline-offset: 2px;
+        outline: 2px solid #D4621A; outline-offset: 2px;
       }
       /* Hover words for icon-only buttons (desktop); appears at once, unlike the slow browser tooltip. */
       @media (hover: hover) {
@@ -70,25 +70,28 @@
         --s-surface: 255 255 255;
         --s-alt: 247 247 247;
         --s-border: 222 222 222;
-        --s-primary: 0 115 234;
-        --s-primary-strong: 0 96 185;
-        --s-primary-soft: 204 229 255;
+        --s-primary: 212 98 26;
+        --s-primary-strong: 176 78 18;
+        --s-primary-soft: 254 243 226;
         --s-shadow: 0 0 0;
         --s-shadow-a: 0.08;
       }
       html[data-theme='dark'] {
         color-scheme: dark;
-        --s-page: 17 17 17;
-        --s-surface: 30 30 30;
-        --s-alt: 38 38 38;
-        --s-border: 58 58 58;
-        --s-primary: 0 115 234;
-        --s-primary-strong: 61 140 240;
-        --s-primary-soft: 22 58 110;
+        --s-page: 0 0 0;
+        --s-surface: 0 0 0;
+        --s-alt: 18 18 18;
+        --s-border: 52 52 52;
+        --s-primary: 212 98 26;
+        --s-primary-strong: 236 132 56;
+        --s-primary-soft: 42 26 14;
         --s-shadow: 0 0 0;
         --s-shadow-a: 0.32;
       }
       html, body { background-color: rgb(var(--s-page)); }
+      /* A control whose work is still running (AnimatedPressable sets data-busy): dimmed, not clickable. */
+      [data-busy='1'] { pointer-events: none !important; cursor: progress; animation: th-busy 0.9s ease-in-out infinite; }
+      @keyframes th-busy { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.8; } }
 
       [data-glass] { -webkit-backdrop-filter: none; backdrop-filter: none; background-image: none !important; }
       [data-glass='bar'] {

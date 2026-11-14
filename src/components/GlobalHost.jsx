@@ -4,12 +4,12 @@ import useShortcuts from '../hooks/useShortcuts';
 import QuickAddSheet from './todos/QuickAddSheet';
 import TemplatesSheet from './todos/TemplatesSheet';
 import CommandPalette from './CommandPalette';
-import Celebration from './engage/Celebration';
 import AttentionAlert from './AttentionAlert';
 import WaterReminder from './WaterReminder';
 import StretchBreak from './StretchBreak';
 import FocusMode from './FocusMode';
 import RoulettePicker from './RoulettePicker';
+import BusyBar from './BusyBar';
 import CatBuddy from './buddy/CatBuddy';
 import AutomationHost from './automation/AutomationHost';
 import TimeboxMorning from './timebox/TimeboxMorning';
@@ -54,7 +54,7 @@ export default function GlobalHost() {
       <QuickAddSheet visible={!!quick} onClose={() => setQuick(null)} defaults={quick?.defaults || {}} initialText={quick?.text || ''} />
       <TemplatesSheet visible={!!templates} onClose={() => setTemplates(null)} defaults={templates || {}} />
       <CommandPalette visible={palette} onClose={() => setPalette(false)} />
-      <Celebration />
+      <BusyBar />
       <WaterReminder />
       <StretchBreak />
       <RoulettePicker />

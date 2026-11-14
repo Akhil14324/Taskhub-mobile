@@ -21,6 +21,7 @@ import Popover from '../components/board/Popover';
 import { TextEditor, BoardMeta } from '../components/board/Cells';
 import { useAuth } from '../context/AuthContext';
 import { AddColumnMenu, ColumnMenu, GroupMenu, BoardMoreMenu } from '../components/board/BoardMenus';
+import BoardDashboard from '../components/board/BoardDashboard';
 import BoardAutomate from '../components/board/BoardAutomate';
 import BoardImport from '../components/board/BoardImport';
 import { cellText, itemWordOf, statusLabelOf, valueKeysOf, filterOptions, passesColumnFilters, cellValue } from '../components/board/model';
@@ -42,6 +43,7 @@ const VIEW_KINDS = [
   ['table', 'Main table', 'grid-outline'], ['kanban', 'Kanban', 'albums-outline'], ['calendar', 'Calendar', 'calendar-outline'],
   ['timeline', 'Timeline', 'git-commit-outline'], ['gantt', 'Gantt', 'git-network-outline'], ['chart', 'Chart', 'bar-chart-outline'],
   ['workload', 'Workload', 'people-outline'], ['summary', 'Summary', 'list-outline'], ['activity', 'Activity', 'pulse-outline'],
+  ['dashboard', 'Dashboard', 'speedometer-outline'],
 ];
 const DRAWN_VIEWS = new Set(VIEW_KINDS.map((v) => v[0]));
 const VIEW_ICONS = Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i]));
@@ -392,7 +394,7 @@ export default function BoardScreen({ route }) {
           canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id).length > 1}
         />
       </View>
-      {view.kind !== 'activity' && (
+      {view.kind !== 'activity' && view.kind !== 'dashboard' && (
         <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
           <BoardToolbar
             data={data} vs={vs} onChange={changeVs} people={people} search={search} onSearch={setSearch} word={word} desktop={desktop}
@@ -428,6 +430,12 @@ export default function BoardScreen({ route }) {
           <BoardWorkload board={data} items={items} people={people} onOpenItem={openItem} />
         ) : view.kind === 'summary' ? (
           <BoardSummary board={data} items={items} />
+        ) : view.kind === 'dashboard' ? (
+          <BoardDashboard
+            key={view.id} board={data} people={people} meId={user?.id} view={view} desktop={desktop}
+            canSave={canSaveView} onOpenItem={openItem}
+            onSave={(widgets) => board.updateView(view, { settings: { widgets } })}
+          />
         ) : view.kind === 'activity' ? (
           <BoardActivity board={data} onOpenItem={openItem} />
         ) : desktop ? (

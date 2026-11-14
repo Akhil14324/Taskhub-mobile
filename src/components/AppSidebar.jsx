@@ -43,7 +43,6 @@ const SECTION_OF = {
   Boards: 'boards',
   MyWork: 'mywork',
   Timebox: 'timebox',
-  Dashboards: 'dashboards',
   RecycleBin: 'recycle',
   Dump: 'todos',
   Board: 'boards',
@@ -169,7 +168,6 @@ export default function AppSidebar({ routeName }) {
         <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
         <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
         <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
-        <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Dashboards" active={section === 'dashboards'} onPress={() => go('Dashboards')} />
         <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />

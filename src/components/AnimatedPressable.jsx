@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback, useEffect } from 'react';
+import { memo, useRef, useCallback, useEffect, useState } from 'react';
 import { Pressable, Platform, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -137,10 +137,28 @@ function WebPressable({
   const hapticRef = useRef(haptic);
   hapticRef.current = haptic;
 
+  // A press whose handler returns a promise (any async handler) locks the control until it settles: no second
+  // click can start the same work twice, and `data-busy` dims it and shows the wait cursor (index.html).
+  const pending = useRef(false);
+  const alive = useRef(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => () => { alive.current = false; }, []);
+
   const handlePress = useCallback((e) => {
-    if (disabled) return;
+    if (disabled || pending.current) return;
     if (hapticRef.current) webHaptic(hapticRef.current === true ? 'light' : hapticRef.current);
-    onPress?.(e);
+    const result = onPress?.(e);
+    if (result && typeof result.then === 'function') {
+      pending.current = true;
+      // Only show the busy look when the work takes long enough to notice.
+      const show = setTimeout(() => { if (alive.current && pending.current) setBusy(true); }, 150);
+      const done = () => {
+        clearTimeout(show);
+        pending.current = false;
+        if (alive.current) setBusy(false);
+      };
+      result.then(done, done);
+    }
   }, [disabled, onPress]);
 
   // Respond on pointer-down, not on release: the squish starts the instant the finger lands.
@@ -166,6 +184,8 @@ function WebPressable({
       accessibilityRole={onPress ? 'button' : undefined}
       style={[style, animated]}
       {...rest}
+      dataSet={busy ? { ...rest.dataSet, busy: '1' } : rest.dataSet}
+      aria-busy={busy || undefined}
     >
       {children}
     </AnimatedPressableView>
