@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
 import { useColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { showToast } from '../utils/events';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -127,7 +128,7 @@ export default function EverythingScreen() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, loginAs } = useAuth();
   const canTodos = !!user?.permissions?.view_all_todos;
   const canChats = !!user?.permissions?.chat_audit;
   const [tab, setTab] = useState(canTodos ? 'todos' : 'chats');
@@ -208,6 +209,18 @@ export default function EverythingScreen() {
               <Text style={styles.name}>{p.name}</Text>
               <Text style={styles.meta}>{p.open} open · {p.done} done</Text>
             </View>
+            {user?.is_owner && p.id !== user.id && (
+              <AnimatedPressable
+                onPress={async () => {
+                  try { await loginAs(p.id); } catch (err) { showToast({ message: err.response?.data?.error || 'Could not sign in as this person', tone: 'error' }); }
+                }}
+                accessibilityLabel={`Sign in as ${p.name}`}
+                style={styles.signInAs}
+              >
+                <Ionicons name="log-in-outline" size={15} color={colors.brand[700]} />
+                <Text style={styles.signInAsText}>Sign in as</Text>
+              </AnimatedPressable>
+            )}
             <Ionicons name="chevron-forward" size={18} color={colors.gray[400]} />
           </AnimatedPressable>
         ))}
@@ -260,6 +273,8 @@ const createStyles = (colors) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.xl, backgroundColor: colors.white },
   chatIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand[100] },
   name: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
+  signInAs: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.brand[50], borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  signInAsText: { fontSize: 12, fontWeight: '600', color: colors.brand[700] },
   meta: { fontSize: 12, color: colors.gray[500] },
   link: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[600] },
   todoTitle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900], paddingHorizontal: spacing.sm },
