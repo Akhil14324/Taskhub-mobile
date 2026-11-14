@@ -356,7 +356,7 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
               }}
             />
           )}
-          {canManage && onDelete && (
+          {onDelete && (
             <MenuRow
               icon="trash-outline"
               label="Delete group"

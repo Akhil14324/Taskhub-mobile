@@ -37,18 +37,20 @@ function Panel({ title, icon, action, onAction, grow = 1, fixed, children }) {
   );
 }
 
-function Tile({ label, value, note, color, icon, onPress, basis }) {
+function Tile({ label, value, note, color, icon, onPress, basis, small }) {
   const colors = useColors();
   return (
-    <AnimatedPressable onPress={onPress} {...glass('card')} style={{ flexGrow: 1, flexBasis: basis, minWidth: 0, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 6 }}>
+    <AnimatedPressable onPress={onPress} {...glass('card')} style={{ flexGrow: 1, flexBasis: basis, minWidth: 0, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gray[200], paddingHorizontal: small ? 12 : spacing.lg, paddingVertical: small ? 10 : 14, gap: small ? 4 : 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <View style={{ width: 24, height: 24, borderRadius: 7, backgroundColor: `${paletteHex(color)}22`, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name={icon} size={14} color={paletteHex(color)} />
-        </View>
+        {small ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: paletteHex(color) }} /> : (
+          <View style={{ width: 24, height: 24, borderRadius: 7, backgroundColor: `${paletteHex(color)}22`, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={icon} size={14} color={paletteHex(color)} />
+          </View>
+        )}
         <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '500', color: colors.gray[600] }}>{label}</Text>
       </View>
-      <Text style={{ fontSize: 30, lineHeight: 34, fontWeight: '700', letterSpacing: -0.6, color: colors.gray[900], fontVariant: ['tabular-nums'] }}>{value}</Text>
-      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{note}</Text>
+      <Text style={{ fontSize: small ? 24 : 30, lineHeight: small ? 28 : 34, fontWeight: '700', letterSpacing: -0.6, color: colors.gray[900], fontVariant: ['tabular-nums'] }}>{value}</Text>
+      {!small && <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{note}</Text>}
     </AnimatedPressable>
   );
 }
@@ -97,7 +99,7 @@ export default function HomeDashboard({ ctx, user }) {
   const limited = { ...ctx, limit: phone ? 5 : 14 };
 
   const row = { flexDirection: phone ? 'column' : 'row', gap: GAP };
-  const tileBasis = phone ? '46%' : 0;
+  const tileBasis = phone ? '30%' : 0;
   // On a wide screen three cards share a row; on a laptop the third takes a row of its own.
   const three = (a, b, c) => (cols === 3
     ? <View style={row}>{a}{b}{c}</View>
@@ -106,11 +108,11 @@ export default function HomeDashboard({ ctx, user }) {
   return (
     <View style={{ gap: GAP }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-        <Tile basis={tileBasis} label="Due today" value={my.dueToday.length} note={my.doneToday ? `${my.doneToday} already done` : 'Planned for today'} color="dark_orange" icon="today-outline" onPress={() => go('Todos')} />
-        <Tile basis={tileBasis} label="Late" value={my.late.length} note={my.late.length ? `Oldest from ${parseYmd(my.late[0].due_date).getDate()} ${MONTHS_SHORT[parseYmd(my.late[0].due_date).getMonth()]}` : 'Nothing is late'} color="red" icon="alert-circle-outline" onPress={() => go('Todos')} />
-        <Tile basis={tileBasis} label="Working on" value={my.working} note={my.review ? `${my.review} waiting for review` : `${my.open.length} open in all`} color="orange" icon="play-outline" onPress={() => go('Todos')} />
-        <Tile basis={tileBasis} label="Stuck" value={my.stuck} note={my.stuck ? 'Needs someone to unblock' : 'Nothing is stuck'} color="purple" icon="hand-left-outline" onPress={() => go('Todos')} />
-        <Tile basis={phone ? '100%' : 0} label="Done in 7 days" value={my.doneWeek} note="Tasks you finished" color="green" icon="checkmark-done-outline" onPress={() => go('Todos')} />
+        <Tile small={phone} basis={tileBasis} label="Due today" value={my.dueToday.length} note={my.doneToday ? `${my.doneToday} already done` : 'Planned for today'} color="dark_orange" icon="today-outline" onPress={() => go('Todos')} />
+        <Tile small={phone} basis={tileBasis} label="Late" value={my.late.length} note={my.late.length ? `Oldest from ${parseYmd(my.late[0].due_date).getDate()} ${MONTHS_SHORT[parseYmd(my.late[0].due_date).getMonth()]}` : 'Nothing is late'} color="red" icon="alert-circle-outline" onPress={() => go('Todos')} />
+        <Tile small={phone} basis={tileBasis} label="Working on" value={my.working} note={my.review ? `${my.review} waiting for review` : `${my.open.length} open in all`} color="orange" icon="play-outline" onPress={() => go('Todos')} />
+        <Tile small={phone} basis={tileBasis} label="Stuck" value={my.stuck} note={my.stuck ? 'Needs someone to unblock' : 'Nothing is stuck'} color="purple" icon="hand-left-outline" onPress={() => go('Todos')} />
+        <Tile small={phone} basis={tileBasis} label="Done in 7 days" value={my.doneWeek} note="Tasks you finished" color="green" icon="checkmark-done-outline" onPress={() => go('Todos')} />
       </View>
 
       <View style={row}>

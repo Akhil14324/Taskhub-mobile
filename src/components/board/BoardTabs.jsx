@@ -21,7 +21,7 @@ export default function BoardTabs({ views, activeId, icons, onSelect, onAdd, onR
           return (
             <Pressable
               key={v.id}
-              onPress={() => onSelect(v.id)}
+              onPress={(e) => { onSelect(v.id); e?.currentTarget?.scrollIntoView?.({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
               accessibilityLabel={`${v.name} tab`}
               style={({ hovered }) => ({
                 flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingLeft: spacing.md, paddingRight: active ? 6 : spacing.md,

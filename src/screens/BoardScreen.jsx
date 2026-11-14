@@ -14,7 +14,8 @@ import { useTodos } from '../context/TodoContext';
 import BoardTable, { anchorOf } from '../components/board/BoardTable';
 import BoardCards from '../components/board/BoardCards';
 import BoardKanban from '../components/board/BoardKanban';
-import { BoardCalendar, BoardTimeline, BoardChart, BoardWorkload, BoardSummary, BoardActivity } from '../components/board/BoardViews';
+import { BoardCalendar, BoardTimeline, BoardWorkload, BoardSummary } from '../components/board/BoardViews';
+import BoardProcess from '../components/board/BoardProcess';
 import { todayYmd, addDays } from '../utils/dates';
 import CellEditorHost from '../components/board/CellEditorHost';
 import Popover from '../components/board/Popover';
@@ -394,7 +395,7 @@ export default function BoardScreen({ route }) {
           canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id).length > 1}
         />
       </View>
-      {view.kind !== 'activity' && view.kind !== 'dashboard' && (
+      {view.kind !== 'activity' && view.kind !== 'dashboard' && view.kind !== 'chart' && (
         <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
           <BoardToolbar
             data={data} vs={vs} onChange={changeVs} people={people} search={search} onSearch={setSearch} word={word} desktop={desktop}
@@ -425,7 +426,11 @@ export default function BoardScreen({ route }) {
             onLink={(from, to) => { const t = data.items.find((x) => x.id === to); if (t && !(t.depends_on || []).some((d) => d.id === from)) board.setDepends(t, [...(t.depends_on || []).map((d) => d.id), from]); }}
           />
         ) : view.kind === 'chart' ? (
-          <BoardChart board={data} items={items} people={people} />
+          <BoardDashboard
+            key={view.id} charts board={data} people={people} meId={user?.id} view={view} desktop={desktop}
+            canSave={canSaveView} onOpenItem={openItem}
+            onSave={(widgets) => board.updateView(view, { settings: { widgets } })}
+          />
         ) : view.kind === 'workload' ? (
           <BoardWorkload board={data} items={items} people={people} onOpenItem={openItem} />
         ) : view.kind === 'summary' ? (
@@ -437,7 +442,7 @@ export default function BoardScreen({ route }) {
             onSave={(widgets) => board.updateView(view, { settings: { widgets } })}
           />
         ) : view.kind === 'activity' ? (
-          <BoardActivity board={data} onOpenItem={openItem} />
+          <BoardProcess board={data} items={data.items} onOpenItem={openItem} />
         ) : desktop ? (
           <BoardTable
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
@@ -525,7 +530,15 @@ export default function BoardScreen({ route }) {
           onColor={(color) => board.updateGroup(menu.group, { color })}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
           onDuplicate={data.access.add && data.board.kind !== 'my_todos' ? () => board.duplicateGroup(menu.group) : null}
-          onDelete={menu.group.id && data.access.manage && data.board.kind !== 'my_todos' ? async () => {
+          onDelete={!menu.group.id || typeof menu.group.id !== 'number' ? null : data.board.kind === 'my_todos' ? async () => {
+            try {
+              await api.delete(`/todos/lists/${menu.group.id}`);
+              showToast({ message: `Deleted "${menu.group.name}". Its tasks are kept, under No group.`, icon: 'trash' });
+            } catch (err) {
+              showToast({ message: err.response?.data?.error || 'Could not delete the group', tone: 'error' });
+            }
+            board.reload();
+          } : data.access.manage ? async () => {
             const ok = await board.removeGroup(menu.group);
             if (ok) showToast({ message: `Deleted "${menu.group.name}". Its tasks are kept.`, icon: 'trash' });
           } : null}

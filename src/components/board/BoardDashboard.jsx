@@ -11,7 +11,7 @@ import { paletteHex } from './model';
 import { showToast, confirmDialog } from '../../utils/events';
 import { formatDue } from '../../utils/dates';
 import {
-  computeWidget, generateWidgets, cleanWidgets, dimensionsOf, numericColumns, AGGS, FILTERS, CHARTS,
+  computeWidget, generateWidgets, generateCharts, presetsOf, newId, cleanWidgets, dimensionsOf, numericColumns, AGGS, FILTERS, CHARTS, METRICS,
 } from '../../utils/boardDashboard';
 
 // The Dashboard tab of a board: widgets worked out from the board's own columns, editable by hand or by asking the AI.
@@ -169,13 +169,14 @@ function WidgetEditor({ widget, board, onChange, onClose, onDelete }) {
         {t === 'chart' && <Pick label="Chart type" value={widget.chart || 'column'} options={CHARTS.map((k) => [k, CHART_LABELS[k]])} onChange={(v) => set({ chart: v })} />}
         {(t === 'chart' || t === 'table') && <Pick label={t === 'chart' ? 'Along the axis' : 'Rows'} value={widget.by || 'status'} options={dims} onChange={(v) => set({ by: v })} />}
         {(t === 'chart' || t === 'table') && <Pick label="Split by" value={widget.series} options={dims.filter((d) => d[0] !== widget.by)} blank="No split" onChange={(v) => set({ series: v })} />}
-        {(t === 'number' || t === 'chart' || t === 'table') && !widget.formula && (
+        {t === 'number' && <Pick label="Ready-made measure" value={widget.metric} options={METRICS.map(([k, l]) => [k, l])} blank="None" onChange={(v) => set({ metric: v })} />}
+        {(t === 'number' || t === 'chart' || t === 'table') && !widget.formula && !(t === 'number' && widget.metric) && (
           <>
             <Pick label="Measure" value={widget.value} options={nums} blank="Count of tasks" onChange={(v) => set({ value: v })} />
             {!!widget.value && <Pick label="How to combine" value={widget.agg || 'sum'} options={AGGS} onChange={(v) => set({ agg: v })} />}
           </>
         )}
-        {t === 'number' && (
+        {t === 'number' && !widget.metric && (
           <View style={{ gap: 6 }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[600] }}>Or a formula (like Excel)</Text>
             <TextInput value={widget.formula || ''} onChangeText={(v) => set({ formula: v })} placeholder="SUM(Budget) / COUNT()" placeholderTextColor={colors.gray[400]} autoCapitalize="none" autoCorrect={false}
@@ -197,21 +198,59 @@ function WidgetEditor({ widget, board, onChange, onClose, onDelete }) {
   );
 }
 
+/** Everything that can be added with one press, plus an empty chart to set up by hand. */
+function Gallery({ board, chartsOnly, onAdd, onClose }) {
+  const colors = useColors();
+  const groups = presetsOf(board).map((g) => ({ ...g, items: chartsOnly ? g.items.filter((x) => x.widget.type === 'chart') : g.items })).filter((g) => g.items.length);
+  return (
+    <BottomSheet visible onClose={onClose} maxHeight={680}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <Text style={{ flex: 1, fontSize: 17, fontWeight: '700', color: colors.gray[900] }}>{chartsOnly ? 'Add a chart' : 'Add to this dashboard'}</Text>
+          <Pressable onPress={() => onAdd({ type: 'chart', title: 'New chart', chart: 'column', by: 'status', w: 1 }, true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
+            <Ionicons name="construct-outline" size={15} color={colors.gray[800]} /><Text style={{ fontSize: 13, color: colors.gray[800] }}>Build my own</Text>
+          </Pressable>
+        </View>
+        {groups.map((g) => (
+          <View key={g.group} style={{ gap: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase', color: colors.gray[500] }}>{g.group}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {g.items.map((x) => (
+                <Pressable key={x.title} onPress={() => onAdd(x.widget)} style={({ hovered }) => ({ flexGrow: 1, flexBasis: 220, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: hovered ? BRAND : colors.gray[200], backgroundColor: colors.white })}>
+                  <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.brand[50], alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={x.icon} size={16} color={colors.brand[700]} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: colors.gray[900] }}>{x.title}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>{x.hint}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </BottomSheet>
+  );
+}
+
 const GAP = 12;
 const PANEL_H = 340;
 // What a number means decides its colour and icon: late is red, finished is green, the rest take the accent.
 const KPI_LOOK = {
   overdue: ['red', 'alert-circle-outline'], done: ['green', 'checkmark-done-outline'], this_week: ['amber', 'calendar-outline'],
   mine: ['purple', 'person-outline'], open: ['brand', 'albums-outline'], all: ['brand', 'layers-outline'],
+  due_today: ['amber', 'today-outline'], working: ['brand', 'play-outline'], stuck: ['red', 'hand-left-outline'],
+  unassigned: ['purple', 'person-add-outline'], no_date: ['amber', 'help-circle-outline'], done_week: ['green', 'checkmark-done-outline'],
 };
 
 /** One number of the strip: what it is, the number, and a line that puts it in context. */
 function KpiTile({ w, data, desktop, editing, controls, total }) {
   const colors = useColors();
   const isProgress = w.type === 'progress';
-  const [tone, icon] = isProgress ? ['green', 'pie-chart-outline'] : w.value || w.formula ? ['brand', 'stats-chart-outline'] : KPI_LOOK[w.filter || 'all'];
+  const [tone, icon] = isProgress ? ['green', 'pie-chart-outline'] : w.metric ? ['brand', 'speedometer-outline'] : w.value || w.formula ? ['brand', 'stats-chart-outline'] : (KPI_LOOK[w.filter || 'all'] || ['brand', 'albums-outline']);
   const quiet = w.filter === 'overdue' && !data?.value; // nothing late: no alarm colour
-  const hue = quiet ? colors.gray : colors[tone];
+  const hue = w.metric ? (data?.tone === 'bad' ? colors.red : data?.tone === 'good' ? colors.green : colors.brand) : quiet ? colors.gray : colors[tone];
   const value = data?.error ? '!' : isProgress ? `${data.percent}%` : Number(data.value).toLocaleString('en-IN');
   const filterLabel = FILTERS.find((f) => f[0] === (w.filter || 'all'))?.[1];
   return (
@@ -233,7 +272,7 @@ function KpiTile({ w, data, desktop, editing, controls, total }) {
         </View>
       ) : (
         <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>
-          {data?.error ? data.error : w.formula ? 'Formula' : w.value ? `${AGGS.find((x) => x[0] === (w.agg || 'sum'))?.[1]} · ${filterLabel} tasks` : `of ${total} on the board`}
+          {data?.error ? data.error : data?.note ? data.note : w.formula ? 'Formula' : w.value ? `${AGGS.find((x) => x[0] === (w.agg || 'sum'))?.[1]} · ${filterLabel} tasks` : `of ${total} on the board`}
         </Text>
       )}
     </View>
@@ -242,10 +281,11 @@ function KpiTile({ w, data, desktop, editing, controls, total }) {
 
 const SUGGESTIONS = ['Add a pie chart of tasks by person', 'Show what is overdue this week', 'Make it a weekly review dashboard'];
 
-export default function BoardDashboard({ board, people, meId, view, canSave, onSave, onOpenItem, desktop }) {
+export default function BoardDashboard({ board, people, meId, view, canSave, onSave, onOpenItem, desktop, charts = false }) {
   const colors = useColors();
   const saved = view?.settings?.widgets;
-  const [widgets, setWidgets] = useState(() => (saved ? cleanWidgets(saved, board) : generateWidgets(board)));
+  const [widgets, setWidgets] = useState(() => (saved ? cleanWidgets(saved, board) : charts ? generateCharts(board) : generateWidgets(board)));
+  const [gallery, setGallery] = useState(false);
   const [edit, setEdit] = useState(false);
   const [editing, setEditing] = useState(null);
   const [request, setRequest] = useState('');
@@ -271,10 +311,10 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
 
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= widgets.length) return; const n = [...widgets]; [n[i], n[j]] = [n[j], n[i]]; commit(n); };
   const resize = (i) => commit(widgets.map((w, k) => (k === i ? { ...w, w: (w.w % 3) + 1 } : w)));
-  const addWidget = () => { const w = { id: Math.random().toString(36).slice(2, 9), type: 'chart', title: 'New chart', chart: 'column', by: 'status', w: 1 }; commit([...widgets, w]); setEditing(w.id); };
+  const addWidget = (widget, thenEdit) => { const w = { ...widget, id: newId() }; commit([...widgets, w]); setGallery(false); if (thenEdit) setEditing(w.id); else showToast({ message: `Added "${w.title}"`, tone: 'success', icon: 'add-circle' }); };
   const regenerate = async () => {
     const ok = await confirmDialog({ title: 'Rebuild from the board?', message: 'Your widgets are replaced by a fresh set made from the board\'s columns.', confirmLabel: 'Rebuild' });
-    if (ok) commit(generateWidgets(board));
+    if (ok) commit(charts ? generateCharts(board) : generateWidgets(board));
   };
 
   const ask = async (text) => {
@@ -312,14 +352,16 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
       <ScrollView contentContainerStyle={{ padding: desktop ? spacing.lg : spacing.sm, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 6, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
           <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray[900], letterSpacing: -0.3 }}>{view?.name || 'Dashboard'}</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray[900], letterSpacing: -0.3 }}>{view?.name || (charts ? 'Charts' : 'Dashboard')}</Text>
             <Text style={{ fontSize: 12, color: colors.gray[500], marginTop: 2 }}>{total} {total === 1 ? 'task' : 'tasks'} on this board, counted live</Text>
           </View>
+          {canSave && (
+            <Pressable onPress={() => setGallery(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, backgroundColor: BRAND }}>
+              <Ionicons name="add" size={16} color="#fff" /><Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{charts ? 'Add chart' : 'Add'}</Text>
+            </Pressable>
+          )}
           {canSave && edit && (
             <>
-              <Pressable onPress={addWidget} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
-                <Ionicons name="add" size={16} color={colors.gray[800]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Widget</Text>
-              </Pressable>
               <Pressable onPress={regenerate} accessibilityLabel="Rebuild from the board" style={{ padding: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
                 <Ionicons name="refresh" size={16} color={colors.gray[800]} />
               </Pressable>
@@ -381,7 +423,7 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
             );
           })}
         </View>
-        {!widgets.length && <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>This dashboard is empty. {canSave ? 'Press Edit then Widget, or ask the AI below.' : ''}</Text>}
+        {!widgets.length && <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>This dashboard is empty. {canSave ? 'Press Add to pick a ready-made number or chart.' : ''}</Text>}
       </ScrollView>
 
       {board.ai_enabled && canSave && (
@@ -402,6 +444,7 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
         </View>
       )}
 
+      {gallery && <Gallery board={board} chartsOnly={charts} onClose={() => setGallery(false)} onAdd={addWidget} />}
       {editingWidget && (
         <WidgetEditor
           widget={editingWidget} board={board} onClose={() => setEditing(null)}
