@@ -124,12 +124,6 @@ React (react-native-web via Expo) client for TaskHub (JavaScript + JSX; no TypeS
   - **Follow-up (2026-11-15):** the super admin (level 0) lists, reads and asks about every meeting (`readable()` in `routes/meetingNotes.js`; other people's are read only, their questions are not saved with the meeting, and `GET /drafts?meeting_id=` shows that meeting's waiting tasks). Mirror cells are drawn like the column they mirror (`mirrors` in the board response from `mirrorLooks()`, `MirrorValue` in `Cells.jsx`: status pills, dates, faces, ticks). Ticked table rows have **Move to** (another group). Home is one fixed dashboard (`components/home/HomeDashboard.jsx`: my numbers, Today, Next 7 days, attention, stages, steps, team panels for leaders); the drag-and-drop widget board (`HomeGrid`) is deleted. Motion: springs in `theme/motion.js` are short and without overshoot, presses are a small even dip, the water ripple is deleted.
   - **Never push a broken build:** both repos have `scripts/git-hooks/pre-push` (copy it to `.git/hooks/pre-push` after a fresh clone). A push to `main` runs `npm run build:web` (client) or `npm test` plus `node --check` on every source file (backend) and is refused when that fails.
 
-
-Did you mean this?
-  npm test # Test a package
-To see a list of supported npm commands, run:
-  npm help plus  on every source file (backend) and is refused when that fails.
-
 ## Second brain (Notion)
 
 This project is documented in Akhil's Notion second brain: "VGrand TaskHub" (https://app.notion.com/p/3fcfb1c823578135a686e50f7a0e99c3). Root page: https://app.notion.com/p/3fcfb1c82357815bb1c2f8b544e206aa
