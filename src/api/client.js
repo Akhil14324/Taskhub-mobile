@@ -83,5 +83,25 @@ api.interceptors.response.use(
   }
 );
 
+// The same POST (same address, same body) fired again while the first is still on its way is the same press
+// landing twice (a double click, an impatient tap on a slow connection). Both callers get the one answer, so
+// nothing is ever created twice. Uploads (FormData) are left alone.
+const inFlight = new Map();
+const rawPost = api.post.bind(api);
+api.post = (url, data, config) => {
+  if (typeof FormData !== 'undefined' && data instanceof FormData) return rawPost(url, data, config);
+  let key;
+  try {
+    key = `${url}|${JSON.stringify(data ?? null)}`;
+  } catch (e) {
+    return rawPost(url, data, config);
+  }
+  const running = inFlight.get(key);
+  if (running) return running;
+  const request = rawPost(url, data, config).finally(() => inFlight.delete(key));
+  inFlight.set(key, request);
+  return request;
+};
+
 export { API_URL };
 export default api;

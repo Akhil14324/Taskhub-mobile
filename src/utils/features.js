@@ -3,7 +3,7 @@
  * else's app changes. They are stored on the account as `preferences.features` ({ key: boolean }), so the
  * choice follows the person to another device. A key that was never touched uses its default.
  */
-export const FEATURES = [
+const ALL_FEATURES = [
   { group: 'Health and focus', key: 'water', icon: 'water-outline', label: 'Water reminder', hint: 'A drop in the header and a nudge to drink water. How often and how many glasses are set in My settings', default: true },
   { group: 'Health and focus', key: 'stretch', icon: 'body-outline', label: 'Stretch break', hint: 'A one-minute guided stretch for your neck, back, wrists or eyes. How often is set in My settings', default: true },
   { group: 'Health and focus', key: 'focus', icon: 'timer-outline', label: 'Focus mode', hint: 'A full-screen landscape timer for one task. Notifications wait until it ends', default: true },
@@ -32,10 +32,19 @@ export const FEATURES = [
   { group: 'Getting things done', key: 'automation', icon: 'flash-outline', label: 'Automations', hint: 'Rules that do things for you: at a time, when a to-do changes, when a message arrives. Find them in the menu', default: true },
 ];
 
-const DEFAULTS = Object.fromEntries(FEATURES.map((f) => [f.key, f.default]));
+// Retired from the app (2026-11-14, the owner's declutter): the cat buddy and its tricks, water and stretch
+// reminders, Pick for me, the overdue roast, the leaderboard and the personal Automations screen. The code and
+// every saved preference stay; these are simply always off and no longer offered as switches.
+const RETIRED = new Set(['water', 'stretch', 'roulette', 'roast', 'leaderboard', 'automation']);
+const retired = (key) => RETIRED.has(key) || key.startsWith('buddy');
+
+export const FEATURES = ALL_FEATURES.filter((f) => !retired(f.key));
+
+const DEFAULTS = Object.fromEntries(ALL_FEATURES.map((f) => [f.key, f.default]));
 
 /** Is this feature on for someone with these preferences? Usable outside React components. */
 export function featureOn(preferences, key) {
+  if (retired(key)) return false;
   const saved = preferences?.features?.[key];
   return typeof saved === 'boolean' ? saved : DEFAULTS[key] !== false;
 }

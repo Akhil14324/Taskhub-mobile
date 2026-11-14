@@ -1,5 +1,6 @@
-// Work OS colours (MONDAY_FEATURE_SPEC.md F-DSN-01): a neutral base, one blue for actions, and named colours
-// that mean something (green done, orange working, red stuck or late, purple waiting on someone). The token
+// Colours: true white and true black surfaces, one warm orange for actions (#D4621A, with the amber #F4AE52,
+// the cream #FEF3E2 and the deep brown #2A1A0E as its scale), and named colours that mean something (green done,
+// amber working, red stuck or late, purple waiting on someone). The token
 // names are the ones every screen already uses (brand, gray, green, ...), so screens restyle without edits.
 //
 // Scales: 50 and 100 are tints for backgrounds, 500 is the colour itself, 600 is text and icons in that
@@ -10,16 +11,16 @@ const scale = (t50, t100, c500, c600, c700) => ({ 50: t50, 100: t100, 500: c500,
 
 export const lightColors = {
   brand: {
-    50: '#eaf3fe',
-    100: '#cce5ff',
-    200: '#a8cfff',
-    300: '#7db5fb',
-    400: '#3d8cf0',
-    500: '#1f7cee',
-    600: '#0073ea',
-    700: '#0060b9',
-    800: '#004b91',
-    900: '#003366',
+    50: '#FEF3E2',
+    100: '#FCE4C2',
+    200: '#F9CD90',
+    300: '#F4AE52',
+    400: '#E88A32',
+    500: '#DC7022',
+    600: '#D4621A',
+    700: '#B04E12',
+    800: '#86390D',
+    900: '#2A1A0E',
   },
   gray: {
     // Neutral greys with no blue tint: a pure white app with light grey lines.
@@ -50,23 +51,23 @@ export const lightColors = {
 
 export const darkColors = {
   brand: {
-    50: '#0e2349',
-    100: '#133774',
-    200: '#1a4a9a',
-    300: '#2160c0',
-    400: '#2b74da',
-    500: '#3d8cf0',
-    600: '#579bfc',
-    700: '#8dbbfd',
-    800: '#bbd6fe',
-    900: '#e1eeff',
+    50: '#2A1A0E',
+    100: '#3B2310',
+    200: '#5A3212',
+    300: '#864313',
+    400: '#B04E12',
+    500: '#D4621A',
+    600: '#EC8438',
+    700: '#F4AE52',
+    800: '#F9CD90',
+    900: '#FEF3E2',
   },
   gray: {
-    // Near-black, no blue tint. 50 is the page, `white` below is a panel on it.
-    50: '#111111',
-    100: '#1b1b1b',
-    200: '#2e2e2e',
-    300: '#454545',
+    // True black. 50 is the page, `white` below is a panel on it (also black, set apart by its hairline).
+    50: '#000000',
+    100: '#121212',
+    200: '#262626',
+    300: '#3d3d3d',
     400: '#7a7a7a',
     500: '#a0a0a0',
     600: '#c2c2c2',
@@ -81,11 +82,11 @@ export const darkColors = {
   blue: scale('#0e2349', '#133774', '#579bfc', '#8dbbfd', '#bbd6fe'),
   indigo: scale('#1e1f4d', '#2c2e75', '#5559df', '#8a8df0', '#b3b5f6'),
   amber: scale('#3d2a10', '#5e3f12', '#fdab3d', '#fec26f', '#fed79f'),
-  white: '#1e1e1e',
-  black: '#f7f7f7',
+  white: '#000000',
+  black: '#ffffff',
   overlay: 'rgba(0, 0, 0, 0.6)',
-  page: '#111111',
-  rim: 'rgba(255, 255, 255, 0.08)',
+  page: '#000000',
+  rim: 'rgba(255, 255, 255, 0.12)',
 };
 
 /**
@@ -117,7 +118,7 @@ export const PALETTE = {
 export const PALETTE_NAMES = Object.keys(PALETTE);
 
 /** The one action colour (buttons, links, selection, focus) in both themes. */
-export const BRAND = '#0073ea';
+export const BRAND = '#D4621A';
 
 export const colors = lightColors;
 

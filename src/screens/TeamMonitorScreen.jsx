@@ -250,7 +250,7 @@ export default function TeamMonitorScreen() {
 /** A number with a label and a coloured edge: the tiles along the top. */
 function Kpi({ label, value, tone, icon }) {
   const colors = useColors();
-  const edge = { blue: '#0073ea', green: '#00c875', red: '#e2445c', orange: '#fdab3d', grey: colors.gray[300] }[tone] || colors.gray[300];
+  const edge = { blue: '#D4621A', green: '#00c875', red: '#e2445c', orange: '#fdab3d', grey: colors.gray[300] }[tone] || colors.gray[300];
   return (
     <View style={{ flexGrow: 1, flexBasis: 150, minWidth: 140, borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: edge, backgroundColor: colors.white, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200], padding: spacing.md, gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

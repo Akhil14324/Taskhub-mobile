@@ -134,7 +134,7 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
               {Platform.OS === 'web' ? createElement('input', {
                 type: 'time', step: 60, value: pickedTime || '', 'aria-label': 'Pick any time',
                 onChange: (e) => { const v = e.target.value; setPickedTime(v || null); if (v) onChange({ date: date || todayYmd(), time: v }); },
-                style: { height: 34, padding: '0 10px', fontSize: 14, color: colors.gray[900], background: colors.gray[100], border: `1px solid ${colors.gray[300]}`, borderRadius: 8, colorScheme: colors.page === '#111111' ? 'dark' : 'light', outline: 'none' },
+                style: { height: 34, padding: '0 10px', fontSize: 14, color: colors.gray[900], background: colors.gray[100], border: `1px solid ${colors.gray[300]}`, borderRadius: 8, colorScheme: colors.page === '#000000' ? 'dark' : 'light', outline: 'none' },
               }) : null}
             </View>
             <Text style={styles.timeHint}>Tip: type times in quick add, e.g. "tomorrow 6:30pm".</Text>
@@ -177,12 +177,12 @@ const createStyles = (colors) => StyleSheet.create({
   weekday: { width: `${100 / 7}%`, textAlign: 'center', fontSize: fontSize.xs, color: colors.gray[400], fontWeight: '600', paddingVertical: 4 },
   cell: { width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 3 },
   day: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  daySelected: { backgroundColor: '#0073ea' },
-  dayToday: { borderWidth: 1.5, borderColor: '#0073ea' },
+  daySelected: { backgroundColor: '#D4621A' },
+  dayToday: { borderWidth: 1.5, borderColor: '#D4621A' },
   dayText: { fontSize: fontSize.base, color: colors.gray[800] },
   dayPast: { color: colors.gray[400] },
   dayTextSelected: { color: '#fff', fontWeight: '700' },
-  dayTextToday: { color: '#0073ea', fontWeight: '700' },
+  dayTextToday: { color: '#D4621A', fontWeight: '700' },
   timeTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[600], marginTop: spacing.lg, paddingHorizontal: spacing.sm },
   timeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.sm },
   timeChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.gray[100] },

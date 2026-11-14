@@ -53,3 +53,6 @@ export function openNotificationTarget(data = {}) {
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');
 }
+
+// Development only: lets a browser console (and automated checks) move between screens.
+if (typeof __DEV__ !== 'undefined' && __DEV__ && typeof window !== 'undefined') window.__nav = navigationRef;

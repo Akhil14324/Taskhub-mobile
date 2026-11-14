@@ -25,3 +25,4 @@ build.exit
 *.mobileprovision
 *.p8
 AuthKey_*.p8
+graphify-out/

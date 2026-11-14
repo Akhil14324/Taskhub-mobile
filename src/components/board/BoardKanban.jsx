@@ -12,7 +12,7 @@ import { showToast, confirmDialog } from '../../utils/events';
 import api from '../../api/client';
 import { Avatar } from '../kit';
 
-const DROP_OUTLINE = '2px dashed #0073ea';
+const DROP_OUTLINE = '2px dashed #D4621A';
 
 function IconBtn({ icon, label, onPress, active, count }) {
   const colors = useColors();

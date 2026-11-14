@@ -92,7 +92,7 @@ export default function HomeGrid({ ctx, desktop, userId }) {
       if (!card || card.dataset.widget === dragId) return;
       e.preventDefault();
       mark = card;
-      card.style.boxShadow = side(card, e) === 'before' ? 'inset 4px 0 0 #0073ea' : 'inset -4px 0 0 #0073ea';
+      card.style.boxShadow = side(card, e) === 'before' ? 'inset 4px 0 0 #D4621A' : 'inset -4px 0 0 #D4621A';
     };
     const onDrop = (e) => {
       if (!dragId) return;
