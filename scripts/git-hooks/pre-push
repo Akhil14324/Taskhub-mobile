@@ -1,0 +1,23 @@
+#!/bin/sh
+# Nothing reaches GitHub (and so Vercel) unless the web build compiles. Added 2026-11-14 after a merge that
+# did not compile was pushed. To skip in an emergency: git push --no-verify.
+remote_is_main=0
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in refs/heads/main) remote_is_main=1 ;; esac
+done
+[ "$remote_is_main" = 1 ] || exit 0
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "pre-push: there are uncommitted changes; the build below checks the files on disk, not only what is committed." >&2
+fi
+echo "pre-push: building the web app before pushing to main..." >&2
+log=$(mktemp)
+npm run build:web >"$log" 2>&1
+if ! grep -q "Exported: dist" "$log"; then
+  echo "pre-push: the build FAILED. Nothing was pushed." >&2
+  grep -v '^$' "$log" | tail -25 >&2
+  rm -f "$log"
+  exit 1
+fi
+rm -f "$log"
+echo "pre-push: build passed." >&2
+exit 0

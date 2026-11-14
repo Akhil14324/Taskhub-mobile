@@ -239,7 +239,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, addingGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onResizeColumn,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn,
 }) {
   const colors = useColors();
   const { columns: savedColumns, groups, values, access } = board;
@@ -280,6 +280,7 @@ export default function BoardTable({
     return () => document.removeEventListener('copy', onCopy);
   }, [sel, items, onBulkCopy]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const toggleSel = (ids, on) => setSel((cur) => { const n = new Set(cur); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
   useEffect(() => { // forget ticks for rows that are gone (deleted, filtered out)
     setSel((cur) => { const have = new Set(items.map((t) => t.id)); const n = new Set([...cur].filter((id) => have.has(id))); return n.size === cur.size ? cur : n; });
@@ -669,6 +670,29 @@ export default function BoardTable({
           <Pressable disabled={bulkBusy} onPress={async () => { setBulkBusy(true); await onBulkDuplicate(items.filter((t) => sel.has(t.id))); setBulkBusy(false); setSel(new Set()); }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
             <Ionicons name="copy-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Duplicate</Text>
           </Pressable>
+        )}
+        {!!onBulkMove && (moveGroups || []).length > 1 && (
+          <View>
+            <Pressable disabled={bulkBusy} onPress={() => setMoveOpen((v) => !v)} accessibilityLabel="Move to another group" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered || moveOpen ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Move to</Text>
+            </Pressable>
+            {moveOpen && (
+              <View {...glass('menu')} style={{ position: 'absolute', bottom: 44, left: 0, minWidth: 220, maxHeight: 320, borderRadius: radius.lg, paddingVertical: 6, backgroundColor: colors.white }}>
+                <ScrollView>
+                  {moveGroups.map((g) => (
+                    <Pressable key={g.id} onPress={async () => {
+                      setMoveOpen(false); setBulkBusy(true);
+                      await onBulkMove(items.filter((t) => sel.has(t.id) && !t.parent_id), g);
+                      setBulkBusy(false); setSel(new Set());
+                    }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: paletteHex(g.color) }} />
+                      <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[800], flexShrink: 1 }}>{g.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
         )}
         {!!onBulkDelete && (
           <Pressable disabled={bulkBusy} onPress={async () => {

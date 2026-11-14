@@ -48,7 +48,7 @@ export function Visual({ visual }) {
  * Questions about one meeting, answered from its saved transcript. An answer can bring a chart or a flow
  * chart. The exchange is kept with the meeting, so it is here again the next time the meeting is opened.
  */
-export default function MeetingAsk({ meetingId, initialChat, ready }) {
+export default function MeetingAsk({ meetingId, initialChat, ready, kept = true }) {
   const colors = useColors();
   const [chat, setChat] = useState(Array.isArray(initialChat) ? initialChat : []);
   const [text, setText] = useState('');
@@ -67,7 +67,7 @@ export default function MeetingAsk({ meetingId, initialChat, ready }) {
     setAsking(question);
     setText('');
     try {
-      const res = await api.post(`/meeting-notes/${meetingId}/ask`, { question }, { timeout: 180000, __skipOops: true });
+      const res = await api.post(`/meeting-notes/${meetingId}/ask`, kept ? { question } : { question, chat }, { timeout: 180000, __skipOops: true });
       setChat(res.data.chat || []);
       if (res.data.cut) showToast({ message: 'This meeting is very long: the answer used its beginning and its end.', icon: 'information-circle' });
     } catch (err) {
@@ -82,7 +82,7 @@ export default function MeetingAsk({ meetingId, initialChat, ready }) {
     const ok = await confirmDialog({ title: 'Clear these questions?', message: 'The questions and answers are removed. The meeting and its transcript stay.', confirmLabel: 'Clear' });
     if (!ok) return;
     try {
-      await api.delete(`/meeting-notes/${meetingId}/ask`);
+      if (kept) await api.delete(`/meeting-notes/${meetingId}/ask`);
       setChat([]);
     } catch {
       showToast({ message: 'Could not clear them', tone: 'error' });

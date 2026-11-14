@@ -108,11 +108,11 @@ export default function MeetingNotesScreen({ embedded = false }) {
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.rowTitle} numberOfLines={1}>{m.title}</Text>
               <Text style={styles.rowSub} numberOfLines={1}>
-                {[timeAgo(m.created_at), lengthOf(m.duration_ms), Number(m.chars) ? null : 'Nothing recorded yet'].filter(Boolean).join('  ·  ')}
+                {[m.owner_name ? `Recorded by ${m.owner_name}` : null, timeAgo(m.created_at), lengthOf(m.duration_ms), Number(m.chars) ? null : 'Nothing recorded yet'].filter(Boolean).join('  ·  ')}
               </Text>
               {!!m.summary && <Text style={styles.rowSummary} numberOfLines={2}>{m.summary}</Text>}
             </View>
-            {m.drafts > 0 && (
+            {m.drafts > 0 && m.mine !== false && (
               <View style={styles.badge}><Text style={styles.badgeText}>{m.drafts} to give</Text></View>
             )}
             <Ionicons name="chevron-forward" size={18} color={colors.gray[400]} />
@@ -284,6 +284,8 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
     }
   };
 
+  // Someone else's meeting (only the super admin can open one): everything can be read and asked about, nothing changed.
+  const own = note ? note.mine !== false : true;
   const list = drafts || [];
   const readyToGive = list.filter((d) => !(d.confidence === 'unsure' && !d.assignee_id));
   const words = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
@@ -299,17 +301,27 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
             value={title}
             onChangeText={setTitle}
             onBlur={saveTitle}
+            editable={own}
             placeholder="Name this meeting"
             placeholderTextColor={colors.gray[400]}
             style={styles.titleInput}
           />
-          <AnimatedPressable onPress={onDelete} hitSlop={10} accessibilityLabel="Delete this meeting" style={styles.iconBtn}>
-            <Ionicons name="trash-outline" size={19} color={colors.gray[500]} />
-          </AnimatedPressable>
+          {own && (
+            <AnimatedPressable onPress={onDelete} hitSlop={10} accessibilityLabel="Delete this meeting" style={styles.iconBtn}>
+              <Ionicons name="trash-outline" size={19} color={colors.gray[500]} />
+            </AnimatedPressable>
+          )}
         </View>
 
+        {!own && (
+          <View {...glass('card')} style={[styles.panel, styles.waitRow]}>
+            <Ionicons name="eye-outline" size={18} color={colors.gray[600]} />
+            <Text style={styles.waitText}>Recorded by {note.owner_name || 'someone else'}. You can read it and ask about it. Your questions are not saved with it.</Text>
+          </View>
+        )}
+
         {/* The recorder. */}
-        <View {...glass('card')} style={styles.panel}>
+        {own && <View {...glass('card')} style={styles.panel}>
           {recorder.recording ? (
             <>
               <View style={styles.recRow}>
@@ -386,7 +398,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
               )}
             </>
           )}
-        </View>
+        </View>}
 
         {reading && (
           <View {...glass('card')} style={[styles.panel, styles.waitRow]}>
@@ -425,7 +437,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
                 ) : !reading && (
                   <Text style={styles.hint}>The meeting has not been read yet.</Text>
                 )}
-                {!reading && !busyHere && (
+                {own && !reading && !busyHere && (
                   <AnimatedPressable style={[styles.secondary, { alignSelf: 'flex-start' }]} onPress={readMeeting}>
                     <Ionicons name="refresh" size={16} color={colors.gray[800]} />
                     <Text style={styles.secondaryText}>{result ? 'Read again' : 'Read the meeting'}</Text>
@@ -436,7 +448,8 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
 
             {tab === 'tasks' && (
               <View style={{ gap: spacing.sm }}>
-                {list.length > 0 && (
+                {list.length > 0 && !own && <Text style={styles.hint}>Waiting to be given by {note.owner_name || 'the person who recorded it'}.</Text>}
+                {list.length > 0 && own && (
                   <View style={styles.taskHead}>
                     <Text style={[styles.hint, { flex: 1 }]}>Nothing reaches anyone until you give it.{given ? ` ${given} given so far.` : ''}</Text>
                     <AnimatedPressable style={styles.secondary} onPress={() => setReviewing(true)}>
@@ -466,7 +479,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
                         </View>
                         {!!d.quote && <Text style={styles.quote} numberOfLines={2}>"{d.quote}"</Text>}
                       </View>
-                      <View style={styles.taskActions}>
+                      {own && <View style={styles.taskActions}>
                         {unsure ? (
                           <AnimatedPressable style={styles.secondary} onPress={() => setReviewing(true)}>
                             <Text style={styles.secondaryText}>Pick a person</Text>
@@ -479,7 +492,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
                         <AnimatedPressable onPress={() => drop(d.id)} hitSlop={8} accessibilityLabel="Leave this task out" style={styles.iconBtn}>
                           <Ionicons name="close" size={18} color={colors.gray[500]} />
                         </AnimatedPressable>
-                      </View>
+                      </View>}
                     </View>
                   );
                 })}
@@ -504,7 +517,7 @@ function MeetingView({ id, embedded, onBack, onDelete }) {
               </View>
             )}
 
-            {tab === 'ask' && <MeetingAsk meetingId={id} initialChat={note?.chat} ready={hasText && !busyHere} />}
+            {tab === 'ask' && <MeetingAsk meetingId={id} initialChat={note?.chat} ready={hasText && !busyHere} kept={own} />}
           </>
         )}
       </View>

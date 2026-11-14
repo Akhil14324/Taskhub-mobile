@@ -345,7 +345,7 @@ export default function BoardScreen({ route }) {
   const columnsById = data.columns;
 
   return (
-    <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
+    <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, mirrors: data.mirrors || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
     {desktop && <BoardsSidebar boardId={boardId} />}
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
@@ -463,6 +463,13 @@ export default function BoardScreen({ route }) {
               showToast({ message: n === rows.length ? `Deleted ${n}` : `Deleted ${n} of ${rows.length} (the rest you cannot delete)`, icon: 'trash', tone: n ? undefined : 'error' });
             }}
             onBulkCopy={rowsAsCells}
+            moveGroups={vs.group_by ? null : data.groups}
+            onBulkMove={async (rows, group) => {
+              const mine = data.board.kind === 'my_todos';
+              const todo = rows.filter((t) => t.business_section_id !== group.id && t.permissions?.can_edit !== false);
+              for (const t of todo) await board.updateFields(t, mine ? { list_id: group.id } : { business_section_id: group.id });
+              showToast({ message: todo.length ? `Moved ${todo.length} to ${group.name}` : 'Nothing to move', tone: todo.length ? 'success' : undefined, icon: 'arrow-forward-circle' });
+            }}
             onBulkDuplicate={async (rows) => {
               for (const t of rows) await board.addItem(`${t.title} (copy)`, { groupId: t.business_section_id ?? undefined });
               showToast({ message: `Duplicated ${rows.length}`, tone: 'success', icon: 'copy' });
