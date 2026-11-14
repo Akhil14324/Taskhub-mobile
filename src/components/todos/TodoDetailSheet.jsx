@@ -25,7 +25,6 @@ import { PickerSheet } from './Pickers';
 import GovernancePanel from './GovernancePanel';
 import PlanSheet, { planSummary } from '../biz/PlanSheet';
 import TimeBox from '../biz/TimeBox';
-import MeetPanel from './MeetPanel';
 import WorkflowSheet from './WorkflowSheet';
 import ClaudePanel from './ClaudePanel';
 import PromptSheet from './PromptSheet';
@@ -336,7 +335,6 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
 
       <GovernancePanel todo={todo} />
       <SubtaskTree parent={todo} onOpen={setActiveId} />
-      <MeetPanel todo={todo} />
       <ClaudePanel todo={todo} />
 
       <View style={styles.tabs}>

@@ -12,7 +12,7 @@ export const BUILTIN_DIMS = [['status', 'Status'], ['person', 'Person'], ['group
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PRIORITY = { 1: ['Urgent', 'red'], 2: ['High', 'orange'], 3: ['Normal', 'blue'], 4: ['Low', 'grey'] };
-const COLORS = ['blue', 'green', 'orange', 'purple', 'red', 'aquamarine', 'pink', 'yellow', 'indigo', 'grass'];
+const COLORS = ['dark_orange', 'aquamarine', 'purple', 'green', 'blue', 'yellow', 'pink', 'indigo', 'red', 'grass'];
 const dueOf = (t) => t.due_date || t.deadline_date || null;
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -123,7 +123,7 @@ export function matrix(list, w, ctx) {
     for (const [ck, cl, cc, cs] of dimOf(by, t, ctx)) {
       const c = cats.get(ck) || { key: ck, label: cl, color: cc, sort: cs, total: 0 };
       c.total += 1; cats.set(ck, c);
-      for (const [sk, sl, sc] of seriesBy ? dimOf(seriesBy, t, ctx) : [['all', valueCol ? valueCol.title : 'Tasks', 'blue']]) {
+      for (const [sk, sl, sc] of seriesBy ? dimOf(seriesBy, t, ctx) : [['all', valueCol ? valueCol.title : 'Tasks', 'dark_orange']]) {
         if (!sers.has(sk)) sers.set(sk, { key: sk, label: sl, color: sc, total: 0 });
         sers.get(sk).total += 1;
         const k = `${ck}|${sk}`;

@@ -76,40 +76,98 @@ function FilesEditor({ item, ids, files, onSave }) {
   );
 }
 
-/** Pick items of the linked board (Connect boards). */
+/**
+ * Connect boards: tick the tasks of the linked board this one belongs with, or type a new name and make that
+ * task on the linked board without leaving this one. The picked ones stay on top.
+ */
 function LinkEditor({ boardId, selfId, ids, onDone }) {
   const colors = useColors();
-  const [items, setItems] = useState(null);
+  const [linked, setLinked] = useState(null); // { name, word, canAdd, items }
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState(ids);
+  const [making, setMaking] = useState(false);
   useEffect(() => {
     let live = true;
     api.get(`/boards/${boardId}`, { __skipOops: true })
-      .then((r) => live && setItems(r.data.items.filter((t) => t.id !== selfId && !t.parent_id)))
-      .catch(() => live && setItems([]));
+      .then((r) => live && setLinked({
+        name: r.data.board?.name || 'the linked board',
+        word: itemWordOf(r.data.board).toLowerCase(),
+        canAdd: !!r.data.access?.add,
+        items: r.data.items.filter((t) => t.id !== selfId && !t.parent_id),
+      }))
+      .catch(() => live && setLinked({ name: 'the linked board', word: 'task', canAdd: false, items: [], failed: true }));
     return () => { live = false; };
   }, [boardId, selfId]);
-  const shown = (items || []).filter((t) => !q || t.title.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
+
+  const text = q.trim();
+  const items = linked?.items || [];
+  const shown = items
+    .filter((t) => !text || t.title.toLowerCase().includes(text.toLowerCase()))
+    .sort((x, y) => Number(picked.includes(y.id)) - Number(picked.includes(x.id)))
+    .slice(0, 60);
+  const exact = items.some((t) => t.title.trim().toLowerCase() === text.toLowerCase());
+
+  const make = async () => {
+    if (making || !text) return;
+    setMaking(true);
+    try {
+      const r = await api.post(`/boards/${boardId}/items`, { title: text });
+      const made = r.data.todo || { id: r.data.id, title: text };
+      if (made.id) {
+        setLinked((l) => ({ ...l, items: [made, ...l.items] }));
+        setPicked((p) => [...p, made.id]);
+        setQ('');
+      }
+    } catch (e) {
+      showToast(e.response?.data?.error || 'Could not make it. Try again.');
+    } finally {
+      setMaking(false);
+    }
+  };
+
   return (
-    <View style={{ gap: 6 }}>
-      <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Find an item" placeholderTextColor={colors.gray[400]}
-        style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 7, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
-      {!items ? <ActivityIndicator /> : (
-        <ScrollView style={{ maxHeight: 260 }}>
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Ionicons name="swap-horizontal-outline" size={14} color={colors.gray[500]} />
+        <Text numberOfLines={1} style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.gray[500] }}>
+          {linked ? `From ${linked.name}` : 'Opening the linked board'}
+        </Text>
+        {picked.length > 0 && <Text style={{ fontSize: 12, fontWeight: '600', color: colors.brand[600] }}>{picked.length} linked</Text>}
+      </View>
+      <TextInput autoFocus value={q} onChangeText={setQ} onSubmitEditing={() => { if (text && !exact && linked?.canAdd) make(); }}
+        placeholder={linked?.canAdd ? 'Find one, or type a new name' : 'Find one'} placeholderTextColor={colors.gray[400]}
+        style={{ borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 8, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }} />
+      {!linked ? <ActivityIndicator color={colors.brand[600]} /> : (
+        <ScrollView style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
           {shown.map((t) => {
             const on = picked.includes(t.id);
             return (
               <Pressable key={t.id} onPress={() => setPicked((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))}
-                style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
+                style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
                 <Ionicons name={on ? 'checkbox' : 'square-outline'} size={17} color={on ? colors.brand[600] : colors.gray[400]} />
-                <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[900] }}>{t.title}</Text>
+                <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
               </Pressable>
             );
           })}
-          {!shown.length && <Text style={{ color: colors.gray[500], padding: 6 }}>Nothing matches.</Text>}
+          {!!text && !exact && linked.canAdd && (
+            <Pressable onPress={make} disabled={making}
+              style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: radius.md, opacity: making ? 0.6 : 1, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              {making ? <ActivityIndicator size="small" color={colors.brand[600]} /> : <Ionicons name="add-circle-outline" size={17} color={colors.brand[600]} />}
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.brand[600] }}>
+                {making ? 'Making it' : `New ${linked.word} "${text}" in ${linked.name}`}
+              </Text>
+            </Pressable>
+          )}
+          {!shown.length && !(text && linked.canAdd) && (
+            <Text style={{ color: colors.gray[500], padding: 8, fontSize: 13, lineHeight: 18 }}>
+              {linked.failed ? 'You cannot open the linked board.'
+                : items.length ? 'Nothing matches.'
+                : `${linked.name} has nothing in it yet.${linked.canAdd ? ' Type a name above to add the first one.' : ''}`}
+            </Text>
+          )}
         </ScrollView>
       )}
-      <Pressable onPress={() => onDone(picked)} style={{ backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 8, alignItems: 'center' }}>
+      <Pressable onPress={() => onDone(picked)} disabled={making} style={{ backgroundColor: colors.brand[600], borderRadius: radius.md, paddingVertical: 9, alignItems: 'center', opacity: making ? 0.6 : 1 }}>
         <Text style={{ color: '#fff', fontWeight: '600' }}>Done</Text>
       </Pressable>
     </View>

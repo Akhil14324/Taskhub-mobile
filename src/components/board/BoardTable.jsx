@@ -178,7 +178,9 @@ function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
   const { rowH } = useContext(Metrics);
   const [text, setText] = useState('');
   return (
-    <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+    <View style={{ height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+      {/* Stays at the left edge when the table is scrolled sideways, like the name column above it. */}
+      <View style={{ flexDirection: 'row', height: rowH - 1, width, position: 'sticky', left: 0, zIndex: 4, backgroundColor: colors.white }}>
       <View style={{ width: 6, backgroundColor: paletteHex(color), opacity: 0.5 }} />
       <TextInput accessibilityLabel={`Add ${word.toLowerCase()}`}
         value={text}
@@ -189,6 +191,7 @@ function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
         blurOnSubmit={false}
         style={{ width: width - 6, paddingLeft: spacing.lg + 18 + indent, paddingRight: spacing.sm, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
       />
+      </View>
     </View>
   );
 }
@@ -196,7 +199,7 @@ function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
 function SummaryRow({ items, columns, values, colors, nameWidth }) {
   return (
     <View style={{ flexDirection: 'row', height: 30, alignItems: 'center' }}>
-      <View style={{ width: nameWidth }} />
+      <View style={{ width: nameWidth, height: 30, position: 'sticky', left: 0, zIndex: 4, backgroundColor: colors.white }} />
       {columns.map((c) => {
         let inner = null;
         if (c.kind === 'date' || c.kind === 'timeline') {

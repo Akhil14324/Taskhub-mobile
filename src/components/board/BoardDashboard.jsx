@@ -24,7 +24,7 @@ const SIZES = ['S', 'M', 'L'];
 const FALLBACK = ['blue', 'green', 'orange', 'purple', 'red', 'aquamarine', 'pink', 'yellow', 'indigo', 'grass'];
 
 /** Pie and donut: one slice per category (all series added up). */
-function Pie({ data, donut, size = 190 }) {
+export function Pie({ data, donut, size = 190 }) {
   const colors = useColors();
   const cats = data.categories.map((c, i) => ({ ...c, v: data.series.reduce((n, s) => n + (s.values[i] || 0), 0) })).filter((c) => c.v > 0);
   const total = cats.reduce((n, c) => n + c.v, 0);
@@ -68,8 +68,8 @@ function PivotTable({ data }) {
   const multi = data.series.length > 1;
   const cell = (t, w, bold) => <Text numberOfLines={1} style={{ width: w, fontSize: 13, fontWeight: bold ? '600' : '400', color: colors.gray[900], textAlign: bold ? 'left' : 'right' }}>{t}</Text>;
   return (
-    <ScrollView horizontal>
-      <View>
+    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>
+      <View style={{ flexGrow: 1 }}>
         <View style={{ flexDirection: 'row', gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
           <Text style={{ width: 140, fontSize: 12, fontWeight: '600', color: colors.gray[600] }}> </Text>
           {data.series.map((s) => <Text key={s.key} numberOfLines={1} style={{ width: 84, fontSize: 12, fontWeight: '600', color: colors.gray[600], textAlign: 'right' }}>{s.label}</Text>)}
@@ -197,6 +197,49 @@ function WidgetEditor({ widget, board, onChange, onClose, onDelete }) {
   );
 }
 
+const GAP = 12;
+const PANEL_H = 340;
+// What a number means decides its colour and icon: late is red, finished is green, the rest take the accent.
+const KPI_LOOK = {
+  overdue: ['red', 'alert-circle-outline'], done: ['green', 'checkmark-done-outline'], this_week: ['amber', 'calendar-outline'],
+  mine: ['purple', 'person-outline'], open: ['brand', 'albums-outline'], all: ['brand', 'layers-outline'],
+};
+
+/** One number of the strip: what it is, the number, and a line that puts it in context. */
+function KpiTile({ w, data, desktop, editing, controls, total }) {
+  const colors = useColors();
+  const isProgress = w.type === 'progress';
+  const [tone, icon] = isProgress ? ['green', 'pie-chart-outline'] : w.value || w.formula ? ['brand', 'stats-chart-outline'] : KPI_LOOK[w.filter || 'all'];
+  const quiet = w.filter === 'overdue' && !data?.value; // nothing late: no alarm colour
+  const hue = quiet ? colors.gray : colors[tone];
+  const value = data?.error ? '!' : isProgress ? `${data.percent}%` : Number(data.value).toLocaleString('en-IN');
+  const filterLabel = FILTERS.find((f) => f[0] === (w.filter || 'all'))?.[1];
+  return (
+    <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: desktop ? 190 : '46%', minWidth: 148, backgroundColor: colors.white, borderRadius: radius.xl, borderWidth: 1, borderColor: editing ? BRAND : colors.gray[200], padding: spacing.lg, gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: hue[50], alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={icon} size={15} color={hue[600]} />
+        </View>
+        <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.gray[600] }}>{w.title || (isProgress ? 'Progress' : 'Number')}</Text>
+        {controls}
+      </View>
+      <Text numberOfLines={1} style={{ fontSize: 30, lineHeight: 34, fontWeight: '700', letterSpacing: -0.8, color: w.filter === 'overdue' && data?.value ? colors.red[600] : colors.gray[900], fontVariant: ['tabular-nums'] }}>
+        {value}{!isProgress && data?.unit ? <Text style={{ fontSize: 14, fontWeight: '500', color: colors.gray[500] }}> {data.unit}</Text> : null}
+      </Text>
+      {isProgress ? (
+        <View style={{ gap: 6 }}>
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.gray[100] }}><View style={{ width: `${data.percent}%`, height: 6, borderRadius: 3, backgroundColor: colors.green[500] }} /></View>
+          <Text style={{ fontSize: 12, color: colors.gray[500] }}>{data.done} of {data.total} done</Text>
+        </View>
+      ) : (
+        <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>
+          {data?.error ? data.error : w.formula ? 'Formula' : w.value ? `${AGGS.find((x) => x[0] === (w.agg || 'sum'))?.[1]} · ${filterLabel} tasks` : `of ${total} on the board`}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 const SUGGESTIONS = ['Add a pie chart of tasks by person', 'Show what is overdue this week', 'Make it a weekly review dashboard'];
 
 export default function BoardDashboard({ board, people, meId, view, canSave, onSave, onOpenItem, desktop }) {
@@ -249,12 +292,29 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
 
   const editingWidget = widgets.find((w) => w.id === editing);
   const cols = desktop ? 3 : 1;
+  const indexed = widgets.map((w, i) => ({ w, i }));
+  const kpis = indexed.filter(({ w }) => w.type === 'number' || w.type === 'progress');
+  const panels = indexed.filter(({ w }) => w.type !== 'number' && w.type !== 'progress');
+  const total = board.items.filter((t) => !t.parent_id).length;
+
+  // The small tools a widget shows while the dashboard is being edited.
+  const controls = (w, i, sizable) => (edit ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      {desktop && sizable && <Pressable onPress={() => resize(i)} accessibilityLabel="Change width" hitSlop={6} style={{ paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm, backgroundColor: colors.gray[100] }}><Text style={{ fontSize: 11, fontWeight: '700', color: colors.gray[700] }}>{SIZES[(w.w || 1) - 1]}</Text></Pressable>}
+      <Pressable onPress={() => move(i, -1)} accessibilityLabel="Move earlier" hitSlop={8} style={{ padding: 4 }}><Ionicons name="arrow-back" size={15} color={i ? colors.gray[700] : colors.gray[300]} /></Pressable>
+      <Pressable onPress={() => move(i, 1)} accessibilityLabel="Move later" hitSlop={8} style={{ padding: 4 }}><Ionicons name="arrow-forward" size={15} color={i < widgets.length - 1 ? colors.gray[700] : colors.gray[300]} /></Pressable>
+      <Pressable onPress={() => setEditing(w.id)} accessibilityLabel="Widget settings" hitSlop={8} style={{ padding: 4 }}><Ionicons name="settings-outline" size={15} color={colors.gray[700]} /></Pressable>
+    </View>
+  ) : null);
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: desktop ? spacing.lg : spacing.sm, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 6, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray[900], flex: 1 }}>Dashboard</Text>
+          <View style={{ flex: 1, minWidth: 140 }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray[900], letterSpacing: -0.3 }}>{view?.name || 'Dashboard'}</Text>
+            <Text style={{ fontSize: 12, color: colors.gray[500], marginTop: 2 }}>{total} {total === 1 ? 'task' : 'tasks'} on this board, counted live</Text>
+          </View>
           {canSave && edit && (
             <>
               <Pressable onPress={addWidget} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
@@ -285,24 +345,37 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {widgets.map((w, i) => {
+        {/* The numbers first, as one strip of equal tiles; then the charts, lists and tables in rows of equal height. */}
+        {kpis.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: 6, paddingBottom: GAP }}>
+            {kpis.map(({ w, i }) => (
+              <KpiTile key={w.id} w={w} data={computed[i]} desktop={desktop} editing={edit} controls={controls(w, i, false)} total={total} />
+            ))}
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 6 - GAP / 2 }}>
+          {panels.map(({ w, i }) => {
             const wide = desktop ? Math.min(w.w || 1, cols) : 1;
+            const fixed = w.type !== 'text';
             return (
-              <View key={w.id} style={{ width: `${(wide / cols) * 100}%`, padding: 6 }}>
-                <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: edit ? BRAND : colors.gray[200], padding: spacing.md, gap: spacing.sm, minHeight: 110 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>{w.title || TYPES.find((t) => t[0] === w.type)?.[1]}</Text>
-                    {edit && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                        {desktop && <Pressable onPress={() => resize(i)} accessibilityLabel="Change width" hitSlop={6} style={{ paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm, backgroundColor: colors.gray[100] }}><Text style={{ fontSize: 11, fontWeight: '700', color: colors.gray[700] }}>{SIZES[(w.w || 1) - 1]}</Text></Pressable>}
-                        <Pressable onPress={() => move(i, -1)} accessibilityLabel="Move earlier" hitSlop={8} style={{ padding: 5 }}><Ionicons name="arrow-up" size={16} color={i ? colors.gray[700] : colors.gray[300]} /></Pressable>
-                        <Pressable onPress={() => move(i, 1)} accessibilityLabel="Move later" hitSlop={8} style={{ padding: 5 }}><Ionicons name="arrow-down" size={16} color={i < widgets.length - 1 ? colors.gray[700] : colors.gray[300]} /></Pressable>
-                        <Pressable onPress={() => setEditing(w.id)} accessibilityLabel="Widget settings" hitSlop={8} style={{ padding: 5 }}><Ionicons name="settings-outline" size={16} color={colors.gray[700]} /></Pressable>
-                      </View>
+              <View key={w.id} style={{ width: `${(wide / cols) * 100}%`, padding: GAP / 2 }}>
+                <View style={{ backgroundColor: colors.white, borderRadius: radius.xl, borderWidth: 1, borderColor: edit ? BRAND : colors.gray[200], height: fixed ? PANEL_H : undefined, overflow: 'hidden' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+                    <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.gray[900] }}>{w.title || TYPES.find((t) => t[0] === w.type)?.[1]}</Text>
+                    {!edit && w.filter && w.filter !== 'all' && (
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.gray[500] }}>{FILTERS.find((f) => f[0] === w.filter)?.[1]}</Text>
                     )}
+                    {controls(w, i, true)}
                   </View>
-                  <WidgetBody w={w} data={computed[i]} onOpenItem={onOpenItem} />
+                  {fixed ? (
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, flexGrow: 1, justifyContent: w.type === 'chart' ? 'center' : 'flex-start' }}>
+                      <WidgetBody w={w} data={computed[i]} onOpenItem={onOpenItem} height={PANEL_H - 96} />
+                    </ScrollView>
+                  ) : (
+                    <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
+                      <WidgetBody w={w} data={computed[i]} onOpenItem={onOpenItem} />
+                    </View>
+                  )}
                 </View>
               </View>
             );
