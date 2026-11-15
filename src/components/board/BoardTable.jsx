@@ -281,6 +281,63 @@ export default function BoardTable({
   }, [sel, items, onBulkCopy]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+
+  // Drag a task by its name onto another group to move it there (desktop; the same move as "Move to").
+  const tableRef = useRef(null);
+  const dragMove = useRef(null);
+  dragMove.current = onBulkMove && (moveGroups || []).length > 0 ? { onBulkMove, moveGroups, items } : null;
+  useEffect(() => {
+    const root = tableRef.current;
+    if (!root || typeof root.addEventListener !== 'function') return undefined;
+    let dragId = null;
+    let from = null;
+    let over = null;
+    const clear = () => { if (over) over.style.outline = ''; over = null; };
+    const down = (e) => {
+      const row = e.target.closest?.('[data-drag-row]');
+      // Typing in a name keeps the text cursor; anything else on the name block can start a drag.
+      if (row) row.draggable = !!dragMove.current && !e.target.closest('input, textarea');
+    };
+    const start = (e) => {
+      const row = e.target.closest?.('[data-drag-row]');
+      if (!row || !dragMove.current) return;
+      dragId = Number(row.dataset.dragRow);
+      from = row.closest('[data-drop-group]')?.dataset.dropGroup ?? null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragId));
+    };
+    const overGroup = (e) => {
+      if (dragId === null) return;
+      const g = e.target.closest?.('[data-drop-group]');
+      if (!g || g.dataset.dropGroup === from || g.dataset.dropGroup === 'none') { clear(); return; }
+      e.preventDefault();
+      if (over !== g) { clear(); over = g; g.style.outline = '2px solid #D4621A'; g.style.outlineOffset = '4px'; }
+    };
+    const drop = (e) => {
+      const g = over;
+      const id = dragId;
+      clear(); dragId = null;
+      if (!g || id === null || !dragMove.current) return;
+      e.preventDefault();
+      const { onBulkMove: move, moveGroups: groups, items: all } = dragMove.current;
+      const group = groups.find((x) => String(x.id) === g.dataset.dropGroup);
+      const item = all.find((t) => t.id === id);
+      if (group && item) move([item], group);
+    };
+    const end = () => { clear(); dragId = null; };
+    root.addEventListener('pointerdown', down);
+    root.addEventListener('dragstart', start);
+    root.addEventListener('dragover', overGroup);
+    root.addEventListener('drop', drop);
+    root.addEventListener('dragend', end);
+    return () => {
+      root.removeEventListener('pointerdown', down);
+      root.removeEventListener('dragstart', start);
+      root.removeEventListener('dragover', overGroup);
+      root.removeEventListener('drop', drop);
+      root.removeEventListener('dragend', end);
+    };
+  }, []);
   const toggleSel = (ids, on) => setSel((cur) => { const n = new Set(cur); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
   useEffect(() => { // forget ticks for rows that are gone (deleted, filtered out)
     setSel((cur) => { const have = new Set(items.map((t) => t.id)); const n = new Set([...cur].filter((id) => have.has(id))); return n.size === cur.size ? cur : n; });
@@ -502,13 +559,14 @@ export default function BoardTable({
     const hasKids = kids.length > 0;
     const prog = hasKids ? progressMap.get(t.id) : null;
     const rule = colorOf ? colorOf(t) : null;
+    const linkedFrom = board.backlinks?.[t.id]?.length || 0;
     return (
       <View key={t.id}>
         <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white, opacity: t.pending ? 0.55 : 1 }}>
           <View style={[{ flexDirection: 'row', backgroundColor: colors.white, height: rowH }, stickyName]}>
           <View style={{ width: 6, backgroundColor: paletteHex(rule || block.group.color) }} />
           <View
-            dataSet={{ cell: `${t.id}:-1` }}
+            dataSet={depth === 0 && typeof t.id === 'number' ? { cell: `${t.id}:-1`, dragRow: String(t.id) } : { cell: `${t.id}:-1` }}
             style={{
               width: nameW - 6, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: spacing.sm,
               paddingRight: spacing.xs, borderRightWidth: 1, borderColor: colors.gray[200],
@@ -540,6 +598,12 @@ export default function BoardTable({
                   {t.title}
                 </Text>
               </Pressable>
+            )}
+            {linkedFrom > 0 && (
+              <View accessibilityLabel={`Linked from ${linkedFrom} other ${linkedFrom === 1 ? 'task' : 'tasks'}`} dataSet={{ tip: `Linked from ${linkedFrom} other ${linkedFrom === 1 ? 'task' : 'tasks'}. Open the task to see them.` }} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Ionicons name="link-outline" size={14} color={colors.gray[500]} />
+                <Text style={{ fontSize: 11, color: colors.gray[600] }}>{linkedFrom}</Text>
+              </View>
             )}
             {hasKids && prog && (
               <View accessibilityLabel={`${prog.done} of ${prog.total} steps done`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -583,12 +647,12 @@ export default function BoardTable({
 
   return (
     <Metrics.Provider value={metrics}>
-    <View style={{ flex: 1, overflow: 'auto' }}>
+    <View ref={tableRef} style={{ flex: 1, overflow: 'auto' }}>
       <View style={{ width: Math.max(tableWidth, 600), paddingBottom: 120 }}>
         {blocks.map((b) => {
           const isCollapsed = collapsed.has(b.group.id);
           return (
-            <View key={b.group.id ?? 'none'} style={{ marginBottom: spacing.xl, width: layoutOf(b.group.id).width }}>
+            <View key={b.group.id ?? 'none'} dataSet={{ dropGroup: typeof b.group.id === 'number' ? String(b.group.id) : 'none' }} style={{ marginBottom: spacing.xl, width: layoutOf(b.group.id).width }}>
               {/* Sticky: scrolling the columns sideways leaves the group name where it is. */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, position: 'sticky', left: 0, alignSelf: 'flex-start', zIndex: 5 }}>
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
@@ -671,7 +735,7 @@ export default function BoardTable({
             <Ionicons name="copy-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Duplicate</Text>
           </Pressable>
         )}
-        {!!onBulkMove && (moveGroups || []).length > 1 && (
+        {!!onBulkMove && (moveGroups || []).length > 0 && (
           <View>
             <Pressable disabled={bulkBusy} onPress={() => setMoveOpen((v) => !v)} accessibilityLabel="Move to another group" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered || moveOpen ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="arrow-forward-circle-outline" size={16} color={colors.gray[700]} /><Text style={{ fontSize: 14, color: colors.gray[800] }}>Move to</Text>

@@ -425,7 +425,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
     <Card
       title="Schedule"
       icon="time-outline"
-      right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>{sum.planned ? `${hours(sum.planned)} planned${canMark && sum.done ? ` · ${hours(sum.done)} done` : ''}` : isWeb ? 'Drag a task here, pull the bottom edge of a block to stretch it' : 'Tap a half hour to plan it'}</Text>}
+      right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>{sum.planned ? `${hours(sum.planned)} planned${canMark && sum.done ? ` · ${hours(sum.done)} done` : ''}` : isWeb && typeof window !== 'undefined' && window.innerWidth >= 700 ? 'Drag a task here, pull the bottom edge of a block to stretch it' : 'Tap a half hour to plan it'}</Text>}
     >
       {placing && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand[50], paddingHorizontal: spacing.md, paddingVertical: 8 }}>

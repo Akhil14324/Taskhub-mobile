@@ -326,9 +326,11 @@ export default function Profile() {
           <View style={styles.headerInfo}>
             <Text style={styles.userName}>{getDynamic(user?.name)}</Text>
             <View style={styles.headerBadges}>
-              <Badge bg={roleBadgeStyle.bg} color={roleBadgeStyle.text}>
-                {user?.display_title || roleLabel}
-              </Badge>
+              {!user?.is_owner && (
+                <Badge bg={roleBadgeStyle.bg} color={roleBadgeStyle.text}>
+                  {user?.display_title || roleLabel}
+                </Badge>
+              )}
               <Badge bg={statusBadgeStyle.bg} color={statusBadgeStyle.text}>
                 {t(user?.status || 'active')}
               </Badge>
@@ -369,7 +371,7 @@ export default function Profile() {
               const m = user?.memberships?.find((x) => x.business_id === biz.id);
               return (
                 <Badge key={biz.id} bg={colors.brand[100]} color={colors.brand[700]}>
-                  {getDynamic(biz.name)}{m ? ` · ${m.title || m.designation_label}` : ''}
+                  {getDynamic(biz.name)}{m && !user?.is_owner ? ` · ${m.title || m.designation_label}` : ''}
                 </Badge>
               );
             })}
@@ -667,19 +669,19 @@ const createStyles = (colors) => StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    minWidth: '46%',
-    padding: spacing.lg,
+    minWidth: 96,
+    padding: spacing.md,
   },
   statIcon: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   statValue: {
-    fontSize: fontSize.xxxl,
+    fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.gray[900],
   },

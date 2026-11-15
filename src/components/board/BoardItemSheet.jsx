@@ -197,6 +197,18 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           </View>
         )}
       </View>
+      {(board.backlinks?.[item.id] || []).length > 0 && (
+        <View style={{ marginTop: spacing.lg, gap: 4 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[600] }}>Linked from other tasks</Text>
+          {board.backlinks[item.id].map((l) => (
+            <Pressable key={`${l.id}-${l.column}`} onPress={() => onOpenFull(l.id)} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="link-outline" size={15} color={colors.gray[500]} />
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: colors.gray[900], textDecorationLine: l.is_done ? 'line-through' : 'none' }}>{l.title}</Text>
+              <Text numberOfLines={1} style={{ maxWidth: '45%', fontSize: 12, color: colors.gray[500] }}>{l.board_name} · {l.column}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <Pressable onPress={() => onOpenFull(item.id)} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent', marginTop: spacing.sm })}>
         <Ionicons name="options-outline" size={16} color={colors.brand[600]} />
         <Text style={{ fontSize: 14, color: colors.brand[600] }}>More options (share, reminder, repeat)</Text>

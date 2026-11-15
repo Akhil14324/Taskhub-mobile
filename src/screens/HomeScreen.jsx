@@ -80,7 +80,7 @@ export default function HomeScreen() {
             <Text style={styles.date}>{WEEKDAYS[d.getDay()]}, {d.getDate()} {MONTHS_SHORT[d.getMonth()]}</Text>
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
-            {!!user?.display_title && (
+            {!!user?.display_title && !user?.is_owner && (
               <Text style={styles.role} numberOfLines={1}>
                 {user.display_title}
                 {user.memberships?.length ? ` · ${user.memberships.map((m) => m.business_name).join(', ')}` : ''}

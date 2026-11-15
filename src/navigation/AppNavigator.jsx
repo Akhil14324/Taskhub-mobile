@@ -327,7 +327,7 @@ function MainTabs() {
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
     ...(user?.permissions?.manage_access ? [{ group: 'Organisation', label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
-    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ group: 'Organisation', label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
+    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ group: 'Organisation', label: user?.is_owner ? 'Super admin' : 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
     { group: 'Organisation', label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { group: 'You', label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { group: 'You', label: t('profile'), icon: 'person-outline', route: 'Profile' },

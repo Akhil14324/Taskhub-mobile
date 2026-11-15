@@ -5,6 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize, PALETTE, PALETTE_NAMES, BRAND } from '../../theme/theme';
 import { Avatar, PRIORITY } from '../kit';
 import { formatDue, daysFromToday, timeAgo } from '../../utils/dates';
+import useLoad, { loadText } from '../../hooks/useLoad';
 import {
   cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn,
 } from './model';
@@ -498,6 +499,7 @@ export function PersonEditor({ selected, multiple, candidates, onDone }) {
   const colors = useColors();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState(selected || []);
+  const load = useLoad();
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return candidates.filter((p) => !s || p.name?.toLowerCase().includes(s) || p.username?.toLowerCase().includes(s)).slice(0, 40);
@@ -513,7 +515,7 @@ export function PersonEditor({ selected, multiple, candidates, onDone }) {
         {list.map((p) => (
           <Row key={p.id} active={picked.includes(p.id)} onPress={() => choose(p.id)} label={p.name}
             icon={<Avatar name={p.name} uri={p.profile_picture} size={22} />}
-            right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>@{p.username}</Text>}
+            right={<Text numberOfLines={1} style={{ fontSize: 12, color: load[p.id]?.late ? colors.red[600] : colors.gray[500] }}>{loadText(load[p.id])}</Text>}
           />
         ))}
         {!list.length && <Text style={{ padding: spacing.sm, color: colors.gray[500] }}>Nobody matches.</Text>}

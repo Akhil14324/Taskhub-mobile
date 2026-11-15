@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -11,6 +11,56 @@ import DailyReportCard from '../engage/DailyReportCard';
 import TeamBoard from '../engage/TeamBoard';
 import { todayYmd, addDays, parseYmd, WEEKDAYS_SHORT, MONTHS_SHORT } from '../../utils/dates';
 import { Stages, NeedsAttention, Processes, ByBusiness, Workload, Recent } from './HomeWidgets';
+import BoardDashboard from '../board/BoardDashboard';
+import useAi from '../../hooks/useAi';
+import * as SecureStore from '../../utils/secureStorage';
+
+// The built-in stages, so a status looks the same in "My own dashboard" as on a board.
+const HOME_COLUMNS = [
+  { id: -1, system_key: 'status', kind: 'status', title: 'Status', labels: [
+    { maps_to: 'todo', label: 'Not started', color: 'grey' }, { maps_to: 'in_progress', label: 'Working on it', color: 'orange' },
+    { maps_to: 'blocked', label: 'Stuck', color: 'red' }, { maps_to: 'in_review', label: 'In review', color: 'blue' },
+    { maps_to: 'on_hold', label: 'On hold', color: 'purple' }, { maps_to: 'done', label: 'Done', color: 'green' },
+  ] },
+  { id: -2, system_key: 'person', kind: 'person', title: 'Owner' },
+  { id: -3, system_key: 'date', kind: 'date', title: 'Due date' },
+];
+
+/**
+ * A dashboard the person builds for themselves, under the fixed one: numbers and charts picked from the gallery or
+ * asked for in words (the AI, when it is set up). It is drawn from the to-dos they can see, with a company as the
+ * "group", by the same component as a board's dashboard. Kept on this device per person.
+ */
+function OwnDashboard({ todos, userId, desktop, onOpenItem }) {
+  const ai = useAi();
+  const key = `home.widgets.${userId || 'me'}`;
+  const [saved, setSaved] = useState(undefined); // undefined = not read yet
+  useEffect(() => {
+    let live = true;
+    SecureStore.getItemAsync(key).then((v) => {
+      if (!live) return;
+      try { setSaved(v ? JSON.parse(v) : null); } catch { setSaved(null); }
+    }).catch(() => live && setSaved(null));
+    return () => { live = false; };
+  }, [key]);
+  const board = useMemo(() => {
+    const groups = new Map([[0, { id: 0, name: 'Personal', color: 'grey' }]]);
+    for (const t of todos) if (t.business_id && !groups.has(t.business_id)) groups.set(t.business_id, { id: t.business_id, name: t.business_name || 'Company', color: 'dark_orange' });
+    return {
+      board: { id: 'home', kind: 'home' }, columns: HOME_COLUMNS, groups: [...groups.values()], values: {}, ai_enabled: ai,
+      items: todos.map((t) => ({ ...t, business_section_id: t.business_id || 0 })),
+    };
+  }, [todos, ai]);
+  const save = useCallback((widgets) => { setSaved(widgets); SecureStore.setItemAsync(key, JSON.stringify(widgets)).catch(() => {}); }, [key]);
+  if (saved === undefined) return null;
+  return (
+    <BoardDashboard
+      embedded board={board} people={[]} meId={userId} desktop={desktop} canSave initial={[]}
+      view={{ name: 'My own dashboard', settings: saved ? { widgets: saved } : {} }}
+      aiPath="/boards/home-dashboard/ai" onSave={save} onOpenItem={onOpenItem}
+    />
+  );
+}
 
 const GAP = 12;
 const PANEL_H = 348;
@@ -187,6 +237,8 @@ export default function HomeDashboard({ ctx, user }) {
         <Panel key="b" title="Open work by person" icon="people-outline" fixed={!phone}><Workload ctx={limited} /></Panel>,
         <Panel key="c" title="Finished recently" icon="checkmark-done-outline" fixed={!phone}><Recent ctx={limited} /></Panel>,
       )}
+
+      <OwnDashboard todos={todos} userId={meId} desktop={!phone} onOpenItem={openTodo} />
 
       {leads && (
         <View style={row}>

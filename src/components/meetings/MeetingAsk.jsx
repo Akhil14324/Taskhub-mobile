@@ -14,6 +14,7 @@ const SERIES_COLORS = ['dark_orange', 'aquamarine', 'purple', 'green', 'blue', '
 const STARTERS = [
   'What was decided?',
   'Who has to do what? Show a chart of tasks per person',
+  'Build a dashboard of this meeting',
   'Draw the process we agreed on as a flow chart',
   'What is still open or unclear?',
 ];
@@ -23,6 +24,27 @@ export function Visual({ visual }) {
   const colors = useColors();
   if (!visual) return null;
   let body = null;
+  if (visual.kind === 'dashboard') {
+    return (
+      <View style={{ marginTop: 8, gap: 10 }}>
+        {!!visual.title && <Text style={{ fontSize: 15, fontWeight: '700', color: colors.gray[900] }}>{visual.title}</Text>}
+        {visual.tiles.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {visual.tiles.map((t, i) => (
+              <View key={i} style={{ flexGrow: 1, flexBasis: 130, minWidth: 0, borderWidth: 1, borderColor: colors.gray[200], borderRadius: radius.lg, backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 10, gap: 2 }}>
+                <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '500', color: colors.gray[600] }}>{t.label}</Text>
+                <Text numberOfLines={1} style={{ fontSize: 22, fontWeight: '700', color: colors.gray[900] }}>{t.value}</Text>
+                {!!t.note && <Text numberOfLines={2} style={{ fontSize: 12, color: colors.gray[500] }}>{t.note}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {visual.charts.map((c, i) => <View key={i} style={{ flexGrow: 1, flexBasis: 320, minWidth: 0 }}><Visual visual={c} /></View>)}
+        </View>
+      </View>
+    );
+  }
   if (visual.kind === 'flow') {
     body = <FlowChart flow={visual} />;
   } else if (visual.kind === 'chart') {

@@ -180,7 +180,7 @@ export default function AppSidebar({ routeName }) {
           <Entry p={p} icon="key-outline" activeIcon="key" label="Who can do what" active={section === 'access'} onPress={() => go('Access')} />
         )}
         {(user?.permissions?.view_all_todos || user?.permissions?.chat_audit) && (
-          <Entry p={p} icon="eye-outline" activeIcon="eye" label="Everything" active={section === 'everything'} onPress={() => go('Everything')} />
+          <Entry p={p} icon="eye-outline" activeIcon="eye" label={user?.is_owner ? 'Super admin' : 'Everything'} active={section === 'everything'} onPress={() => go('Everything')} />
         )}
         <Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
         <Entry p={p} icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />

@@ -173,7 +173,7 @@ export default function EverythingScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <BackTitle title={person ? person.name : 'Everything'} style={styles.title} />
+        <BackTitle title={person ? person.name : user?.is_owner ? 'Super admin' : 'Everything'} style={styles.title} />
         <Text style={styles.subtitle}>{person ? 'Read only. Everything they are on' : 'Every person\'s to-dos and every chat, read only'}</Text>
       </View>
       {person && (

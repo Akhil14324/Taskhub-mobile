@@ -234,6 +234,12 @@ function Gallery({ board, chartsOnly, onAdd, onClose }) {
   );
 }
 
+/** The dashboard's own scroll area, or a plain block when it sits inside a page that already scrolls. */
+function Body({ embedded, desktop, children }) {
+  if (embedded) return <View>{children}</View>;
+  return <ScrollView contentContainerStyle={{ padding: desktop ? spacing.lg : spacing.sm, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">{children}</ScrollView>;
+}
+
 const GAP = 12;
 const PANEL_H = 340;
 // What a number means decides its colour and icon: late is red, finished is green, the rest take the accent.
@@ -245,7 +251,7 @@ const KPI_LOOK = {
 };
 
 /** One number of the strip: what it is, the number, and a line that puts it in context. */
-function KpiTile({ w, data, desktop, editing, controls, total }) {
+function KpiTile({ w, data, desktop, editing, controls, total, embedded }) {
   const colors = useColors();
   const isProgress = w.type === 'progress';
   const [tone, icon] = isProgress ? ['green', 'pie-chart-outline'] : w.metric ? ['brand', 'speedometer-outline'] : w.value || w.formula ? ['brand', 'stats-chart-outline'] : (KPI_LOOK[w.filter || 'all'] || ['brand', 'albums-outline']);
@@ -254,7 +260,7 @@ function KpiTile({ w, data, desktop, editing, controls, total }) {
   const value = data?.error ? '!' : isProgress ? `${data.percent}%` : Number(data.value).toLocaleString('en-IN');
   const filterLabel = FILTERS.find((f) => f[0] === (w.filter || 'all'))?.[1];
   return (
-    <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: desktop ? 190 : '46%', minWidth: 148, backgroundColor: colors.white, borderRadius: radius.xl, borderWidth: 1, borderColor: editing ? BRAND : colors.gray[200], padding: spacing.lg, gap: 10 }}>
+    <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: desktop ? 190 : '46%', minWidth: 148, maxWidth: desktop ? 420 : undefined, backgroundColor: colors.white, borderRadius: radius.xl, borderWidth: 1, borderColor: editing ? BRAND : colors.gray[200], padding: spacing.lg, gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: hue[50], alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name={icon} size={15} color={hue[600]} />
@@ -272,7 +278,7 @@ function KpiTile({ w, data, desktop, editing, controls, total }) {
         </View>
       ) : (
         <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[500] }}>
-          {data?.error ? data.error : data?.note ? data.note : w.formula ? 'Formula' : w.value ? `${AGGS.find((x) => x[0] === (w.agg || 'sum'))?.[1]} · ${filterLabel} tasks` : `of ${total} on the board`}
+          {data?.error ? data.error : data?.note ? data.note : w.formula ? 'Formula' : w.value ? `${AGGS.find((x) => x[0] === (w.agg || 'sum'))?.[1]} · ${filterLabel} tasks` : `of ${total} ${embedded ? 'you can see' : 'on the board'}`}
         </Text>
       )}
     </View>
@@ -281,10 +287,10 @@ function KpiTile({ w, data, desktop, editing, controls, total }) {
 
 const SUGGESTIONS = ['Add a pie chart of tasks by person', 'Show what is overdue this week', 'Make it a weekly review dashboard'];
 
-export default function BoardDashboard({ board, people, meId, view, canSave, onSave, onOpenItem, desktop, charts = false }) {
+export default function BoardDashboard({ board, people, meId, view, canSave, onSave, onOpenItem, desktop, charts = false, embedded = false, aiPath, initial }) {
   const colors = useColors();
   const saved = view?.settings?.widgets;
-  const [widgets, setWidgets] = useState(() => (saved ? cleanWidgets(saved, board) : charts ? generateCharts(board) : generateWidgets(board)));
+  const [widgets, setWidgets] = useState(() => (saved ? cleanWidgets(saved, board) : initial || (charts ? generateCharts(board) : generateWidgets(board))));
   const [gallery, setGallery] = useState(false);
   const [edit, setEdit] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -322,7 +328,7 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
     if (!q || asking) return;
     setAsking(true);
     try {
-      const r = await api.post(`/boards/${board.board.id}/dashboard/ai`, { request: q, widgets }, { timeout: 90000, __skipOops: true });
+      const r = await api.post(aiPath || `/boards/${board.board.id}/dashboard/ai`, { request: q, widgets }, { timeout: 90000, __skipOops: true });
       setProposal({ widgets: cleanWidgets(r.data.widgets, board), summary: r.data.summary || 'Here is the new dashboard.', request: q });
       setRequest('');
     } catch (e) {
@@ -348,12 +354,12 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
   ) : null);
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: desktop ? spacing.lg : spacing.sm, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: embedded ? undefined : 1 }}>
+      <Body embedded={embedded} desktop={desktop}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 6, paddingBottom: spacing.sm, flexWrap: 'wrap' }}>
           <View style={{ flex: 1, minWidth: 140 }}>
             <Text style={{ fontSize: 20, fontWeight: '700', color: colors.gray[900], letterSpacing: -0.3 }}>{view?.name || (charts ? 'Charts' : 'Dashboard')}</Text>
-            <Text style={{ fontSize: 12, color: colors.gray[500], marginTop: 2 }}>{total} {total === 1 ? 'task' : 'tasks'} on this board, counted live</Text>
+            <Text style={{ fontSize: 12, color: colors.gray[500], marginTop: 2 }}>{embedded ? 'Built by you from the tasks you can see' : `${total} ${total === 1 ? 'task' : 'tasks'} on this board, counted live`}</Text>
           </View>
           {canSave && (
             <Pressable onPress={() => setGallery(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, backgroundColor: BRAND }}>
@@ -391,7 +397,7 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
         {kpis.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: 6, paddingBottom: GAP }}>
             {kpis.map(({ w, i }) => (
-              <KpiTile key={w.id} w={w} data={computed[i]} desktop={desktop} editing={edit} controls={controls(w, i, false)} total={total} />
+              <KpiTile key={w.id} w={w} data={computed[i]} desktop={desktop} editing={edit} controls={controls(w, i, false)} total={total} embedded={embedded} />
             ))}
           </View>
         )}
@@ -423,11 +429,11 @@ export default function BoardDashboard({ board, people, meId, view, canSave, onS
             );
           })}
         </View>
-        {!widgets.length && <Text style={{ padding: spacing.xl, color: colors.gray[600] }}>This dashboard is empty. {canSave ? 'Press Add to pick a ready-made number or chart.' : ''}</Text>}
-      </ScrollView>
+        {!widgets.length && <Text style={{ padding: embedded ? 6 : spacing.xl, color: colors.gray[600], fontSize: 13 }}>{embedded ? 'Nothing here yet. Press Add to pick a number or a chart' : 'This dashboard is empty.'}{board.ai_enabled && embedded ? ', or ask the AI below.' : embedded ? '.' : canSave ? ' Press Add to pick a ready-made number or chart.' : ''}</Text>}
+      </Body>
 
       {board.ai_enabled && canSave && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: desktop ? spacing.xl : spacing.sm, paddingBottom: spacing.sm, paddingTop: 6, gap: 6, alignItems: 'center' }} pointerEvents="box-none">
+        <View style={embedded ? { paddingTop: spacing.sm, gap: 6, alignItems: 'center' } : { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: desktop ? spacing.xl : spacing.sm, paddingBottom: spacing.sm, paddingTop: 6, gap: 6, alignItems: 'center' }} pointerEvents="box-none">
           {!request && !asking && !proposal && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxWidth: 720 }} contentContainerStyle={{ gap: 6 }}>
               {SUGGESTIONS.map((s) => <Pressable key={s} onPress={() => ask(s)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[300] }}><Text style={{ fontSize: 12, color: colors.gray[700] }}>{s}</Text></Pressable>)}
