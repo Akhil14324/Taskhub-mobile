@@ -92,7 +92,11 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
     const list = [...b.priorities];
     while (list.length <= i) list.push({ text: '', done: false, todo_id: null });
     list[i] = { ...list[i], ...fields };
-    return { ...b, priorities: list };
+    // Ticking a top priority ticks the schedule blocks that serve it (and unticking clears a tick, never a "not done").
+    const blocks = 'done' in fields
+      ? b.blocks.map((x) => (x.priority === i ? { ...x, done: fields.done ? true : x.done === true ? null : x.done } : x))
+      : b.blocks;
+    return { ...b, priorities: list, blocks };
   });
   const rows = readOnly ? box.priorities : Array.from({ length: MAX_PRIORITIES }, (_, i) => box.priorities[i] || { text: '', done: false });
   return (
@@ -298,7 +302,22 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
     };
   }, []);
   const color = block.priority !== null && block.priority !== undefined ? PRIORITY_COLORS[block.priority] : null;
-  const set = (fields) => update((b) => ({ ...b, blocks: b.blocks.map((x, i) => (i === index ? { ...x, ...fields } : x)) }));
+  // A block that serves a top priority and that priority are one thing: ticking one ticks the other, and giving a
+  // block "Top 2" fills Top 2 with it when that line is still empty.
+  const set = (fields) => update((b) => {
+    const blocksNext = b.blocks.map((x, i) => (i === index ? { ...x, ...fields } : x));
+    const cur = blocksNext[index];
+    const p = cur.priority;
+    let priorities = b.priorities;
+    if (p !== null && p !== undefined && p < MAX_PRIORITIES && ('done' in fields || 'priority' in fields)) {
+      priorities = [...b.priorities];
+      while (priorities.length <= p) priorities.push({ text: '', done: false, todo_id: null });
+      const line = priorities[p];
+      if (!line.text && cur.text) priorities[p] = { text: cur.text, todo_id: cur.todo_id || null, done: cur.done === true };
+      else if ('done' in fields) priorities[p] = { ...line, done: cur.done === true };
+    }
+    return { ...b, blocks: blocksNext, priorities };
+  });
   // A selected block grows to hold its controls (a 30 minute block is too short for them); it shrinks back when deselected.
   const showTools = selected && !readOnly;
   const cycle = () => set({ done: block.done === null || block.done === undefined ? true : block.done === true ? false : null });
