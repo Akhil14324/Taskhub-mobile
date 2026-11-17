@@ -148,6 +148,46 @@ const PushProgress = T(FramedProgress);
 const PushRecap = T(FramedRecap);
 
 const Stack = createNativeStackNavigator();
+
+// Every screen has its own address, so reloading the browser (or opening a link) stays on that screen instead of
+// falling back to Home. Ids in the address are numbers.
+const num = { parse: { id: Number, conversationId: Number, personId: Number }, stringify: {} };
+const LINKING = {
+  prefixes: [],
+  config: {
+    screens: {
+      Main: { path: '', screens: { Dashboard: '', Todos: 'todos', ChatList: 'chat', More: 'more' } },
+      ChatThread: { path: 'chat/:conversationId', ...num },
+      GroupInfo: 'group-info',
+      Organization: 'organization',
+      TeamMonitor: 'team-monitor',
+      PersonMonitor: { path: 'team-monitor/:personId', ...num },
+      Assistant: 'assistant',
+      Workflows: 'workflows',
+      Leaderboard: 'leaderboard',
+      Automations: 'automations',
+      Boards: 'boards',
+      Board: { path: 'boards/:id', ...num },
+      MyWork: 'my-work',
+      Timebox: 'timebox',
+      RecycleBin: 'recycle-bin',
+      Dump: 'dump',
+      MeetingNotes: 'notes',
+      Access: 'access',
+      Everything: 'everything',
+      Notifications: 'notifications',
+      Profile: 'profile',
+      Progress: 'progress',
+      Recap: 'recap',
+      Legal: 'legal',
+      Login: 'login',
+      Signup: 'signup',
+      ForgotPassword: 'forgot-password',
+      ChangePassword: 'change-password',
+      Oops: 'oops',
+    },
+  },
+};
 const Tab = createBottomTabNavigator();
 
 /**
@@ -548,7 +588,7 @@ export default function AppNavigator() {
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
       {showShell && <AppSidebar routeName={routeName} />}
       <View style={{ flex: 1, minWidth: 0 }}>
-    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={syncRoute} onStateChange={syncRoute}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} linking={LINKING} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
