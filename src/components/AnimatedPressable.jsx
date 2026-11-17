@@ -1,4 +1,4 @@
-import { memo, useRef, useCallback, useEffect } from 'react';
+import { memo, useRef, useCallback, useEffect, useState } from 'react';
 import { Pressable, Platform, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -10,41 +10,25 @@ import useReducedMotion from '../hooks/useReducedMotion';
 import * as Haptics from 'expo-haptics';
 import { haptic as webHaptic } from '../utils/feedback';
 import { SPRING } from '../theme/motion';
-import { waterPress } from '../utils/water';
 
 const SCALE_DOWN = 0.985;
-const MIN_DEPTH = 0.04;      // even the gentlest press squishes a little: that is what makes it feel liquid
-const MIN_HOLD = 120;        // ms the compression is held at least, so a quick click is still seen and felt
-const MORPH = 0.3;           // corners tighten by this fraction while pressed (small shapes only)
-const MAX_MORPH_RADIUS = 40; // pills and circles keep their shape; the squish alone carries them
-
-// Controls (as opposed to rows and cards) behave like water when touched: the squish plus a ripple distortion.
-const WATER_GLASS = new Set(['button', 'accent', 'accent-deep', 'inset', 'capsule', 'tint']);
+const MIN_DEPTH = 0.025;     // the press is a small, even dip: felt, never a wobble
+const MIN_HOLD = 70;         // ms the dip is held at least, so a quick click is still seen
 
 const AnimatedPressableView = Animated.createAnimatedComponent(Pressable);
 
 /**
- * Press feedback shared by web and native: a spring-driven "squish". On finger-down the control
- * compresses (shorter, a touch wider) and its corners tighten, and on release the spring overshoots
- * so it wobbles back like a drop of liquid. It all runs on the UI thread, starts from the current
- * value (so a second tap mid-wobble never jumps) and respects reduced motion (a short fade of scale).
+ * Press feedback shared by web and native: on finger-down the control dips a little (an even scale) and on
+ * release it comes straight back. It runs on the UI thread, starts from the current value (so a second tap
+ * mid-way never jumps) and respects reduced motion.
  */
 function usePressSpring(style, scale) {
   const reduced = useReducedMotion();
   const p = useSharedValue(0);
   const depth = Math.max(1 - scale, MIN_DEPTH);
-  const flat = StyleSheet.flatten(style) || {};
-  const radiusPx = typeof flat.borderRadius === 'number' && flat.borderRadius <= MAX_MORPH_RADIUS ? flat.borderRadius : 0;
 
   const animated = useAnimatedStyle(() => {
-    const out = {
-      transform: [
-        { scaleX: 1 + depth * 0.3 * p.value },
-        { scaleY: 1 - depth * p.value },
-      ],
-    };
-    if (radiusPx) out.borderRadius = radiusPx * (1 - MORPH * p.value);
-    return out;
+    return { transform: [{ scale: 1 - depth * p.value }] };
   });
 
   const downAt = useRef(0);
@@ -137,19 +121,35 @@ function WebPressable({
   const hapticRef = useRef(haptic);
   hapticRef.current = haptic;
 
+  // A press whose handler returns a promise (any async handler) locks the control until it settles: no second
+  // click can start the same work twice, and `data-busy` dims it and shows the wait cursor (index.html).
+  const pending = useRef(false);
+  const alive = useRef(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => () => { alive.current = false; }, []);
+
   const handlePress = useCallback((e) => {
-    if (disabled) return;
+    if (disabled || pending.current) return;
     if (hapticRef.current) webHaptic(hapticRef.current === true ? 'light' : hapticRef.current);
-    onPress?.(e);
+    const result = onPress?.(e);
+    if (result && typeof result.then === 'function') {
+      pending.current = true;
+      // Only show the busy look when the work takes long enough to notice.
+      const show = setTimeout(() => { if (alive.current && pending.current) setBusy(true); }, 150);
+      const done = () => {
+        clearTimeout(show);
+        pending.current = false;
+        if (alive.current) setBusy(false);
+      };
+      result.then(done, done);
+    }
   }, [disabled, onPress]);
 
   // Respond on pointer-down, not on release: the squish starts the instant the finger lands.
-  const wet = water ?? WATER_GLASS.has(rest.dataSet?.glass);
   const handlePressIn = useCallback((e) => {
     down();
-    if (wet && !disabled) waterPress(e?.currentTarget);
     onPressIn?.(e);
-  }, [down, onPressIn, wet, disabled]);
+  }, [down, onPressIn]);
 
   const handlePressOut = useCallback((e) => {
     up();
@@ -166,6 +166,8 @@ function WebPressable({
       accessibilityRole={onPress ? 'button' : undefined}
       style={[style, animated]}
       {...rest}
+      dataSet={busy ? { ...rest.dataSet, busy: '1' } : rest.dataSet}
+      aria-busy={busy || undefined}
     >
       {children}
     </AnimatedPressableView>

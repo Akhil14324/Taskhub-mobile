@@ -54,7 +54,6 @@ import BoardScreen from '../screens/BoardScreen';
 import BoardsHomeScreen from '../screens/BoardsHomeScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
 import TimeboxScreen from '../screens/TimeboxScreen';
-import DashboardsScreen from '../screens/DashboardsScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
 import DumpScreen from '../screens/DumpScreen';
 import MeetingNotesScreen from '../screens/NotesScreen';
@@ -137,7 +136,6 @@ const PushBoards = T(BoardsHomeScreen);
 const PushBoard = T(BoardScreen);
 const PushMyWork = T(MyWorkScreen);
 const PushTimebox = T(TimeboxScreen);
-const PushDashboards = T(DashboardsScreen);
 const PushRecycleBin = T(FramedRecycleBin);
 const PushDump = T(FramedDump);
 const PushMeetingNotes = T(FramedMeetingNotes);
@@ -320,7 +318,6 @@ function MainTabs() {
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
     { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
-    { group: 'Work', label: 'Dashboards', icon: 'speedometer-outline', route: 'Dashboards' },
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
@@ -330,7 +327,7 @@ function MainTabs() {
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
     ...(featureOn(user?.preferences, 'automation') ? [{ group: 'Work', label: 'Automations', icon: 'flash-outline', route: 'Automations' }] : []),
     ...(user?.permissions?.manage_access ? [{ group: 'Organisation', label: 'Who can do what', icon: 'key-outline', route: 'Access' }] : []),
-    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ group: 'Organisation', label: 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
+    ...(user?.permissions?.view_all_todos || user?.permissions?.chat_audit ? [{ group: 'Organisation', label: user?.is_owner ? 'Super admin' : 'Everything', icon: 'eye-outline', route: 'Everything' }] : []),
     { group: 'Organisation', label: user?.is_portal ? 'Organisation & people' : 'Organisation', icon: 'git-network-outline', route: 'Organization' },
     { group: 'You', label: `${t('notifications')}${unreadCount ? ` · ${unreadCount}` : ''}`, icon: 'notifications-outline', route: 'Notifications' },
     { group: 'You', label: t('profile'), icon: 'person-outline', route: 'Profile' },
@@ -582,7 +579,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Board" component={PushBoard} />
             <Stack.Screen name="MyWork" component={PushMyWork} />
             <Stack.Screen name="Timebox" component={PushTimebox} />
-            <Stack.Screen name="Dashboards" component={PushDashboards} />
             <Stack.Screen name="RecycleBin" component={PushRecycleBin} />
             <Stack.Screen name="Dump" component={PushDump} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />

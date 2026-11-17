@@ -11,6 +11,7 @@ import BlockerSheet from './BlockerSheet';
 import { HealthBanner, MetricsGrid, TimelineEntries, useNowTick } from './TimeHealth';
 import { Avatar, Chip } from '../kit';
 import useDirectory, { filterPeople } from '../../hooks/useDirectory';
+import useLoad, { loadText } from '../../hooks/useLoad';
 import { STATUS, BLOCKER_KINDS, formatSeconds, healthColor } from '../../utils/timeline';
 import { timeAgo } from '../../utils/dates';
 import { showToast, confirmDialog } from '../../utils/events';
@@ -212,6 +213,7 @@ export function AssignSheet({ visible, todo, onClose }) {
   const colors = useColors();
   const { assignTodoTo, fetchAssignees } = useTodos();
   const { people } = useDirectory();
+  const load = useLoad(visible);
   const [query, setQuery] = useState('');
   const [bizPeople, setBizPeople] = useState([]);
   useEffect(() => { if (visible) setQuery(''); }, [visible]);
@@ -257,7 +259,7 @@ export function AssignSheet({ visible, todo, onClose }) {
             <Avatar name={p.name} uri={p.profile_picture} size={34} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] }}>{p.name}</Text>
-              <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>@{p.username}{memberIds.has(p.id) ? ' · on this to-do' : ''}</Text>
+              <Text style={{ fontSize: fontSize.xs, color: load[p.id]?.late ? colors.red[600] : colors.gray[500] }}>{loadText(load[p.id])}{memberIds.has(p.id) ? ' · on this to-do' : ''}</Text>
             </View>
             {todo.assignee_id === p.id && <Ionicons name="checkmark-circle" size={22} color={colors.brand[600]} />}
           </AnimatedPressable>

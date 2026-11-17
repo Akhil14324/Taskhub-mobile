@@ -10,16 +10,16 @@ export function apple(response, ratio = 1, mass = 1) {
 }
 
 export const SPRING = {
-  smooth: apple(0.4, 1),        // move / reposition, nothing to overshoot
-  sheet: apple(0.34, 0.86),     // sheets and dialogs arriving
-  press: apple(0.26, 0.85),     // finger down: a soft, visible compression (not a snap)
-  release: apple(0.58, 0.55),   // finger up: one clear overshoot, then rest. Long enough to feel, short enough to stay out of the way
-  pop: apple(0.38, 0.55),       // check marks, badges
+  smooth: apple(0.3, 1),        // move / reposition, nothing to overshoot
+  sheet: apple(0.28, 0.95),     // sheets and dialogs arriving
+  press: apple(0.16, 1),        // finger down: a small, immediate dip
+  release: apple(0.24, 0.9),    // finger up: straight back, no wobble
+  pop: apple(0.3, 0.7),         // check marks, badges
   momentum: apple(0.42, 0.8),   // after a flick, with the release velocity handed in
-  layout: apple(0.42, 0.88),    // list items reordering / entering / leaving
-  screen: apple(0.42, 0.9),     // a whole module arriving (tab / route / layout change): quick, it must never feel like waiting
-  morph: apple(0.9, 0.9),       // one surface becoming another (capsule gathers into a bubble, flies, unfolds)
-  panel: apple(0.55, 0.96),     // sidebars opening and closing
+  layout: apple(0.3, 0.95),     // list items reordering / entering / leaving
+  screen: apple(0.28, 1),       // a whole module arriving (tab / route / layout change): quick, it must never feel like waiting
+  morph: apple(0.5, 0.95),      // one surface becoming another (capsule gathers into a bubble, flies, unfolds)
+  panel: apple(0.34, 1),        // sidebars opening and closing
 };
 
 /**

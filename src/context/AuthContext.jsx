@@ -10,6 +10,8 @@ const STORAGE_READ_MS = 1500;
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Set while a super admin has the app open as someone else: their own name, to offer the way back.
+  const [actingFrom, setActingFrom] = useState(null);
 
   const fetchMe = useCallback(async () => {
     let token;
@@ -62,15 +64,36 @@ export function AuthProvider({ children }) {
       setTimeout(() => resolve({ token: null, user: null }), STORAGE_READ_MS)
     );
 
-    const { token, user: storedUser } = await Promise.race([readStorage(), timeout]);
+    let { token, user: storedUser } = await Promise.race([readStorage(), timeout]);
+    // A super admin looking at the app as someone else keeps their own session aside (see loginAs below).
+    let adminName = null;
+    try {
+      const adminToken = await SecureStore.getItemAsync('admin_token');
+      const adminUser = await SecureStore.getItemAsync('admin_user');
+      if (adminToken && !token) {
+        // The borrowed session ended (it lasts four hours): go back to their own.
+        await SecureStore.setItemAsync('token', adminToken);
+        if (adminUser) await SecureStore.setItemAsync('user', adminUser);
+        await SecureStore.deleteItemAsync('admin_token');
+        await SecureStore.deleteItemAsync('admin_user');
+        token = adminToken;
+        storedUser = adminUser ? JSON.parse(adminUser) : null;
+      } else if (adminToken) {
+        adminName = (adminUser ? JSON.parse(adminUser)?.name : null) || 'your account';
+      }
+    } catch { /* storage not readable: an ordinary session */ }
+    setActingFrom(adminName);
     setUser(storedUser);
     setLoading(false);
 
     if (token) {
       fetchMe();
-      setupPushNotifications().catch((err) => {
-        console.warn('[auth] Push notification setup failed on session restore:', err.message);
-      });
+      // Never while acting as someone else: it would move this device's notifications to that person.
+      if (!adminName) {
+        setupPushNotifications().catch((err) => {
+          console.warn('[auth] Push notification setup failed on session restore:', err.message);
+        });
+      }
     }
   }, [fetchMe]);
 
@@ -79,6 +102,11 @@ export function AuthProvider({ children }) {
   }, [restoreSession]);
 
   const login = async (token, userData) => {
+    try {
+      await SecureStore.deleteItemAsync('admin_token');
+      await SecureStore.deleteItemAsync('admin_user');
+    } catch {}
+    setActingFrom(null);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('user', JSON.stringify(userData));
     setUser(userData);
@@ -102,7 +130,33 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Super admin only: open the app as another person. Their own session is put aside and the page starts again,
+  // so every list, board and chat loads as that person. The server checks who may do this and writes it down.
+  const loginAs = async (userId) => {
+    const res = await api.post(`/access/login-as/${userId}`);
+    const myToken = await SecureStore.getItemAsync('token');
+    const myUser = await SecureStore.getItemAsync('user');
+    await SecureStore.setItemAsync('admin_token', myToken);
+    await SecureStore.setItemAsync('admin_user', myUser || '');
+    await SecureStore.setItemAsync('token', res.data.token);
+    await SecureStore.setItemAsync('user', JSON.stringify(res.data.user));
+    if (typeof window !== 'undefined') window.location.reload();
+  };
+
+  const returnToMine = async () => {
+    const adminToken = await SecureStore.getItemAsync('admin_token');
+    const adminUser = await SecureStore.getItemAsync('admin_user');
+    if (!adminToken) return;
+    await SecureStore.setItemAsync('token', adminToken);
+    if (adminUser) await SecureStore.setItemAsync('user', adminUser);
+    await SecureStore.deleteItemAsync('admin_token');
+    await SecureStore.deleteItemAsync('admin_user');
+    if (typeof window !== 'undefined') window.location.reload();
+  };
+
   const logout = async () => {
+    // Signing out while acting as someone else just goes back to the super admin's own account.
+    if (actingFrom) { await returnToMine(); return; }
     await teardownPushNotifications();
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
@@ -110,7 +164,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser: fetchMe, updatePreferences }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser: fetchMe, updatePreferences, loginAs, returnToMine, actingFrom }}>
       {children}
     </AuthContext.Provider>
   );

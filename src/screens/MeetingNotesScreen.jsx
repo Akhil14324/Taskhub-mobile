@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,13 +9,12 @@ import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
 import AnimatedPressable from '../components/AnimatedPressable';
 import BackTitle from '../components/BackTitle';
-import BottomSheet from '../components/BottomSheet';
 import useMeetingRecorder from '../hooks/useMeetingRecorder';
-import ConsentOverlay from '../components/meetings/ConsentOverlay';
+import ConsentOverlay, { CONSENT_TEXT } from '../components/meetings/ConsentOverlay';
+import MeetingAsk from '../components/meetings/MeetingAsk';
 import DraftReviewSheet from '../components/drafts/DraftReviewSheet';
-import useBrowserTranscript from '../hooks/useBrowserTranscript';
 import { showToast, confirmDialog } from '../utils/events';
-import { timeAgo } from '../utils/dates';
+import { timeAgo, formatDue } from '../utils/dates';
 
 const clock = (s) => {
   const h = Math.floor(s / 3600);
@@ -24,10 +23,19 @@ const clock = (s) => {
   return h ? `${h}:${m}:${sec}` : `${m}:${sec}`;
 };
 
+const lengthOf = (ms) => {
+  const min = Math.round(Number(ms || 0) / 60000);
+  if (min < 1) return '';
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
+};
+
+const defaultTitle = () => `Meeting, ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+
 /**
- * Meetings that are not attached to a to-do. Record the whole meeting (it is sent and turned into text in 5
- * minute pieces, so an hour or more works), or paste a transcript. "Make to-dos" reads the whole meeting and
- * creates each task for the person it is for. Only the person who recorded it can see it; no audio is kept.
+ * Meetings: one person records the whole meeting (one to three hours is fine). What is said appears on screen
+ * about every twenty seconds and the whole transcript is saved. When the recording stops, the summary, the
+ * decisions and every task that was given are worked out; each task is one click away from the person it is
+ * for. Afterwards the meeting can be asked questions. Only the person who recorded it sees it; no sound is kept.
  */
 export default function MeetingNotesScreen({ embedded = false }) {
   const colors = useColors();
@@ -35,9 +43,6 @@ export default function MeetingNotesScreen({ embedded = false }) {
   const insets = useSafeAreaInsets();
   const [list, setList] = useState(null);
   const [openId, setOpenId] = useState(null);
-  const [newOpen, setNewOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
   const loadList = useCallback(async () => {
@@ -51,23 +56,18 @@ export default function MeetingNotesScreen({ embedded = false }) {
   }, []);
   useFocusEffect(useCallback(() => { loadList(); }, [loadList]));
 
+  // One press: the meeting exists and is open, ready to record. It can be named any time.
   const create = async () => {
-    setCreating(true);
     try {
-      const res = await api.post('/meeting-notes', { title: newTitle.trim() || undefined });
-      setNewOpen(false);
-      setNewTitle('');
+      const res = await api.post('/meeting-notes', { title: defaultTitle() });
       setOpenId(res.data.meeting.id);
-      loadList();
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not start the meeting', tone: 'error' });
-    } finally {
-      setCreating(false);
     }
   };
 
   const remove = async (id) => {
-    const ok = await confirmDialog({ title: 'Delete this meeting?', message: 'Its text and notes will be removed. To-dos already made stay.', confirmLabel: 'Delete', destructive: true });
+    const ok = await confirmDialog({ title: 'Delete this meeting?', message: 'Its transcript, summary and questions are removed. Tasks already given stay.', confirmLabel: 'Delete', destructive: true });
     if (!ok) return;
     try {
       await api.delete(`/meeting-notes/${id}`);
@@ -79,78 +79,81 @@ export default function MeetingNotesScreen({ embedded = false }) {
   };
 
   if (openId) {
-    return <MeetingNoteView id={openId} onBack={() => { setOpenId(null); loadList(); }} onDelete={() => remove(openId)} />;
+    return <MeetingView id={openId} embedded={embedded} onBack={() => { setOpenId(null); loadList(); }} onDelete={() => remove(openId)} />;
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[styles.page, { paddingTop: embedded ? spacing.sm : insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
+    <ScrollView contentContainerStyle={[styles.page, { paddingTop: embedded ? spacing.lg : insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
+      <View style={styles.column}>
         {!embedded && <BackTitle title="Meetings" style={styles.title} />}
-        <Text style={styles.lead}>Record a whole meeting. The text is kept and to-dos are made from it, each given to the person it is for.</Text>
-
-        <AnimatedPressable style={styles.primary} onPress={() => setNewOpen(true)}>
-          <Ionicons name="mic" size={20} color="#fff" />
-          <Text style={styles.primaryText}>New meeting</Text>
-        </AnimatedPressable>
+        <View style={styles.listHead}>
+          <Text style={styles.lead}>Record a meeting. You get the transcript, a summary, and every task ready to give to the person it is for.</Text>
+          <AnimatedPressable style={styles.primary} onPress={create}>
+            <Ionicons name="mic" size={18} color="#fff" />
+            <Text style={styles.primaryText}>New meeting</Text>
+          </AnimatedPressable>
+        </View>
 
         {!!error && <Text style={styles.error}>{error}</Text>}
         {list === null && !error && <ActivityIndicator color={colors.brand[600]} style={{ marginTop: spacing.xl }} />}
-        {list && list.length === 0 && <Text style={styles.hint}>No meetings yet.</Text>}
+        {list && list.length === 0 && (
+          <View style={styles.empty}>
+            <Ionicons name="mic-outline" size={26} color={colors.gray[400]} />
+            <Text style={styles.emptyTitle}>No meetings yet</Text>
+            <Text style={styles.hint}>Press New meeting when the next one starts.</Text>
+          </View>
+        )}
         {(list || []).map((m) => (
           <AnimatedPressable key={m.id} {...glass('card')} style={styles.row} onPress={() => setOpenId(m.id)}>
-            <View style={styles.rowIcon}><Ionicons name="document-text-outline" size={20} color={colors.brand[600]} /></View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.rowTitle} numberOfLines={1}>{m.title}</Text>
               <Text style={styles.rowSub} numberOfLines={1}>
-                {timeAgo(m.created_at)} · {m.pieces} piece{m.pieces === 1 ? '' : 's'} · {Number(m.chars || 0).toLocaleString()} characters
-                {m.has_notes ? ' · notes ready' : ''}
+                {[m.owner_name ? `Recorded by ${m.owner_name}` : null, timeAgo(m.created_at), lengthOf(m.duration_ms), Number(m.chars) ? null : 'Nothing recorded yet'].filter(Boolean).join('  ·  ')}
               </Text>
+              {!!m.summary && <Text style={styles.rowSummary} numberOfLines={2}>{m.summary}</Text>}
             </View>
+            {m.drafts > 0 && m.mine !== false && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{m.drafts} to give</Text></View>
+            )}
             <Ionicons name="chevron-forward" size={18} color={colors.gray[400]} />
           </AnimatedPressable>
         ))}
-      </ScrollView>
-
-      <BottomSheet visible={newOpen} onClose={() => setNewOpen(false)} maxHeight={320} avoidKeyboard>
-        <View style={{ paddingHorizontal: spacing.sm }}>
-          <Text style={styles.sheetTitle}>New meeting</Text>
-          <TextInput
-            value={newTitle}
-            onChangeText={setNewTitle}
-            placeholder="What is it about? (optional)"
-            placeholderTextColor={colors.gray[400]}
-            onSubmitEditing={create}
-            {...glass('inset')}
-            style={styles.input}
-          />
-          <AnimatedPressable style={[styles.primary, creating && { opacity: 0.5 }]} disabled={creating} onPress={create}>
-            <Ionicons name="mic" size={18} color="#fff" />
-            <Text style={styles.primaryText}>{creating ? 'Starting...' : 'Continue'}</Text>
-          </AnimatedPressable>
-        </View>
-      </BottomSheet>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
-/** One meeting: the recorder, a paste box, and the summary and to-dos. */
-function MeetingNoteView({ id, onBack, onDelete }) {
+const TABS = [['summary', 'Summary'], ['tasks', 'Tasks'], ['transcript', 'Transcript'], ['ask', 'Ask AI']];
+
+function MeetingView({ id, embedded, onBack, onDelete }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const canShareTab = width >= 900;
   const [note, setNote] = useState(null);
   const [title, setTitle] = useState('');
-  const [chars, setChars] = useState(0);
+  const [transcript, setTranscript] = useState('');
   const [pieces, setPieces] = useState(0);
   const [result, setResult] = useState(null);
-  const [withTab, setWithTab] = useState(true);
+  const [drafts, setDrafts] = useState(null);
+  const [given, setGiven] = useState(0);
+  const [tab, setTab] = useState('summary');
+  const [withTab, setWithTab] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [reading, setReading] = useState(false);
   const [reviewing, setReviewing] = useState(false);
-  const [drafting, setDrafting] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [paste, setPaste] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState('paid');
-  const [lang, setLang] = useState('en-IN');
+  const recordedHere = useRef(false);
+  const liveBox = useRef(null);
+
+  const loadDrafts = useCallback(async () => {
+    try {
+      const res = await api.get('/drafts', { params: { meeting_id: id }, __skipOops: true });
+      setDrafts(res.data.drafts || []);
+    } catch { setDrafts((d) => d || []); }
+  }, [id]);
 
   useEffect(() => {
     let live = true;
@@ -159,12 +162,13 @@ function MeetingNoteView({ id, onBack, onDelete }) {
       const m = res.data.meeting;
       setNote(m);
       setTitle(m.title);
-      setChars(m.transcript ? m.transcript.length : 0);
+      setTranscript(m.transcript || '');
       setPieces(m.pieces || 0);
       setResult(m.extracted || null);
     }).catch(() => showToast({ message: 'Could not open this meeting', tone: 'error' }));
+    loadDrafts();
     return () => { live = false; };
-  }, [id]);
+  }, [id, loadDrafts]);
 
   const recorder = useMeetingRecorder({
     send: async (blob, { pieceNo, durationMs } = {}) => {
@@ -173,36 +177,58 @@ function MeetingNoteView({ id, onBack, onDelete }) {
       // Numbered: the server keeps each piece once, so a retry after a dropped connection never doubles the text.
       if (pieceNo !== undefined) form.append('piece_no', String(pieceNo));
       if (durationMs) form.append('duration_ms', String(durationMs));
-      const res = await api.post(`/meeting-notes/${id}/audio`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 });
-      setChars(res.data.chars || 0);
+      const res = await api.post(`/meeting-notes/${id}/audio`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000, __skipOops: true });
       setPieces(res.data.pieces || 0);
+      if (res.data.text) setTranscript((t) => (t ? `${t}\n${res.data.text}` : res.data.text));
     },
-    onError: (err) => showToast({ message: err.response?.data?.error || 'A piece of the recording could not be read. The rest is kept.', tone: 'error' }),
+    onError: (err) => showToast({ message: err.response?.data?.error || 'A part of the recording could not be read yet. It is kept and tried again.', tone: 'error' }),
   });
 
-  const free = useBrowserTranscript({ id, lang, onSaved: setChars });
+  const busyHere = recorder.recording || recorder.queued > 0;
+  const hasText = transcript.trim().length > 40;
 
-  // Every recording starts with the consent notice on screen for 3 seconds (company context, decision 4).
-  const startRecording = () => setConsent(true);
+  // The live transcript follows the newest words.
+  useEffect(() => {
+    if (recorder.recording) liveBox.current?.scrollToEnd?.({ animated: true });
+  }, [transcript, recorder.recording]);
+
+  // Summary, decisions and tasks, read from the whole transcript (two readings side by side).
+  const readMeeting = useCallback(async () => {
+    setReading(true);
+    const [sum, tasks] = await Promise.allSettled([
+      api.post(`/meeting-notes/${id}/extract`, { create: false }, { timeout: 300000, __skipOops: true }),
+      api.post(`/meeting-notes/${id}/drafts`, {}, { timeout: 300000, __skipOops: true }),
+    ]);
+    if (sum.status === 'fulfilled') setResult(sum.value.data);
+    if (tasks.status === 'fulfilled') setDrafts(tasks.value.data.drafts || []);
+    const failed = [sum, tasks].find((r) => r.status === 'rejected');
+    if (failed) showToast({ message: failed.reason?.response?.data?.error || 'The meeting could not be read fully. Press Read again.', tone: 'error' });
+    else if (tasks.value.data.drafts?.length) setTab('tasks');
+    setReading(false);
+  }, [id]);
+
+  // When a recording made here has stopped and its last part is written down, read the meeting by itself.
+  useEffect(() => {
+    if (recordedHere.current && !busyHere && hasText && !reading) {
+      recordedHere.current = false;
+      readMeeting();
+    }
+  }, [busyHere, hasText, reading, readMeeting]);
+
+  // Every recording starts with the consent notice, on screen and spoken, for 3 seconds.
+  const startRecording = () => {
+    try {
+      const say = new window.SpeechSynthesisUtterance(CONSENT_TEXT);
+      window.speechSynthesis?.cancel();
+      window.speechSynthesis?.speak(say);
+    } catch { /* this browser cannot speak: the notice is still on screen */ }
+    setConsent(true);
+  };
   const beginAfterConsent = async () => {
     setConsent(false);
-    const ok = await recorder.start({ withTab, firstPiece: pieces });
+    const ok = await recorder.start({ withTab: canShareTab && withTab, firstPiece: pieces });
     if (!ok) showToast({ message: 'The microphone could not be used. Allow it in the browser and try again.', tone: 'error' });
-  };
-
-  // Every task said in the meeting becomes a draft; nothing is anyone's work until it is reviewed and assigned.
-  const findTasks = async () => {
-    setDrafting(true);
-    try {
-      const res = await api.post(`/meeting-notes/${id}/drafts`, {}, { timeout: 300000 });
-      const n = res.data.drafts?.length || 0;
-      if (n) setReviewing(true);
-      else showToast({ message: 'No tasks were found in what was said', icon: 'information-circle' });
-    } catch (err) {
-      showToast({ message: err.response?.data?.error || 'Could not read the meeting', tone: 'error' });
-    } finally {
-      setDrafting(false);
-    }
+    else recordedHere.current = true;
   };
 
   const saveTitle = async () => {
@@ -217,222 +243,345 @@ function MeetingNoteView({ id, onBack, onDelete }) {
   };
 
   const sendPaste = async () => {
-    setBusy(true);
     try {
-      const res = await api.post(`/meeting-notes/${id}/transcript`, { text: paste, replace: false });
-      setChars(res.data.chars || 0);
+      await api.post(`/meeting-notes/${id}/transcript`, { text: paste, replace: false });
+      setTranscript((t) => (t ? `${t}\n${paste.trim()}` : paste.trim()));
       setPaste('');
-      showToast({ message: 'Transcript saved', tone: 'success' });
+      setPasting(false);
+      recordedHere.current = true; // read it like a recording that just ended
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not save the transcript', tone: 'error' });
-    } finally {
-      setBusy(false);
     }
   };
 
-  // An hour of speech can take a minute or two to read in parts, so the wait is longer than usual.
-  const make = async () => {
-    setBusy(true);
+  // One click gives a task to its person. A task whose person is not known yet opens the review instead.
+  const give = async (ids) => {
     try {
-      const res = await api.post(`/meeting-notes/${id}/extract`, { create: false }, { timeout: 240000 });
-      setResult(res.data);
+      const res = await api.post('/drafts/confirm', { ids }, { timeout: 120000 });
+      const made = res.data.created?.length || 0;
+      const failed = res.data.failed || [];
+      if (made) {
+        setGiven((n) => n + made);
+        showToast({ message: made === 1 ? 'Task given' : `${made} tasks given`, tone: 'success', icon: 'checkmark-circle' });
+      }
+      if (failed.length) showToast({ message: failed.length === 1 ? failed[0].error : `${failed.length} tasks need a person first`, tone: 'error' });
+      await loadDrafts();
     } catch (err) {
-      showToast({ message: err.response?.data?.error || 'Could not make the to-dos', tone: 'error' });
-    } finally {
-      setBusy(false);
+      showToast({ message: err.response?.data?.error || 'Could not give the task', tone: 'error' });
+    }
+  };
+  const drop = async (draftId) => {
+    setDrafts((d) => (d || []).filter((x) => x.id !== draftId));
+    try { await api.post('/drafts/drop', { ids: [draftId] }, { __skipOops: true }); } catch { loadDrafts(); }
+  };
+
+  const copyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(transcript);
+      showToast({ message: 'Transcript copied', tone: 'success' });
+    } catch {
+      showToast({ message: 'Could not copy. Select the text and copy it by hand.', tone: 'error' });
     }
   };
 
-  const busyHere = recorder.recording || recorder.queued > 0 || free.listening;
-  const ready = !busyHere && chars > 40 && !busy && !drafting;
+  // Someone else's meeting (only the super admin can open one): everything can be read and asked about, nothing changed.
+  const own = note ? note.mine !== false : true;
+  const list = drafts || [];
+  const readyToGive = list.filter((d) => !(d.confidence === 'unsure' && !d.assignee_id));
+  const words = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
 
   return (
-    <ScrollView contentContainerStyle={[styles.page, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]}>
-      <View style={styles.topRow}>
-        <AnimatedPressable onPress={onBack} hitSlop={10} style={{ marginLeft: -6, padding: 4 }}>
-          <Ionicons name="chevron-back" size={26} color={colors.gray[700]} />
-        </AnimatedPressable>
-        <Text style={styles.topTitle}>Meetings</Text>
-        <AnimatedPressable onPress={onDelete} hitSlop={10} accessibilityLabel="Delete this meeting">
-          <Ionicons name="trash-outline" size={20} color={colors.gray[500]} />
-        </AnimatedPressable>
-      </View>
-
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        onBlur={saveTitle}
-        placeholder="Meeting"
-        placeholderTextColor={colors.gray[400]}
-        style={styles.titleInput}
-      />
-
-      <View style={styles.modes}>
-        {[['paid', 'Best quality'], ['free', 'Free']].map(([k, label]) => (
-          <AnimatedPressable
-            key={k}
-            style={[styles.mode, mode === k && styles.modeOn]}
-            disabled={busyHere}
-            onPress={() => setMode(k)}
-          >
-            <Text style={[styles.modeText, mode === k && styles.modeTextOn]}>{label}</Text>
+    <ScrollView contentContainerStyle={[styles.page, { paddingTop: embedded ? spacing.md : insets.top + spacing.md, paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
+      <View style={styles.column}>
+        <View style={styles.topRow}>
+          <AnimatedPressable onPress={onBack} hitSlop={10} accessibilityLabel="Back to meetings" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={colors.gray[700]} />
           </AnimatedPressable>
-        ))}
-      </View>
-
-      {mode === 'paid' ? (
-        <View {...glass('card')} style={styles.panel}>
-          <Text style={styles.clock}>{clock(recorder.elapsed)}</Text>
-          <Text style={styles.status}>
-            {recorder.recording
-              ? `Recording. ${pieces} piece${pieces === 1 ? '' : 's'} sent${recorder.queued ? `, ${recorder.queued} turning into text` : ''}.`
-              : recorder.queued
-                ? `Turning ${recorder.queued} piece${recorder.queued === 1 ? '' : 's'} into text...`
-                : chars
-                  ? `${Number(chars).toLocaleString()} characters so far, from ${pieces} piece${pieces === 1 ? '' : 's'}.`
-                  : 'Not recorded yet.'}
-          </Text>
-          <Text style={styles.hint}>Paid: OpenAI turns the recording into text a minute at a time. English, Telugu and both mixed are understood. Before it starts, the screen shows "Hi everyone, I am starting the recording." for 3 seconds.</Text>
-
-          {!recorder.recording && recorder.canShare && (
-            <AnimatedPressable style={styles.check} onPress={() => setWithTab((v) => !v)}>
-              <Ionicons name={withTab ? 'checkbox' : 'square-outline'} size={22} color={withTab ? colors.brand[600] : colors.gray[400]} />
-              <Text style={styles.checkText}>Also record the others. Pick the Meet tab and tick "Share tab audio".</Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            onBlur={saveTitle}
+            editable={own}
+            placeholder="Name this meeting"
+            placeholderTextColor={colors.gray[400]}
+            style={styles.titleInput}
+          />
+          {own && (
+            <AnimatedPressable onPress={onDelete} hitSlop={10} accessibilityLabel="Delete this meeting" style={styles.iconBtn}>
+              <Ionicons name="trash-outline" size={19} color={colors.gray[500]} />
             </AnimatedPressable>
           )}
-          {!recorder.canRecord && <Text style={styles.hint}>This browser cannot record. Paste the transcript below instead.</Text>}
-          {recorder.canRecord && (
-            <AnimatedPressable style={[styles.primary, recorder.recording && { backgroundColor: colors.gray[800] }]} onPress={recorder.recording ? recorder.stop : startRecording}>
-              <Ionicons name={recorder.recording ? 'stop' : 'mic'} size={20} color="#fff" />
-              <Text style={styles.primaryText}>{recorder.recording ? `Stop at ${clock(recorder.elapsed)}` : chars ? 'Keep recording' : 'Start recording'}</Text>
-            </AnimatedPressable>
-          )}
-          {recorder.recording && <Text style={styles.hint}>Keep this page open until you stop. The screen stays awake; if a phone locks anyway, recording starts again when you come back{recorder.resumed ? ` (restarted ${recorder.resumed} time${recorder.resumed === 1 ? '' : 's'})` : ''}.</Text>}
         </View>
-      ) : (
-        <View {...glass('card')} style={styles.panel}>
-          <Text style={styles.clock}>{clock(free.elapsed)}</Text>
-          <Text style={styles.status}>
-            {free.listening
-              ? 'Listening. Each phrase is saved as it is finished.'
-              : chars
-                ? `${Number(chars).toLocaleString()} characters so far.`
-                : 'Not recorded yet.'}
-          </Text>
-          <Text style={styles.hint}>Free: the browser's own speech recognition writes it down. It works in Chrome or Edge on a computer or Android, and it is less accurate than the paid mode, especially for Telugu. The browser sends the sound to its speech service to do this.</Text>
 
-          {!free.listening && (
-            <View style={styles.modes}>
-              {[['en-IN', 'English'], ['te-IN', 'Telugu']].map(([k, label]) => (
-                <AnimatedPressable key={k} style={[styles.mode, lang === k && styles.modeOn]} onPress={() => setLang(k)}>
-                  <Text style={[styles.modeText, lang === k && styles.modeTextOn]}>{label}</Text>
+        {!own && (
+          <View {...glass('card')} style={[styles.panel, styles.waitRow]}>
+            <Ionicons name="eye-outline" size={18} color={colors.gray[600]} />
+            <Text style={styles.waitText}>Recorded by {note.owner_name || 'someone else'}. You can read it and ask about it. Your questions are not saved with it.</Text>
+          </View>
+        )}
+
+        {/* The recorder. */}
+        {own && <View {...glass('card')} style={styles.panel}>
+          {recorder.recording ? (
+            <>
+              <View style={styles.recRow}>
+                <View style={styles.recDot} />
+                <Text style={styles.clock}>{clock(recorder.elapsed)}</Text>
+                <View style={{ flex: 1 }} />
+                <AnimatedPressable style={styles.stop} onPress={recorder.stop}>
+                  <Ionicons name="stop" size={16} color="#fff" />
+                  <Text style={styles.primaryText}>Stop</Text>
+                </AnimatedPressable>
+              </View>
+              <ScrollView ref={liveBox} style={styles.live} contentContainerStyle={{ padding: spacing.md }}>
+                <Text style={styles.liveText}>
+                  {transcript || 'Listening. What is said appears here about every twenty seconds.'}
+                </Text>
+              </ScrollView>
+              <Text style={styles.hint}>
+                {recorder.queued ? 'Writing down the last part. ' : ''}Keep this page open until you stop. The screen stays awake
+                {recorder.resumed ? `; the microphone was restarted ${recorder.resumed} time${recorder.resumed === 1 ? '' : 's'}` : ''}.
+              </Text>
+            </>
+          ) : recorder.queued > 0 ? (
+            <View style={styles.waitRow}>
+              <ActivityIndicator color={colors.brand[600]} />
+              <Text style={styles.waitText}>Writing down the last part of the recording. Please wait.</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.recRow}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.panelTitle}>{hasText ? 'Recorded' : 'Ready to record'}</Text>
+                  <Text style={styles.hint}>
+                    {hasText
+                      ? `${words.toLocaleString('en-IN')} words saved. You can add to it.`
+                      : 'English, Telugu or both mixed. Everyone hears a short notice before it starts.'}
+                  </Text>
+                </View>
+                {recorder.canRecord && (
+                  <AnimatedPressable style={hasText ? styles.secondary : styles.primary} onPress={startRecording}>
+                    <Ionicons name="mic" size={18} color={hasText ? colors.gray[800] : '#fff'} />
+                    <Text style={hasText ? styles.secondaryText : styles.primaryText}>{hasText ? 'Keep recording' : 'Start recording'}</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+              {!recorder.canRecord && <Text style={styles.hint}>This browser cannot record. Paste the transcript instead.</Text>}
+              <View style={styles.optionRow}>
+                {recorder.canShare && canShareTab && (
+                  <AnimatedPressable style={styles.check} onPress={() => setWithTab((v) => !v)}>
+                    <Ionicons name={withTab ? 'checkbox' : 'square-outline'} size={19} color={withTab ? colors.brand[600] : colors.gray[400]} />
+                    <Text style={styles.checkText}>Also record a call playing in a browser tab</Text>
+                  </AnimatedPressable>
+                )}
+                <AnimatedPressable onPress={() => setPasting((v) => !v)} style={styles.check}>
+                  <Ionicons name="clipboard-outline" size={17} color={colors.gray[600]} />
+                  <Text style={styles.checkText}>Paste a transcript</Text>
+                </AnimatedPressable>
+              </View>
+              {pasting && (
+                <View style={{ gap: spacing.sm }}>
+                  <TextInput
+                    value={paste}
+                    onChangeText={setPaste}
+                    multiline
+                    autoFocus
+                    placeholder="Paste the transcript or notes from any other tool"
+                    placeholderTextColor={colors.gray[400]}
+                    {...glass('inset')}
+                    style={styles.paste}
+                  />
+                  <AnimatedPressable style={[styles.primary, { alignSelf: 'flex-start' }, !paste.trim() && { opacity: 0.45 }]} disabled={!paste.trim()} onPress={sendPaste}>
+                    <Text style={styles.primaryText}>Add it</Text>
+                  </AnimatedPressable>
+                </View>
+              )}
+            </>
+          )}
+        </View>}
+
+        {reading && (
+          <View {...glass('card')} style={[styles.panel, styles.waitRow]}>
+            <ActivityIndicator color={colors.brand[600]} />
+            <Text style={styles.waitText}>Reading the whole meeting: the summary, what was decided, and every task. A long meeting takes a minute or two.</Text>
+          </View>
+        )}
+
+        {hasText && !recorder.recording && (
+          <>
+            <View style={styles.tabs}>
+              {TABS.map(([k, label]) => (
+                <AnimatedPressable key={k} onPress={() => setTab(k)} style={[styles.tab, tab === k && styles.tabOn]}>
+                  <Text style={[styles.tabText, tab === k && styles.tabTextOn]}>{label}{k === 'tasks' && list.length ? `  ${list.length}` : ''}</Text>
                 </AnimatedPressable>
               ))}
             </View>
-          )}
-          {free.listening && !!free.live && <Text style={styles.live} numberOfLines={3}>{free.live}</Text>}
-          {!free.supported && <Text style={styles.hint}>This browser cannot do free transcription. Use Chrome or Edge, or the paid mode.</Text>}
-          {free.supported && (
-            <AnimatedPressable
-              style={[styles.primary, free.listening && { backgroundColor: colors.gray[800] }]}
-              onPress={free.listening ? free.stop : () => free.start()}
-            >
-              <Ionicons name={free.listening ? 'stop' : 'mic'} size={20} color="#fff" />
-              <Text style={styles.primaryText}>{free.listening ? `Stop at ${clock(free.elapsed)}` : chars ? 'Keep listening' : 'Start listening'}</Text>
-            </AnimatedPressable>
-          )}
-          {free.listening && <Text style={styles.hint}>Keep this page open until you stop. Anything heard so far is saved when you stop.</Text>}
-        </View>
-      )}
 
-      <Text style={styles.label}>Or paste a transcript</Text>
-      <TextInput
-        value={paste}
-        onChangeText={setPaste}
-        multiline
-        placeholder="Paste the transcript or notes from any tool"
-        placeholderTextColor={colors.gray[400]}
-        {...glass('inset')}
-        style={styles.paste}
-      />
-      <AnimatedPressable style={[styles.secondary, (!paste.trim() || busy) && { opacity: 0.5 }]} disabled={!paste.trim() || busy} onPress={sendPaste}>
-        <Text style={styles.secondaryText}>{busy ? 'Saving...' : 'Add the transcript'}</Text>
-      </AnimatedPressable>
+            {tab === 'summary' && (
+              <View style={{ gap: spacing.md }}>
+                {result ? (
+                  <>
+                    {!!result.summary && <Text selectable style={styles.summary}>{result.summary}</Text>}
+                    {(result.decisions || []).length > 0 && (
+                      <View style={{ gap: 8 }}>
+                        <Text style={styles.label}>Decided</Text>
+                        {result.decisions.map((d, i) => (
+                          <View key={i} style={styles.decision}>
+                            <Ionicons name="checkmark" size={16} color={colors.green[600]} style={{ marginTop: 2 }} />
+                            <Text selectable style={styles.decisionText}>{d}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                ) : !reading && (
+                  <Text style={styles.hint}>The meeting has not been read yet.</Text>
+                )}
+                {own && !reading && !busyHere && (
+                  <AnimatedPressable style={[styles.secondary, { alignSelf: 'flex-start' }]} onPress={readMeeting}>
+                    <Ionicons name="refresh" size={16} color={colors.gray[800]} />
+                    <Text style={styles.secondaryText}>{result ? 'Read again' : 'Read the meeting'}</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+            )}
 
-      <Text style={styles.label}>Tasks from the meeting</Text>
-      <Text style={styles.hint}>Every task that was said becomes a draft with the person it is for. You check them on one screen and assign them all with one key; nothing reaches anyone before that.</Text>
-      <AnimatedPressable style={[styles.primary, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={findTasks}>
-        {drafting ? <ActivityIndicator color="#fff" /> : <Ionicons name="list" size={18} color="#fff" />}
-        <Text style={styles.primaryText}>{drafting ? 'Reading the whole meeting...' : 'Find the tasks'}</Text>
-      </AnimatedPressable>
-      <AnimatedPressable style={[styles.secondary, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={make}>
-        <Text style={styles.secondaryText}>{busy ? 'Reading...' : 'Summary and decisions'}</Text>
-      </AnimatedPressable>
-      {busyHere && <Text style={styles.hint}>Finish the recording first.</Text>}
+            {tab === 'tasks' && (
+              <View style={{ gap: spacing.sm }}>
+                {list.length > 0 && !own && <Text style={styles.hint}>Waiting to be given by {note.owner_name || 'the person who recorded it'}.</Text>}
+                {list.length > 0 && own && (
+                  <View style={styles.taskHead}>
+                    <Text style={[styles.hint, { flex: 1 }]}>Nothing reaches anyone until you give it.{given ? ` ${given} given so far.` : ''}</Text>
+                    <AnimatedPressable style={styles.secondary} onPress={() => setReviewing(true)}>
+                      <Text style={styles.secondaryText}>Edit</Text>
+                    </AnimatedPressable>
+                    {readyToGive.length > 1 && (
+                      <AnimatedPressable style={styles.primary} onPress={() => give(readyToGive.map((d) => d.id))}>
+                        <Text style={styles.primaryText}>Give all {readyToGive.length}</Text>
+                      </AnimatedPressable>
+                    )}
+                  </View>
+                )}
+                {list.map((d) => {
+                  const unsure = d.confidence === 'unsure' && !d.assignee_id;
+                  const who = d.assignee_name || (unsure ? `"${d.assignee_said || 'someone'}"` : 'Me');
+                  return (
+                    <View key={d.id} {...glass('card')} style={styles.task}>
+                      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 0, gap: 5 }}>
+                        <Text style={styles.taskTitle}>{d.title}</Text>
+                        <View style={styles.taskMeta}>
+                          <View style={[styles.who, unsure && { backgroundColor: colors.red[50] }]}>
+                            <Ionicons name={unsure ? 'help-circle-outline' : 'person-outline'} size={12} color={unsure ? colors.red[600] : colors.gray[600]} />
+                            <Text style={[styles.whoText, unsure && { color: colors.red[600] }]}>{who}</Text>
+                          </View>
+                          {!!d.due_date && <Text style={styles.metaText}>{formatDue(d.due_date)}</Text>}
+                          {!!d.business_name && <Text style={styles.metaText} numberOfLines={1}>{d.business_name}</Text>}
+                        </View>
+                        {!!d.quote && <Text style={styles.quote} numberOfLines={2}>"{d.quote}"</Text>}
+                      </View>
+                      {own && <View style={styles.taskActions}>
+                        {unsure ? (
+                          <AnimatedPressable style={styles.secondary} onPress={() => setReviewing(true)}>
+                            <Text style={styles.secondaryText}>Pick a person</Text>
+                          </AnimatedPressable>
+                        ) : (
+                          <AnimatedPressable style={styles.primary} onPress={() => give([d.id])}>
+                            <Text style={styles.primaryText}>{d.assignee_id ? 'Give' : 'Add'}</Text>
+                          </AnimatedPressable>
+                        )}
+                        <AnimatedPressable onPress={() => drop(d.id)} hitSlop={8} accessibilityLabel="Leave this task out" style={styles.iconBtn}>
+                          <Ionicons name="close" size={18} color={colors.gray[500]} />
+                        </AnimatedPressable>
+                      </View>}
+                    </View>
+                  );
+                })}
+                {drafts && !list.length && !reading && (
+                  <Text style={styles.hint}>
+                    {given ? 'Every task from this meeting has been given.' : result ? 'No tasks are waiting from this meeting.' : 'Tasks appear here once the meeting has been read.'}
+                  </Text>
+                )}
+              </View>
+            )}
 
-      {result && (
-        <View {...glass('card')} style={styles.panel}>
-          {!!result.summary && <Text style={styles.summary}>{result.summary}</Text>}
-          {(result.decisions || []).length > 0 && (
-            <>
-              <Text style={styles.label}>Decided</Text>
-              {result.decisions.map((d, i) => <Text key={i} style={styles.bullet}>• {d}</Text>)}
-            </>
-          )}
-          <Text style={styles.label}>{result.created ? 'To-dos created' : 'Action items mentioned'}</Text>
-          {(result.created || result.tasks || []).length === 0 && <Text style={styles.hint}>No action items were found.</Text>}
-          {(result.created || result.tasks || []).map((t, i) => (
-            <View key={i} style={styles.taskRow}>
-              <Ionicons name="checkbox-outline" size={16} color={colors.brand[600]} />
-              <Text style={styles.taskText}>{t.title}</Text>
-              <Text style={styles.taskWho}>{t.assignee ? (t.assignee.name || t.assignee).split(' ')[0] : 'Me'}</Text>
-            </View>
-          ))}
-          {(result.failed || []).map((t, i) => <Text key={`f${i}`} style={[styles.bullet, { color: colors.red[600] }]}>Could not create: {t}</Text>)}
-          {result.parts > 1 && <Text style={styles.hint}>Read in {result.parts} parts.</Text>}
-        </View>
-      )}
-      <ConsentOverlay visible={consent} onDone={beginAfterConsent} onCancel={() => setConsent(false)} />
-      <DraftReviewSheet open={reviewing} meetingId={id} onClose={() => setReviewing(false)} />
+            {tab === 'transcript' && (
+              <View style={{ gap: spacing.sm }}>
+                <View style={styles.taskHead}>
+                  <Text style={[styles.hint, { flex: 1 }]}>{words.toLocaleString('en-IN')} words, saved with this meeting.</Text>
+                  <AnimatedPressable style={styles.secondary} onPress={copyTranscript}>
+                    <Ionicons name="copy-outline" size={15} color={colors.gray[800]} />
+                    <Text style={styles.secondaryText}>Copy</Text>
+                  </AnimatedPressable>
+                </View>
+                <Text selectable style={styles.transcript}>{transcript}</Text>
+              </View>
+            )}
+
+            {tab === 'ask' && <MeetingAsk meetingId={id} initialChat={note?.chat} ready={hasText && !busyHere} kept={own} />}
+          </>
+        )}
+      </View>
+
+      <ConsentOverlay visible={consent} onDone={beginAfterConsent} onCancel={() => { try { window.speechSynthesis?.cancel(); } catch { /* nothing to stop */ } setConsent(false); }} />
+      <DraftReviewSheet open={reviewing} meetingId={id} onClose={() => { setReviewing(false); loadDrafts(); }} onConfirmed={loadDrafts} />
     </ScrollView>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
-  page: { paddingHorizontal: spacing.lg, gap: spacing.md },
-  title: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.gray[900] },
-  lead: { fontSize: fontSize.sm, color: colors.gray[600], lineHeight: 19 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[700] },
-  titleInput: { fontSize: fontSize.xl, fontWeight: '800', color: colors.gray[900], paddingVertical: 4, outlineStyle: 'none' },
+  page: { paddingHorizontal: spacing.lg },
+  column: { width: '100%', maxWidth: 820, alignSelf: 'center', gap: spacing.lg },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.gray[900] },
+  listHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md },
+  lead: { flex: 1, minWidth: 220, fontSize: fontSize.base, color: colors.gray[600], lineHeight: 20 },
+  empty: { alignItems: 'center', gap: 6, paddingVertical: spacing.xxxl },
+  emptyTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.gray[800] },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  titleInput: { flex: 1, minWidth: 0, fontSize: fontSize.xl, fontWeight: '700', color: colors.gray[900], paddingVertical: 4, letterSpacing: -0.3, outlineStyle: 'none' },
   panel: { padding: spacing.lg, borderRadius: radius.xl, gap: spacing.md },
-  modes: { flexDirection: 'row', gap: 8 },
-  mode: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.gray[100] },
-  modeOn: { backgroundColor: colors.brand[600] },
-  modeText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[700] },
-  modeTextOn: { color: '#fff' },
-  live: { fontSize: fontSize.base, color: colors.gray[700], fontStyle: 'italic' },
-  clock: { fontSize: 40, fontWeight: '800', color: colors.gray[900], fontVariant: ['tabular-nums'] },
-  status: { fontSize: fontSize.sm, color: colors.gray[600] },
-  label: { fontSize: 12, fontWeight: '700', color: colors.gray[500], textTransform: 'uppercase', letterSpacing: 0.6, marginTop: spacing.sm },
-  hint: { fontSize: fontSize.sm, color: colors.gray[500] },
+  panelTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.gray[900] },
+  recRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md },
+  recDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.red[500] },
+  clock: { fontSize: 30, fontWeight: '700', color: colors.gray[900], fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
+  stop: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.red[600], borderRadius: radius.lg, paddingVertical: 11, paddingHorizontal: spacing.lg },
+  live: { maxHeight: 280, minHeight: 120, borderRadius: radius.lg, backgroundColor: colors.gray[50], borderWidth: 1, borderColor: colors.gray[200] },
+  liveText: { fontSize: fontSize.base, lineHeight: 22, color: colors.gray[800] },
+  waitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  waitText: { flex: 1, fontSize: fontSize.base, color: colors.gray[700], lineHeight: 20 },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg },
+  check: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  checkText: { fontSize: fontSize.sm, color: colors.gray[700] },
+  label: { fontSize: 12, fontWeight: '600', color: colors.gray[500], letterSpacing: 0.4, textTransform: 'uppercase' },
+  hint: { fontSize: fontSize.sm, color: colors.gray[500], lineHeight: 18 },
   error: { fontSize: fontSize.sm, color: colors.red[600] },
-  check: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 6 },
-  checkText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[700] },
-  primary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.brand[600], borderRadius: radius.lg, paddingVertical: 14 },
-  primaryText: { color: '#fff', fontWeight: '700', fontSize: fontSize.base },
-  secondary: { backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingVertical: 12, alignItems: 'center' },
-  secondaryText: { fontWeight: '700', color: colors.gray[800], fontSize: fontSize.base },
-  paste: { minHeight: 120, maxHeight: 240, borderRadius: radius.lg, padding: spacing.md, fontSize: fontSize.base, color: colors.gray[900], textAlignVertical: 'top' },
-  input: { borderRadius: radius.lg, padding: spacing.md, fontSize: fontSize.base, color: colors.gray[900], marginBottom: spacing.md, outlineStyle: 'none' },
-  sheetTitle: { fontSize: fontSize.lg, fontWeight: '800', color: colors.gray[900], marginBottom: spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.xl },
-  rowIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gray[100] },
-  rowTitle: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
-  rowSub: { fontSize: fontSize.xs, color: colors.gray[500], marginTop: 2 },
-  summary: { fontSize: fontSize.base, color: colors.gray[800], lineHeight: 21 },
-  bullet: { fontSize: fontSize.sm, color: colors.gray[700] },
-  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  taskText: { flex: 1, fontSize: fontSize.sm, color: colors.gray[900] },
-  taskWho: { fontSize: 11, fontWeight: '700', color: colors.gray[600] },
+  primary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.brand[600], borderRadius: radius.lg, paddingVertical: 11, paddingHorizontal: spacing.lg },
+  primaryText: { color: '#fff', fontWeight: '600', fontSize: fontSize.base },
+  secondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingVertical: 11, paddingHorizontal: spacing.lg },
+  secondaryText: { fontWeight: '600', color: colors.gray[800], fontSize: fontSize.base },
+  paste: { minHeight: 120, maxHeight: 240, borderRadius: radius.lg, padding: spacing.md, fontSize: fontSize.base, color: colors.gray[900], textAlignVertical: 'top', outlineStyle: 'none' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.xl },
+  rowTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.gray[900] },
+  rowSub: { fontSize: fontSize.sm, color: colors.gray[500] },
+  rowSummary: { fontSize: fontSize.sm, color: colors.gray[700], lineHeight: 18 },
+  badge: { backgroundColor: colors.brand[50], borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { fontSize: 12, fontWeight: '600', color: colors.brand[700] },
+  tabs: { flexDirection: 'row', gap: 4, borderBottomWidth: 1, borderBottomColor: colors.gray[200] },
+  tab: { flexShrink: 1, paddingHorizontal: spacing.sm + 2, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  tabOn: { borderBottomColor: colors.brand[600] },
+  tabText: { fontSize: fontSize.base, color: colors.gray[600] },
+  tabTextOn: { color: colors.gray[900], fontWeight: '600' },
+  summary: { fontSize: fontSize.md, color: colors.gray[900], lineHeight: 24 },
+  decision: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  decisionText: { flex: 1, fontSize: fontSize.base, color: colors.gray[800], lineHeight: 20 },
+  taskHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  task: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md, padding: spacing.md, borderRadius: radius.xl },
+  taskTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900], lineHeight: 20 },
+  taskMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  taskActions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.gray[100], borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  whoText: { fontSize: 12, fontWeight: '600', color: colors.gray[700] },
+  metaText: { fontSize: 12, color: colors.gray[500] },
+  quote: { fontSize: 12, color: colors.gray[500], fontStyle: 'italic', lineHeight: 17 },
+  transcript: { fontSize: fontSize.base, lineHeight: 23, color: colors.gray[800] },
 });

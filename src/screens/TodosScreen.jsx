@@ -666,13 +666,8 @@ export default function TodosScreen() {
     now,
   }), [view, search, activeFilter, labelName, business, meId, highlightId, openTodoId, focusId, toggleTodo, openTodo, requestRowDelete, selectMode, selected, toggleSelected, now]);
 
-  // One clear next step instead of a blank page.
-  const emptyAction = search || view === 'done' ? undefined : (
-    <AnimatedPressable onPress={() => setAddOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.brand[600], borderRadius: radius.lg, paddingVertical: 11, paddingHorizontal: spacing.xl }}>
-      <Ionicons name="add" size={18} color="#fff" />
-      <Text style={{ color: '#fff', fontWeight: '800', fontSize: fontSize.base }}>Add your first to-do</Text>
-    </AnimatedPressable>
-  );
+  // The box at the bottom of the screen is the one way to add: an empty view does not repeat it.
+  const emptyAction = undefined;
   const allEmpty = sections.every((s) => s.items.length === 0);
   const emptyState = (() => {
     if (search) return { icon: 'search', title: 'Nothing found', message: 'Try another word.' };
@@ -689,7 +684,7 @@ export default function TodosScreen() {
     if (view === 'upcoming') return { icon: 'calendar', title: 'Your schedule is clear', message: 'Plan ahead. Add a to-do with a date.' };
     if (activeFilter) return { icon: 'funnel', title: 'No matches', message: 'Nothing open fits this filter right now.' };
     if (labelName) return { icon: 'pricetag', title: 'No open to-dos', message: `Nothing is tagged +${labelName} at the moment.` };
-    return { icon: 'file-tray', title: 'All clear', message: 'Tap + to add a to-do.' };
+    return { icon: 'file-tray', title: 'All clear', message: 'Type a to-do in the box below.' };
   })();
 
   const shareVisibleIds = view === 'done'
@@ -1323,7 +1318,7 @@ export default function TodosScreen() {
           {sectioned && !search && placeSections.length === 0 && (
             <AnimatedPressable style={styles.addSection} onPress={() => addStarterSections(currentList?.id || null)}>
               <Ionicons name="sparkles-outline" size={18} color={colors.brand[600]} />
-              <Text style={styles.addSectionText}>Start with 3 sections: To do, Ongoing, Completed (ticked work moves there)</Text>
+              <Text style={styles.addSectionText}>Start with To do, Ongoing, Completed</Text>
             </AnimatedPressable>
           )}
           {sectioned && !search && archivedSections.length > 0 && (
@@ -1355,11 +1350,6 @@ export default function TodosScreen() {
         </>
       )}
 
-      {view !== 'done' && !desktop && (
-        <Text style={styles.tip}>
-          Swipe right to complete, left to delete. Type @name to share, +label to tag, for 2h to estimate.
-        </Text>
-      )}
     </ScrollView>
   );
 

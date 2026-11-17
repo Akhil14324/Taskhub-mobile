@@ -195,7 +195,7 @@ export default function BoardToolbar({
           </View>
         )}
         {searchOpen || search ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: BRAND, borderRadius: radius.md, paddingHorizontal: spacing.sm, width: 250 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: BRAND, borderRadius: radius.md, paddingHorizontal: spacing.sm, width: desktop ? 250 : 190 }}>
             <Ionicons name="search" size={15} color={colors.gray[500]} />
             <TextInput
               ref={inputRef} autoFocus value={search} onChangeText={onSearch} placeholder="Search this board" placeholderTextColor={colors.gray[400]}

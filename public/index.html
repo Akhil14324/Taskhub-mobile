@@ -44,7 +44,7 @@
       #root { display: flex; height: 100%; flex: 1; }
       /* Keyboard users get a visible focus ring; mouse users do not. */
       [role="button"]:focus-visible, a:focus-visible, button:focus-visible, [tabindex="0"]:not(input):not(textarea):focus-visible {
-        outline: 2px solid #0073ea; outline-offset: 2px;
+        outline: 2px solid #D4621A; outline-offset: 2px;
       }
       /* Hover words for icon-only buttons (desktop); appears at once, unlike the slow browser tooltip. */
       @media (hover: hover) {
@@ -70,25 +70,51 @@
         --s-surface: 255 255 255;
         --s-alt: 247 247 247;
         --s-border: 222 222 222;
-        --s-primary: 0 115 234;
-        --s-primary-strong: 0 96 185;
-        --s-primary-soft: 204 229 255;
+        --s-primary: 212 98 26;
+        --s-primary-strong: 176 78 18;
+        --s-primary-soft: 254 243 226;
         --s-shadow: 0 0 0;
         --s-shadow-a: 0.08;
       }
       html[data-theme='dark'] {
         color-scheme: dark;
-        --s-page: 17 17 17;
-        --s-surface: 30 30 30;
-        --s-alt: 38 38 38;
-        --s-border: 58 58 58;
-        --s-primary: 0 115 234;
-        --s-primary-strong: 61 140 240;
-        --s-primary-soft: 22 58 110;
+        --s-page: 0 0 0;
+        --s-surface: 0 0 0;
+        --s-alt: 18 18 18;
+        --s-border: 52 52 52;
+        --s-primary: 212 98 26;
+        --s-primary-strong: 236 132 56;
+        --s-primary-soft: 42 26 14;
         --s-shadow: 0 0 0;
         --s-shadow-a: 0.32;
       }
       html, body { background-color: rgb(var(--s-page)); }
+      /* Notes: the writing inside the editor (components/notes/RichText.jsx). */
+      .th-note { outline: none; font-size: 16px; line-height: 1.6; min-height: 260px; word-break: break-word; }
+      .th-note:empty::before { content: attr(data-placeholder); color: rgb(154 154 154); pointer-events: none; }
+      .th-note h1 { font-size: 26px; line-height: 1.25; font-weight: 700; letter-spacing: -0.4px; margin: 18px 0 6px; }
+      .th-note h2 { font-size: 20px; line-height: 1.3; font-weight: 700; letter-spacing: -0.2px; margin: 16px 0 4px; }
+      .th-note h3 { font-size: 16px; line-height: 1.4; font-weight: 700; margin: 14px 0 2px; }
+      .th-note h1:first-child, .th-note h2:first-child, .th-note h3:first-child { margin-top: 0; }
+      .th-note ul, .th-note ol { margin: 4px 0; padding-left: 26px; }
+      .th-note li { margin: 2px 0; }
+      .th-note ul[data-check] { list-style: none; padding-left: 2px; }
+      .th-note ul[data-check] > li { position: relative; padding-left: 28px; }
+      .th-note ul[data-check] > li::before {
+        content: ''; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; box-sizing: border-box;
+        border: 1.5px solid rgb(154 154 154); border-radius: 4px; cursor: pointer;
+      }
+      .th-note ul[data-check] > li[data-done='1']::before {
+        border-color: rgb(var(--s-primary)); background: rgb(var(--s-primary))
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+      }
+      .th-note ul[data-check] > li[data-done='1'] { opacity: 0.55; text-decoration: line-through; }
+      .th-note blockquote { margin: 6px 0; padding-left: 12px; border-left: 3px solid rgb(var(--s-border)); }
+      .th-cell { outline: none; }
+      .th-cell:focus { box-shadow: inset 0 0 0 2px rgb(var(--s-primary)); }
+      /* A control whose work is still running (AnimatedPressable sets data-busy): dimmed, not clickable. */
+      [data-busy='1'] { pointer-events: none !important; cursor: progress; animation: th-busy 0.9s ease-in-out infinite; }
+      @keyframes th-busy { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.8; } }
 
       [data-glass] { -webkit-backdrop-filter: none; backdrop-filter: none; background-image: none !important; }
       [data-glass='bar'] {

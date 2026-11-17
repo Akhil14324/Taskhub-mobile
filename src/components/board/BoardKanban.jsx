@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
@@ -12,7 +12,7 @@ import { showToast, confirmDialog } from '../../utils/events';
 import api from '../../api/client';
 import { Avatar } from '../kit';
 
-const DROP_OUTLINE = '2px dashed #0073ea';
+const DROP_OUTLINE = '2px dashed #D4621A';
 
 function IconBtn({ icon, label, onPress, active, count }) {
   const colors = useColors();
@@ -148,6 +148,9 @@ function MenuItem({ icon, label, onPress, danger, more, color }) {
  */
 export default function BoardKanban({ board, items, people, onOpenItem, onMove, onSetValue, actions, canAdd, canManage }) {
   const colors = useColors();
+  const { width: screenW } = useWindowDimensions();
+  const phone = screenW < 700;
+  const laneW = phone ? Math.min(330, screenW - 44) : 290;
   const rootRef = useRef(null);
   const [subsOpen, setSubsOpen] = useState(() => new Set());
   const [renaming, setRenaming] = useState(null); // label id
@@ -286,12 +289,12 @@ export default function BoardKanban({ board, items, people, onOpenItem, onMove, 
           </View>
         </View>
       )}
-      <ScrollView horizontal contentContainerStyle={{ padding: spacing.md, gap: spacing.md, alignItems: 'flex-start' }} style={{ flex: 1 }}>
+      <ScrollView horizontal contentContainerStyle={{ padding: phone ? spacing.sm : spacing.md, gap: phone ? spacing.sm : spacing.md, alignItems: 'flex-start' }} style={{ flex: 1 }} snapToInterval={phone ? laneW + spacing.sm : undefined} decelerationRate={phone ? 'fast' : undefined}>
         {lanes.map(({ label, items: laneItems }) => (
           <View
             key={label.id}
             dataSet={{ boardCol: String(label.id) }}
-            style={{ width: 290, backgroundColor: colors.gray[100], borderRadius: radius.md, overflow: 'hidden', maxHeight: '100%' }}
+            style={{ width: laneW, backgroundColor: colors.gray[100], borderRadius: radius.md, overflow: 'hidden', maxHeight: '100%' }}
           >
             <View
               ref={canManage ? makeDraggable : undefined} dataSet={{ laneHandle: String(label.id) }}
@@ -316,7 +319,7 @@ export default function BoardKanban({ board, items, people, onOpenItem, onMove, 
               )}
               {canAdd && <Pressable onPress={() => setAdding(label.id)} hitSlop={6} accessibilityLabel={`Add a task to ${label.label}`}><Ionicons name="add" size={18} color={paletteInk(label.color)} /></Pressable>}
             </View>
-            <ScrollView style={{ maxHeight: 640 }} contentContainerStyle={{ gap: spacing.sm, padding: spacing.sm, minHeight: 80 }}>
+            <ScrollView style={{ maxHeight: phone ? 520 : 640 }} nestedScrollEnabled contentContainerStyle={{ gap: spacing.sm, padding: spacing.sm, minHeight: 80 }}>
               {laneItems.map((t) => (
                 <View key={t.id} ref={mayEdit(t, statusCol) ? makeDraggable : undefined} dataSet={{ boardCard: String(t.id) }}>
                   <KanbanCard

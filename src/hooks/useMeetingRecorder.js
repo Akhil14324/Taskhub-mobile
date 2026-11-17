@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const PIECE_MS = 60 * 1000; // each piece is a complete one-minute file, sent as soon as it is finished
-const BITRATE = 32000; // speech needs little; a minute is about 240 KB
+const PIECE_MS = 20 * 1000; // each piece is a complete twenty-second file, sent as soon as it is finished, so the text is near-live
+const BITRATE = 32000; // speech needs little; a piece is about 80 KB
 const RETRY_STEPS_MS = [3000, 8000, 20000, 45000, 90000]; // then every 90 s while the page is open
 
 /**
- * Records the microphone (and, on a computer, the tab audio of a shared meeting) in numbered one-minute pieces
+ * Records the microphone (and, on a computer, the tab audio of a shared meeting) in numbered twenty-second pieces
  * for as long as the meeting runs (F-MTG-02). `send(blob, { pieceNo, durationMs })` uploads one piece; a piece
  * that fails is kept and retried (after a pause, and at once when the connection comes back), so a dropped
  * network loses nothing. The server ignores a piece number it already has, so a retry never doubles the text.
@@ -117,9 +117,10 @@ export default function useMeetingRecorder({ send, onError }) {
     recorder.start();
     r.recorder = recorder;
     r.timer = setTimeout(() => {
+      // The next piece starts before this one is closed, so no word falls in a gap between two pieces.
+      if (r.active) segment();
       if (recorder.state !== 'inactive') recorder.stop();
       setPieces((n) => n + 1);
-      if (r.active) segment();
     }, PIECE_MS);
   };
 

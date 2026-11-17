@@ -6,42 +6,36 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
-import { useEngage } from '../context/EngageContext';
-import { useChat } from '../context/ChatContext';
 import { useColors, useTheme } from '../context/ThemeContext';
-import { useLang } from '../context/LanguageContext';
 import useAi from '../hooks/useAi';
-import HomeGrid from '../components/home/HomeGrid';
+import HomeDashboard from '../components/home/HomeDashboard';
 import { useHomeStats } from '../components/home/HomeWidgets';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import QuickAddSheet from '../components/todos/QuickAddSheet';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
-import { IconButton, ProgressRing, TodoCheckbox, DueChip } from '../components/kit';
+import { IconButton } from '../components/kit';
 import useIsDesktop from '../hooks/useBreakpoint';
-import { greeting, todayYmd, toYmd, WEEKDAYS, MONTHS_SHORT, WEEKDAYS_SHORT, parseYmd } from '../utils/dates';
+import { greeting, WEEKDAYS, MONTHS_SHORT } from '../utils/dates';
 import { pushEnvironment } from '../services/webPush';
 import { showToast } from '../utils/events';
 import { glass } from '../theme/glass';
 
 /**
- * Home. The daily report and the team graph (completed and pending work, attendance) come first, then my own
- * day and the business work given to me. The to-do store feeds the personal panels; the team data is fetched.
+ * Home: the greeting and any banner, then the dashboard (components/home/HomeDashboard.jsx). The to-do store
+ * feeds every panel; only the team panels fetch.
  */
 export default function HomeScreen() {
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
-  const { lang, toggleLang } = useLang();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
-  const { todos, businesses, insights, fetchTodos, fetchInsights, toggleTodo } = useTodos();
+  const { todos, fetchTodos, fetchInsights, toggleTodo } = useTodos();
   const { unreadCount, pushState, enablePush, refreshCounts } = useNotifications();
-  const { totalUnread } = useChat();
-  const { myDay } = useEngage();
   const ai = useAi();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -56,109 +50,20 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchTodos, fetchInsights, refreshCounts, refreshUser]);
 
-  const today = todayYmd();
   const meId = user?.id;
   const firstName = (user?.name || '').split(' ').find((p) => p.length > 1) || user?.name || '';
   const notPlaced = !user?.is_leader && !(user?.memberships || []).length;
   const d = new Date();
 
-  // ---- my to-dos -----------------------------------------------------------
-  const personal = useMemo(() => todos.filter((t) => !t.business_id), [todos]);
-  const personalToday = useMemo(
-    () => personal.filter((t) => t.due_date === today || (!t.due_date && t.is_done && t.done_at && toYmd(new Date(t.done_at)) === today)),
-    [personal, today]
-  );
-  const overduePersonal = personal.filter((t) => !t.is_done && t.due_date && t.due_date < today);
-  const dueNow = [...overduePersonal, ...personalToday.filter((t) => !t.is_done)];
-  const doneToday = personalToday.filter((t) => t.is_done).length;
-  const totalToday = dueNow.length + doneToday;
-  const percent = totalToday ? Math.round((doneToday / totalToday) * 100) : 0;
-  const weekMax = Math.max(1, ...(insights?.week || []).map((x) => x.count));
-
-  // ---- business work given to me (the team graph covers everyone else) ----
-  const assignedToMe = useMemo(
-    () => todos
-      .filter((t) => t.business_id && !t.is_done && t.assignee_id === meId && t.review_state === 'accepted')
-      .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999') || a.priority - b.priority)
-      .slice(0, 6),
-    [todos, meId]
-  );
   const tryEnablePush = async () => {
     const result = await enablePush();
     if (result === 'granted') showToast({ message: 'Notifications are on', tone: 'success' });
     else if (result === 'denied') showToast({ message: 'Notifications are blocked in your browser settings', tone: 'error' });
   };
 
-  const personalPanel = (
-    <View {...glass('card')} style={styles.panel}>
-      <View style={styles.panelHead}>
-        <View style={styles.panelTitleRow}>
-          <Ionicons name="person-outline" size={16} color={colors.brand[600]} />
-          <Text style={styles.panelTitle}>Today</Text>
-        </View>
-        <AnimatedPressable style={styles.addBtn} onPress={() => setAddOpen(true)} accessibilityLabel="Add a to-do">
-          <Ionicons name="add" size={18} color="#fff" />
-          <Text style={styles.addBtnText}>Add</Text>
-        </AnimatedPressable>
-      </View>
-
-      <View style={styles.todayRow}>
-        <ProgressRing percent={percent} size={64} stroke={6} color={colors.brand[600]}>
-          <Text style={styles.ringValue}>{doneToday}/{totalToday}</Text>
-        </ProgressRing>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.bigLine}>{doneToday} of {totalToday} done</Text>
-          <Text style={styles.mutedLine}>
-            {totalToday === 0 ? 'Nothing scheduled. Plan your day.'
-              : dueNow.length === 0 ? 'Everything is done.'
-                : `${dueNow.length} left${overduePersonal.length ? `, ${overduePersonal.length} overdue` : ''}`}
-          </Text>
-          {!!insights?.streak && <Text style={styles.streak}>{insights.streak}-day streak</Text>}
-        </View>
-      </View>
-
-      {/* The full list lives in My day and the Inbox; Home only says how the day is going and where to go. */}
-      <AnimatedPressable onPress={() => navigation.navigate('Progress', { tab: 'today' })} style={styles.linkRow}>
-        <Text style={styles.link}>Plan my day</Text>
-        <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
-      </AnimatedPressable>
-      <AnimatedPressable onPress={() => navigation.navigate('Todos')} style={styles.linkRow}>
-        <Text style={styles.link}>Open my Inbox{personal.filter((t) => !t.is_done && !t.due_date && !t.list_id).length ? ` · ${personal.filter((t) => !t.is_done && !t.due_date && !t.list_id).length} waiting` : ''}</Text>
-        <Ionicons name="arrow-forward" size={14} color={colors.brand[600]} />
-      </AnimatedPressable>
-    </View>
-  );
-
-  // Business work assigned to me. The same tasks also sit in my To-do; the whole team is on the graph above.
-  const assignedPanel = assignedToMe.length > 0 ? (
-    <View {...glass('card')} style={styles.panel}>
-      <View style={styles.panelHead}>
-        <View style={styles.panelTitleRow}>
-          <Ionicons name="briefcase-outline" size={16} color={colors.brand[600]} />
-          <Text style={styles.panelTitle}>Business work for you</Text>
-        </View>
-      </View>
-      <View style={styles.list}>
-        {assignedToMe.map((t) => (
-          <View key={t.id} style={styles.row}>
-            <TodoCheckbox checked={t.is_done} priority={t.priority} onPress={() => toggleTodo(t)} size={20} />
-            <AnimatedPressable style={{ flex: 1 }} onPress={() => setOpenTodoId(t.id)}>
-              <Text style={styles.rowTitle} numberOfLines={1}>{t.title}</Text>
-              <View style={styles.rowMeta}>
-                <Text style={styles.metaTag}>{t.business_name}</Text>
-                {!!t.due_date && <DueChip date={t.due_date} compact />}
-              </View>
-            </AnimatedPressable>
-          </View>
-        ))}
-      </View>
-    </View>
-  ) : null;
-
   const stats = useHomeStats(todos, meId);
   const ctx = {
-    stats, todos, insights, myDay, reportKey, assignedToMe, toggleTodo,
-    doneToday, totalToday, dueNow, overduePersonal,
+    stats, todos, reportKey, toggleTodo,
     go: (name, params) => navigation.navigate(name, params),
     openAdd: () => setAddOpen(true),
     openTodo: (id) => setOpenTodoId(id),
@@ -175,13 +80,19 @@ export default function HomeScreen() {
             <Text style={styles.date}>{WEEKDAYS[d.getDay()]}, {d.getDate()} {MONTHS_SHORT[d.getMonth()]}</Text>
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.name} numberOfLines={1}>{firstName}</Text>
-            {!!user?.display_title && (
+            {!!user?.display_title && !user?.is_owner && (
               <Text style={styles.role} numberOfLines={1}>
                 {user.display_title}
                 {user.memberships?.length ? ` · ${user.memberships.map((m) => m.business_name).join(', ')}` : ''}
               </Text>
             )}
           </View>
+          {desktop && (
+            <AnimatedPressable style={styles.addBtn} onPress={() => setAddOpen(true)}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.addBtnText}>Add task</Text>
+            </AnimatedPressable>
+          )}
           {!desktop && <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />}
           {ai && <IconButton icon="sparkles-outline" onPress={() => navigation.navigate('Assistant')} />}
           {!desktop && <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />}
@@ -214,16 +125,8 @@ export default function HomeScreen() {
         )}
 
 
-        <HomeGrid ctx={ctx} desktop={desktop} userId={meId} />
+        <HomeDashboard ctx={ctx} user={user} />
 
-        {!desktop && (
-          <View style={styles.quickGrid}>
-            <Quick icon="checkbox-outline" label="Add to-do" onPress={() => setAddOpen(true)} />
-            <Quick icon="chatbubbles-outline" label={totalUnread ? `Chats · ${totalUnread}` : 'Chats'} onPress={() => navigation.navigate('ChatList')} />
-            {user?.can_monitor && <Quick icon="speedometer-outline" label="Team monitor" onPress={() => navigation.navigate('TeamMonitor')} />}
-            <Quick icon="git-network-outline" label="Organisation" onPress={() => navigation.navigate('Organization')} />
-          </View>
-        )}
       </ScrollView>
 
       <QuickAddSheet visible={addOpen} onClose={() => setAddOpen(false)} defaults={{}} />
@@ -232,32 +135,14 @@ export default function HomeScreen() {
   );
 }
 
-function Quick({ icon, label, onPress }) {
-  const colors = useColors();
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      style={{
-        width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md,
-        backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200],
-      }}
-    >
-      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand[100], alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={17} color={colors.brand[700]} />
-      </View>
-      <Text style={{ flex: 1, fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[800] }} numberOfLines={1}>{label}</Text>
-    </AnimatedPressable>
-  );
-}
-
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg },
   contentDesktop: { paddingHorizontal: spacing.xl, maxWidth: 2200, width: '100%', alignSelf: 'center' },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, marginBottom: spacing.xl },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.lg },
   date: { fontSize: fontSize.sm, color: colors.gray[500], fontWeight: '600' },
-  greeting: { fontSize: fontSize.md, color: colors.gray[500], fontWeight: '500', marginTop: 6 },
-  name: { fontSize: fontSize.xxxl, fontWeight: '800', color: colors.gray[900], letterSpacing: -0.7, marginTop: 0 },
+  greeting: { fontSize: fontSize.base, color: colors.gray[500], fontWeight: '500', marginTop: 4 },
+  name: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.gray[900], letterSpacing: -0.5, marginTop: 0 },
   role: { fontSize: fontSize.sm, color: colors.brand[600], fontWeight: '600', marginTop: 4 },
   langBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   langText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[600] },
@@ -289,7 +174,7 @@ const createStyles = (colors) => StyleSheet.create({
   panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.lg },
   panelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   panelTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.gray[900] },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, backgroundColor: colors.brand[600] },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md, backgroundColor: colors.brand[600] },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
   todayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.md },
   ringValue: { fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[800] },

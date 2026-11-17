@@ -5,6 +5,7 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize, PALETTE, PALETTE_NAMES, BRAND } from '../../theme/theme';
 import { Avatar, PRIORITY } from '../kit';
 import { formatDue, daysFromToday, timeAgo } from '../../utils/dates';
+import useLoad, { loadText } from '../../hooks/useLoad';
 import {
   cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn,
 } from './model';
@@ -13,7 +14,7 @@ import {
  * What a board's cells may need besides their own value: titles of linked items (Connect boards), the files of
  * Files cells, who is looking (votes) and whether AI is set up. Provided by BoardScreen.
  */
-export const BoardMeta = createContext({ linked: {}, attachments: {}, meId: null, aiEnabled: false });
+export const BoardMeta = createContext({ linked: {}, attachments: {}, mirrors: {}, meId: null, aiEnabled: false });
 
 function clockIn(zone) {
   try {
@@ -85,6 +86,64 @@ function Chips({ chips }) {
   );
 }
 
+/**
+ * A mirror cell drawn like the column it mirrors: a status as its coloured label (one linked task fills the
+ * cell, several share it), dates as dates, people as faces, ticks, stars and numbers as themselves.
+ */
+function MirrorValue({ values, look, compact }) {
+  const colors = useColors();
+  const kind = look?.kind;
+  const text = { fontSize: 13, color: colors.gray[800] };
+  if (kind === 'status') {
+    const labels = values.slice(0, 4).map((x) => ({ label: String(x), color: look.colors?.[x] || 'grey' }));
+    if (labels.length === 1) return <StatusPill compact={compact} label={labels[0]} />;
+    if (compact) return <Chips chips={labels.map((l, i) => ({ key: `${i}`, ...l }))} />;
+    return (
+      <View style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row' }}>
+        {labels.map((l, i) => (
+          <View key={i} accessibilityLabel={l.label} dataSet={{ tip: l.label }} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: paletteHex(l.color), paddingHorizontal: 4 }}>
+            <Text numberOfLines={1} style={{ color: paletteInk(l.color), fontSize: 12, fontWeight: '500' }}>{l.label}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+  if (kind === 'dropdown' || kind === 'tags' || look?.system_key === 'labels') {
+    const parts = values.flatMap((x) => String(x).split(',')).map((x) => x.trim()).filter(Boolean);
+    return <Chips chips={[...new Set(parts)].slice(0, 3).map((x) => ({ key: x, label: x, color: look.colors?.[x] }))} />;
+  }
+  if (kind === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(values[0]))) {
+    return values.length === 1
+      ? <DateText ymd={String(values[0]).slice(0, 10)} />
+      : <Text numberOfLines={1} style={text}>{values.slice(0, 3).map((x) => formatDue(String(x).slice(0, 10))).join(', ')}</Text>;
+  }
+  if (kind === 'person') {
+    const names = [...new Set(values.flatMap((x) => String(x).split(',')).map((x) => x.trim()).filter(Boolean))];
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {names.slice(0, 3).map((n, i) => <View key={n} style={{ marginLeft: i ? -8 : 0 }} accessibilityLabel={n} dataSet={{ tip: n }}><Avatar name={n} size={26} /></View>)}
+        {names.length === 1 && !compact && <Text numberOfLines={1} style={[text, { marginLeft: 6, flexShrink: 1 }]}>{names[0]}</Text>}
+        {names.length > 3 && <Text style={{ marginLeft: 4, fontSize: 12, color: colors.gray[600] }}>+{names.length - 3}</Text>}
+      </View>
+    );
+  }
+  if (kind === 'checkbox') {
+    const on = values.filter((x) => x === true).length;
+    return values.length === 1
+      ? <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={on ? colors.green[600] : colors.gray[400]} />
+      : <Text style={text}>{on} of {values.length}</Text>;
+  }
+  if (kind === 'rating' && values.length === 1) return <Stars value={Number(values[0]) || 0} max={look.max || 5} />;
+  if (kind === 'numbers' || kind === 'rating' || kind === 'progress') {
+    const nums = values.map(Number).filter((n) => Number.isFinite(n));
+    if (nums.length === values.length) {
+      const sum = nums.reduce((a, b) => a + b, 0);
+      return <Text numberOfLines={1} style={[text, { textAlign: 'right', alignSelf: 'stretch' }]}>{formatNumber(sum, { unit: look.unit })}{kind === 'progress' ? '%' : ''}</Text>;
+    }
+  }
+  return <Chips chips={values.slice(0, 3).map((x, i) => ({ key: `${i}`, label: String(x) }))} />;
+}
+
 function Stars({ value, max = 5, onSet }) {
   return (
     <View style={{ flexDirection: 'row', gap: 1 }}>
@@ -117,7 +176,8 @@ export const CellView = memo(function CellView({ item, column, values, people, c
     return <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], textAlign: typeof v === 'number' ? 'right' : 'left', alignSelf: 'stretch' }}>{typeof v === 'number' ? formatNumber(v, s) : String(v)}</Text>;
   }
   if (column.kind === 'mirror') {
-    return Array.isArray(v) && v.length ? <Chips chips={v.slice(0, 3).map((x, i) => ({ key: `${i}`, label: String(x) }))} /> : <Empty />;
+    if (!Array.isArray(v) || !v.length) return <Empty />;
+    return <MirrorValue values={v} look={meta.mirrors?.[column.id]} compact={compact} />;
   }
   if (column.kind === 'board_relation') {
     const titles = (v || []).map((id) => meta.linked?.[id]).filter(Boolean);
@@ -439,6 +499,7 @@ export function PersonEditor({ selected, multiple, candidates, onDone }) {
   const colors = useColors();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState(selected || []);
+  const load = useLoad();
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return candidates.filter((p) => !s || p.name?.toLowerCase().includes(s) || p.username?.toLowerCase().includes(s)).slice(0, 40);
@@ -454,7 +515,7 @@ export function PersonEditor({ selected, multiple, candidates, onDone }) {
         {list.map((p) => (
           <Row key={p.id} active={picked.includes(p.id)} onPress={() => choose(p.id)} label={p.name}
             icon={<Avatar name={p.name} uri={p.profile_picture} size={22} />}
-            right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>@{p.username}</Text>}
+            right={<Text numberOfLines={1} style={{ fontSize: 12, color: load[p.id]?.late ? colors.red[600] : colors.gray[500] }}>{loadText(load[p.id])}</Text>}
           />
         ))}
         {!list.length && <Text style={{ padding: spacing.sm, color: colors.gray[500] }}>Nobody matches.</Text>}

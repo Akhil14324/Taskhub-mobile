@@ -213,8 +213,8 @@ export default function TeamMonitorScreen() {
 
         {team && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: desktop ? 0 : spacing.lg, marginTop: desktop ? spacing.md : 0 }}>
-            {kpis.map(([label, value, tone, icon]) => <Kpi key={label} label={label} value={value} tone={tone} icon={icon} />)}
-            <Kpi label="On time" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} tone={team.on_time_rate === null ? 'grey' : team.on_time_rate >= 80 ? 'green' : team.on_time_rate >= 50 ? 'orange' : 'red'} icon="timer-outline" />
+            {kpis.map(([label, value, tone, icon]) => <Kpi key={label} label={label} value={value} tone={tone} icon={icon} small={!desktop} />)}
+            <Kpi label="On time" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} tone={team.on_time_rate === null ? 'grey' : team.on_time_rate >= 80 ? 'green' : team.on_time_rate >= 50 ? 'orange' : 'red'} icon="timer-outline" small={!desktop} />
           </View>
         )}
         {team && (
@@ -248,16 +248,16 @@ export default function TeamMonitorScreen() {
 }
 
 /** A number with a label and a coloured edge: the tiles along the top. */
-function Kpi({ label, value, tone, icon }) {
+function Kpi({ label, value, tone, icon, small }) {
   const colors = useColors();
-  const edge = { blue: '#0073ea', green: '#00c875', red: '#e2445c', orange: '#fdab3d', grey: colors.gray[300] }[tone] || colors.gray[300];
+  const edge = { blue: '#D4621A', green: '#00c875', red: '#e2445c', orange: '#fdab3d', grey: colors.gray[300] }[tone] || colors.gray[300];
   return (
-    <View style={{ flexGrow: 1, flexBasis: 150, minWidth: 140, borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: edge, backgroundColor: colors.white, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200], padding: spacing.md, gap: 2 }}>
+    <View style={{ flexGrow: 1, flexBasis: small ? '22%' : 150, minWidth: small ? 76 : 140, borderRadius: radius.lg, borderLeftWidth: small ? 3 : 4, borderLeftColor: edge, backgroundColor: colors.white, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200], padding: small ? 8 : spacing.md, gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Ionicons name={icon} size={14} color={colors.gray[500]} />
-        <Text numberOfLines={1} style={{ fontSize: fontSize.xs, color: colors.gray[600] }}>{label}</Text>
+        {!small && <Ionicons name={icon} size={14} color={colors.gray[500]} />}
+        <Text numberOfLines={1} style={{ fontSize: small ? 11 : fontSize.xs, color: colors.gray[600] }}>{label}</Text>
       </View>
-      <Text style={{ fontSize: 28, fontWeight: '800', color: colors.gray[900] }}>{value}</Text>
+      <Text style={{ fontSize: small ? 20 : 28, fontWeight: '700', color: colors.gray[900] }}>{value}</Text>
     </View>
   );
 }

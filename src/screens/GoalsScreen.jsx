@@ -198,7 +198,7 @@ export default function GoalsScreen({ embedded = false }) {
 }
 
 const styles = StyleSheet.create({
-  action: { fontSize: fontSize.sm, fontWeight: '800', color: '#0073ea' },
+  action: { fontSize: fontSize.sm, fontWeight: '800', color: '#D4621A' },
 });
 
 const createStyles = (colors) => StyleSheet.create({

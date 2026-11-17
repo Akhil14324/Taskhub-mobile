@@ -42,8 +42,8 @@ export default function useTimeboxDnd({ enabled, onDrop }) {
       if (over !== slot) {
         clear();
         over = slot;
-        slot.style.boxShadow = 'inset 0 0 0 2px #0073ea';
-        slot.style.background = 'rgba(0,115,234,0.12)';
+        slot.style.boxShadow = 'inset 0 0 0 2px #D4621A';
+        slot.style.background = 'rgba(212,98,26,0.14)';
       }
     };
     const onDropEvent = (e) => {

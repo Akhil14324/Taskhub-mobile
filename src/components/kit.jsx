@@ -47,11 +47,11 @@ export const darkestRed = () => (darkMode ? '#f0697f' : '#d83a52');
 export const PRIORITY = {
   1: { label: 'Priority 1', short: 'P1', get color() { return darkestRed(); } },
   2: { label: 'Priority 2', short: 'P2', get color() { return darkMode ? '#fec26f' : '#e8932a'; } },
-  3: { label: 'Priority 3', short: 'P3', get color() { return darkMode ? '#8dbbfd' : '#0073ea'; } },
+  3: { label: 'Priority 3', short: 'P3', get color() { return darkMode ? '#8dbbfd' : '#D4621A'; } },
   4: { label: 'Priority 4', short: 'P4', color: '#9699a6' },
 };
 
-const AVATAR_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#a25ddc', '#e2445c', '#579bfc', '#037f4c', '#ff158a', '#5559df', '#7f5347'];
+const AVATAR_COLORS = ['#D4621A', '#00c875', '#fdab3d', '#a25ddc', '#e2445c', '#579bfc', '#037f4c', '#ff158a', '#5559df', '#7f5347'];
 
 function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
