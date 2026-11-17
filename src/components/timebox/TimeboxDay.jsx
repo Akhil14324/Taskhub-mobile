@@ -11,6 +11,7 @@ import useTimeboxDnd, { makeDraggable } from '../../hooks/useTimeboxDnd';
 import { Avatar } from '../kit';
 import { formatTime, formatDue, todayYmd, addDays, toYmd } from '../../utils/dates';
 import { showToast } from '../../utils/events';
+import { getItemAsync, setItemAsync } from '../../utils/secureStorage';
 import { paletteHex, paletteInk } from '../board/model';
 import DayReportSheet from './DayReportSheet';
 import {
@@ -586,7 +587,7 @@ export default function TimeboxDay({ data, box, update, onSend, onOpenTodo }) {
   // What is planned here is written back to the to-do itself: its date, its start time and how long it takes
   // (the length of the block). It runs after the box has saved, only for blocks that changed since the day was
   // opened, so merely looking at a day never rewrites anything. A task the person may not edit is reported.
-  const { updateTodo } = useTodos();
+  const { updateTodo, todos } = useTodos();
   const synced = useRef({ date: null, sig: new Map() });
   useEffect(() => {
     if (!data?.mine || !data.can_edit || data.date !== date) return undefined;
@@ -617,6 +618,53 @@ export default function TimeboxDay({ data, box, update, onSend, onOpenTodo }) {
   }, [box.blocks, date, data, updateTodo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markSynced = useCallback((id, b) => { synced.current.sig.set(id, `${date}|${b.start}|${b.end}`); }, [date]);
+  // Work finished on this day that has a real time (its own date and time, set on the to-do) goes onto the schedule
+  // by itself, as a block marked done: it starts at the to-do's time and lasts as long as its time estimate (half an
+  // hour when there is none, the smallest block), widened to whole half hours. Nothing is guessed: no time, no block.
+  // A clash with something already planned is left alone, and a block the person removes stays removed.
+  const me = useAuth().user;
+  const boxRef = useRef(box);
+  boxRef.current = box;
+  useEffect(() => {
+    if (!data?.mine || !data.can_edit || data.date !== date || date > todayYmd()) return undefined;
+    let cancelled = false;
+    (async () => {
+      const key = `timebox.skip.${date}`;
+      let skip = [];
+      try { skip = JSON.parse((await getItemAsync(key)) || '[]'); } catch { skip = []; }
+      if (cancelled) return;
+      const have = new Set(boxRef.current.blocks.map((b) => b.todo_id).filter(Boolean));
+      const dayOf = (t) => (t.done_at ? toYmd(new Date(t.done_at)) : null);
+      const mine = (t) => (t.assignee_id ? t.assignee_id === me?.id : t.created_by === me?.id || (t.members || []).some((m) => m.id === me?.id));
+      const cands = todos
+        .filter((t) => t.is_done && t.due_time && dayOf(t) === date && t.due_date === date && mine(t) && !have.has(t.id) && !skip.includes(t.id) && typeof t.id === 'number')
+        .sort((a, b) => (a.due_time < b.due_time ? -1 : 1));
+      if (!cands.length) return;
+      let blocks = boxRef.current.blocks;
+      const added = [];
+      const clashedIds = [];
+      let clashed = 0;
+      for (const t of cands) {
+        const startRaw = toMin(t.due_time.slice(0, 5));
+        const start = Math.floor(startRaw / STEP) * STEP;
+        const minutes = Math.max(STEP, Math.ceil(((startRaw - start) + (t.duration_minutes || STEP)) / STEP) * STEP);
+        const next = addBlock(blocks, start, { text: t.title, todo_id: t.id, done: true }, minutes);
+        if (!next) { clashed += 1; clashedIds.push(t.id); continue; } // its time is taken; it can still be added from My work
+        blocks = next;
+        added.push(t);
+      }
+      if (clashed) showToast({ message: `${clashed} finished task${clashed > 1 ? 's' : ''} clash with planned time. Add ${clashed > 1 ? 'them' : 'it'} from My work.`, icon: 'alert-circle-outline' });
+      if (!added.length && !clashed) return;
+      // Remember first (a block that is removed later must not come back), then write the blocks.
+      try { await setItemAsync(key, JSON.stringify([...skip, ...clashedIds, ...added.map((t) => t.id)])); } catch { /* storage blocked */ }
+      if (!added.length) return;
+      added.forEach((t) => markSynced(t.id, blocks.find((x) => x.todo_id === t.id)));
+      update((b) => ({ ...b, blocks }));
+      showToast({ message: added.length === 1 ? '1 finished task added to your timebox' : `${added.length} finished tasks added to your timebox`, icon: 'checkmark-circle-outline', tone: 'success' });
+    })();
+    return () => { cancelled = true; };
+  }, [data?.date, data?.mine, data?.can_edit, date, todos]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onPlace = useCallback((item) => setPlacing((p) => (p && p.text === item.text ? null : item)), []);
   const parts = useMemo(() => ({
     top: <TopThree box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} />,
