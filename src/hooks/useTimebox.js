@@ -88,5 +88,17 @@ export default function useTimebox(date, userId = null) {
     }
   }, [date, save]);
 
-  return { data, box, update, saving, error, send, reload: load };
+  // Wrong day: move the whole box to another day (the server keeps a sent box sent and never overwrites a day).
+  const move = useCallback(async (to) => {
+    if (!(await save())) return false;
+    try {
+      await api.post(`/timebox/day/${date}/move`, { to });
+      return true;
+    } catch (e) {
+      showToast({ message: e?.response?.data?.error || 'Could not move it', icon: 'alert-circle-outline' });
+      return false;
+    }
+  }, [date, save]);
+
+  return { data, box, update, saving, error, send, move, reload: load };
 }

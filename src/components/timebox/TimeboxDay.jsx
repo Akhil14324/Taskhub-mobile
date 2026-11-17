@@ -10,7 +10,7 @@ import useIsDesktop from '../../hooks/useBreakpoint';
 import useTimeboxDnd, { makeDraggable } from '../../hooks/useTimeboxDnd';
 import { Avatar } from '../kit';
 import { formatTime, formatDue, todayYmd, addDays, toYmd } from '../../utils/dates';
-import { showToast } from '../../utils/events';
+import { showToast, confirmDialog } from '../../utils/events';
 import { getItemAsync, setItemAsync } from '../../utils/secureStorage';
 import { paletteHex, paletteInk } from '../board/model';
 import DayReportSheet from './DayReportSheet';
@@ -514,7 +514,46 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
   );
 }
 
-function EndOfDay({ data, box, update, readOnly, onSend, mine }) {
+/** "This is the wrong day": pick the right one among the last week's days that have nothing on them. */
+function WrongDay({ date, onMove }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const today = todayYmd();
+  const days = Array.from({ length: 8 }, (_, i) => addDays(today, -i)).filter((d) => d !== date);
+  const pick = async (to) => {
+    const ok = await confirmDialog({
+      title: 'Move this whole timebox?',
+      message: `Everything in it, and its sent status, moves from ${formatDue(date)} to ${formatDue(to)}. The people above you will see it on ${formatDue(to)}. Tasks linked to its blocks get that date too.`,
+      confirmLabel: 'Move it',
+    });
+    if (!ok) return;
+    setBusy(true);
+    await onMove(to);
+    setBusy(false);
+    setOpen(false);
+  };
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable onPress={() => setOpen((o) => !o)} style={{ alignSelf: 'flex-start' }}>
+        <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>{open ? 'Cancel' : 'Is this the wrong day?'}</Text>
+      </Pressable>
+      {open && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, color: colors.gray[500] }}>It belongs to:</Text>
+          {days.map((d) => (
+            <Pressable key={d} disabled={busy} onPress={() => pick(d)} style={({ hovered }) => ({ paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : colors.white, opacity: busy ? 0.5 : 1 })}>
+              <Text style={{ fontSize: 13, color: colors.gray[800] }}>{d === today ? 'Today' : d === addDays(today, -1) ? 'Yesterday' : formatDue(d)}</Text>
+            </Pressable>
+          ))}
+          <Text style={{ fontSize: 12, color: colors.gray[500], width: '100%' }}>Only a day with nothing on it can be chosen.</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function EndOfDay({ data, box, update, readOnly, onSend, onMove, mine }) {
   const colors = useColors();
   const [sending, setSending] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -555,6 +594,7 @@ function EndOfDay({ data, box, update, readOnly, onSend, mine }) {
               <Ionicons name="paper-plane" size={15} color={colors.green[600]} />
               <Text style={{ fontSize: 13, color: colors.gray[700] }}>Sent at {new Date(data.submitted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. It is locked now.</Text>
             </View>
+            {mine && !!onMove && <WrongDay date={data.date} onMove={onMove} />}
             {mine && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <Text style={{ fontSize: 13, color: colors.gray[500] }}>{data.seen_by?.length ? 'Seen by' : 'Nobody has opened it yet.'}</Text>
@@ -589,7 +629,7 @@ function EndOfDay({ data, box, update, readOnly, onSend, mine }) {
  * One day's timebox: the classic page of brain dump, top three and half-hour blocks, plus the end-of-day card.
  * Editable for its owner until it is sent; read-only for everyone else (and for the owner afterwards).
  */
-export default function TimeboxDay({ data, box, update, onSend, onOpenTodo }) {
+export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTodo }) {
   const desktop = useIsDesktop();
   const [placing, setPlacing] = useState(null);
   const mine = !!data?.mine;
@@ -684,13 +724,21 @@ export default function TimeboxDay({ data, box, update, onSend, onOpenTodo }) {
     return () => { cancelled = true; };
   }, [data?.date, data?.mine, data?.can_edit, date, todos]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Moving a day also moves the dates of the to-dos its blocks are linked to, which the schedule had stamped on them.
+  const moveDay = useCallback(async (to) => {
+    const linked = box.blocks.filter((b) => b.todo_id);
+    const ok = await onMove(to);
+    if (ok) for (const b of linked) { try { await updateTodo(b.todo_id, { due_date: to }); } catch { /* not allowed to edit it: leave it */ } }
+    return ok;
+  }, [box.blocks, onMove, updateTodo]);
+
   const onPlace = useCallback((item) => setPlacing((p) => (p && p.text === item.text ? null : item)), []);
   const parts = useMemo(() => ({
     top: <TopThree box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} />,
     dump: (!readOnly || box.brain_dump.length > 0) && <BrainDump box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} />,
     schedule: <Schedule box={box} update={update} readOnly={readOnly} date={date} placing={placing} setPlacing={setPlacing} onOpenTodo={onOpenTodo} markSynced={markSynced} />,
-    end: <EndOfDay data={data} box={box} update={update} readOnly={readOnly} onSend={onSend} mine={mine} />,
-  }), [box, update, readOnly, onPlace, placing, date, onOpenTodo, data, onSend, mine, markSynced]);
+    end: <EndOfDay data={data} box={box} update={update} readOnly={readOnly} onSend={onSend} onMove={onMove ? moveDay : null} mine={mine} />,
+  }), [box, update, readOnly, onPlace, placing, date, onOpenTodo, data, onSend, mine, markSynced, onMove, moveDay]);
 
   if (desktop) {
     return (

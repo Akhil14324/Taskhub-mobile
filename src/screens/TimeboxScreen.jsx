@@ -83,6 +83,12 @@ export default function TimeboxScreen() {
     if (ok) showToast({ message: 'Timebox sent. The people above you can read it now.', icon: 'paper-plane' });
   }, [tb]);
 
+  const move = useCallback(async (to) => {
+    const ok = await tb.move(to);
+    if (ok) { setDate(to); showToast({ message: `Moved to ${formatDayHeader(to)}`, icon: 'swap-horizontal', tone: 'success' }); }
+    return ok;
+  }, [tb]);
+
   const pad = desktop ? spacing.xl : spacing.md;
   const showTeam = tab === 'team' && !person;
   const title = person ? person.name : 'Timebox';
@@ -135,7 +141,7 @@ export default function TimeboxScreen() {
             <Text style={{ fontSize: 13, color: colors.gray[500] }}>You can read it once it is sent.</Text>
           </View>
         ) : (
-          <TimeboxDay data={tb.data} box={tb.box} update={tb.update} onSend={send} onOpenTodo={setOpenId} />
+          <TimeboxDay data={tb.data} box={tb.box} update={tb.update} onSend={send} onMove={move} onOpenTodo={setOpenId} />
         )}
       </ScrollView>
       <TodoDetailSheet todoId={openId} onClose={() => setOpenId(null)} />
