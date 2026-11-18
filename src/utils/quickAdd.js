@@ -237,3 +237,19 @@ export function detectDelegate(text, people = [], meId = null) {
   if (hits.length !== 1) return null;
   return { person: hits[0], rest: cap(rest.trim().replace(/[,\s]+$/, '')) };
 }
+
+/**
+ * Only the people in a line of text (used where a date or time is already decided, like the timebox):
+ * "@me" is an instruction and leaves the title; other @names stay in it. Returns { title, me, mentions }.
+ */
+export function peopleTags(input) {
+  let text = ` ${input || ''} `;
+  const me = /(^|\s)@me(?=[\s,.!?]|$)/i.test(text);
+  if (me) text = text.replace(/(^|\s)@me(?=[\s,.!?]|$)/gi, ' ');
+  const mentions = [];
+  for (const m of text.matchAll(/(^|\s)@([A-Za-z0-9._-]{2,30})/g)) {
+    const name = m[2].replace(/[.-]+$/, '');
+    if (!mentions.some((x) => x.toLowerCase() === name.toLowerCase())) mentions.push(name);
+  }
+  return { title: text.replace(/\s+/g, ' ').trim(), me, mentions };
+}

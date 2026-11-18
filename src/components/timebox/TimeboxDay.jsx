@@ -9,6 +9,9 @@ import { glass } from '../../theme/glass';
 import useIsDesktop from '../../hooks/useBreakpoint';
 import useTimeboxDnd, { makeDraggable } from '../../hooks/useTimeboxDnd';
 import { Avatar } from '../kit';
+import MentionSuggestions from '../MentionSuggestions';
+import useDirectory, { filterPeople } from '../../hooks/useDirectory';
+import { peopleTags, activeMentionQuery, completeMention } from '../../utils/quickAdd';
 import { formatTime, formatDue, todayYmd, addDays, toYmd } from '../../utils/dates';
 import { showToast, confirmDialog } from '../../utils/events';
 import { getItemAsync, setItemAsync } from '../../utils/secureStorage';
@@ -74,29 +77,67 @@ function DoneMark({ value, onPress, disabled }) {
  */
 function useAddToTodo(date) {
   const { createTodo, updateTodo, todos } = useTodos();
+  const { user } = useAuth();
+  const { people } = useDirectory();
   const todosRef = useRef(todos);
   todosRef.current = todos;
+  const peopleRef = useRef(people);
+  peopleRef.current = people;
   const busy = useRef(new Set());
   const on = !!date && date >= todayYmd();
+  /**
+   * @people hand the to-do to them (one: assigned, several: shared) and keep it off my list; with @me it is on my
+   * list as well (one other person is assigned, several are shared). "@me" leaves the title.
+   */
+  const withPeople = useCallback((text) => {
+    const tags = peopleTags(text);
+    const ments = tags.mentions
+      .map((u) => peopleRef.current.find((p) => p.username?.toLowerCase() === u.toLowerCase()))
+      .filter((p) => p && p.id !== user?.id);
+    const me = tags.me || tags.mentions.some((u) => u.toLowerCase() === user?.username?.toLowerCase());
+    let fields = {};
+    if (ments.length) {
+      if (!me) fields = ments.length === 1 ? { mention_ids: [], delegate_to: ments[0].id } : { mention_ids: [], delegate_ids: ments.map((p) => p.id) };
+      else fields = { mention_ids: ments.map((p) => p.id), assign_to: ments.length === 1 ? ments[0].id : undefined };
+    }
+    return { title: tags.title, fields };
+  }, [user]);
   const add = useCallback((payload, onLinked) => {
-    const title = (payload.title || '').trim();
-    const key = `${title}|${payload.due_time || ''}`;
-    if (!on || !title || busy.current.has(key)) return;
+    const { title, fields } = withPeople(payload.title || '');
+    const key = `${(payload.title || '').trim()}|${payload.due_time || ''}`;
+    // Mid-tag ("... @ak" and the list is still open): wait for the line to be finished.
+    if (!on || !title || activeMentionQuery(payload.title || '') !== null || busy.current.has(key)) return;
     busy.current.add(key);
     const free = () => busy.current.delete(key);
     setTimeout(free, 15000); // a create that never answers must not lock the line for good
-    createTodo({ ...payload, title }, { silent: true, onId: (id) => { free(); if (id) onLinked(id); } }).catch(() => {
+    createTodo({ ...payload, title, ...fields }, { silent: true, onId: (id) => { free(); if (id) onLinked(id); } }).catch(() => {
       free();
       showToast({ message: 'Could not add it to your to-dos', tone: 'error', icon: 'alert-circle-outline' });
     });
-  }, [createTodo, on]);
+  }, [createTodo, on, withPeople]);
   const retitle = useCallback((id, text) => {
-    const title = (text || '').trim();
+    const title = withPeople(text).title;
     const t = todosRef.current.find((x) => x.id === id);
     if (!on || !title || !t || typeof id !== 'number' || t.title === title || t.permissions?.can_edit === false) return;
     updateTodo(id, { title }).catch(() => {});
-  }, [on, updateTodo]);
+  }, [on, updateTodo, withPeople]);
   return { add, retitle };
+}
+
+/** "@name" autocomplete under a timebox line; "@me" keeps the to-do on my list too. */
+function TagSuggest({ text, onChange }) {
+  const { user } = useAuth();
+  const { people } = useDirectory();
+  const q = activeMentionQuery(text);
+  const list = useMemo(() => {
+    if (q === null) return [];
+    const me = user && 'me'.startsWith(q.toLowerCase()) && !/(^|\s)@me(?=\s|$)/i.test(text)
+      ? [{ id: user.id, name: `Me (${user.name || user.username})`, username: 'me', profile_picture: user.profile_picture, display_title: 'Keep it on your list too' }]
+      : [];
+    return [...me, ...filterPeople(people, q, { excludeIds: [user?.id], limit: 5 })];
+  }, [q, people, user, text]);
+  if (!list.length) return null;
+  return <MentionSuggestions people={list} onPick={(p) => onChange(completeMention(text, p.username))} style={{ marginHorizontal: spacing.md, marginBottom: 6 }} />;
 }
 
 function TopThree({ box, update, readOnly, onPlace, placing, date }) {
@@ -124,7 +165,8 @@ function TopThree({ box, update, readOnly, onPlace, placing, date }) {
     <Card title="Top 3" icon="star-outline" right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>What must get done today</Text>}>
       {!rows.length && <Text style={{ padding: spacing.md, color: colors.gray[500] }}>No priorities were written.</Text>}
       {rows.map((p, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 8, borderBottomWidth: i < rows.length - 1 ? 1 : 0, borderColor: colors.gray[100] }}>
+        <View key={i} style={{ borderBottomWidth: i < rows.length - 1 ? 1 : 0, borderColor: colors.gray[100] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 8 }}>
           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: paletteHex(PRIORITY_COLORS[i]), alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: paletteInk(PRIORITY_COLORS[i]) }}>{i + 1}</Text>
           </View>
@@ -150,6 +192,8 @@ function TopThree({ box, update, readOnly, onPlace, placing, date }) {
           <Pressable onPress={readOnly || !p.text ? undefined : () => set(i, { done: !p.done })} accessibilityLabel={p.done ? 'Done' : 'Not done yet'} hitSlop={6}>
             <Ionicons name={p.done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={p.done ? colors.green[600] : colors.gray[400]} />
           </Pressable>
+        </View>
+        {!readOnly && <TagSuggest text={p.text || ''} onChange={(t) => set(i, { text: t })} />}
         </View>
       ))}
     </Card>
@@ -258,7 +302,8 @@ function BrainDump({ box, update, readOnly, onPlace, placing, date }) {
       )}
       {!box.brain_dump.length && readOnly && <Text style={{ padding: spacing.md, color: colors.gray[500] }}>Nothing here.</Text>}
       {box.brain_dump.map((item, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.gray[100] }}>
+        <View key={i} style={{ borderBottomWidth: 1, borderColor: colors.gray[100] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 6 }}>
           <Pressable onPress={readOnly ? undefined : () => edit(i, { done: !item.done })} hitSlop={6}>
             <Ionicons name={item.done ? 'checkbox' : 'square-outline'} size={18} color={item.done ? colors.green[600] : colors.gray[400]} />
           </Pressable>
@@ -277,6 +322,8 @@ function BrainDump({ box, update, readOnly, onPlace, placing, date }) {
           {!readOnly && <IconBtn icon="time-outline" label="Give it a time" active={placing?.dump === i} onPress={() => onPlace({ text: item.text, todo_id: item.todo_id || null, dump: i })} />}
           {!readOnly && <IconBtn icon="close" label="Remove" onPress={() => remove(i)} />}
         </View>
+        {!readOnly && <TagSuggest text={item.text || ''} onChange={(t) => edit(i, { text: t })} />}
+        </View>
       ))}
       {!readOnly && (
         <TextInput
@@ -284,11 +331,12 @@ function BrainDump({ box, update, readOnly, onPlace, placing, date }) {
           onChangeText={setDraft}
           onSubmitEditing={() => { if (draft.trim()) { add({ text: draft.trim() }); setDraft(''); } }}
           blurOnSubmit={false}
-          placeholder="Everything on your mind. Press Enter after each."
+          placeholder="Everything on your mind. @name gives it to them, @me keeps it too. Enter adds."
           placeholderTextColor={colors.gray[400]}
           style={[{ fontSize: 14, color: colors.gray[900], paddingHorizontal: spacing.md, paddingVertical: 10 }, noOutline]}
         />
       )}
+      {!readOnly && <TagSuggest text={draft} onChange={setDraft} />}
     </Card>
   );
 }
@@ -390,6 +438,7 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
             {formatTime(block.start)} – {formatTime(toHM(endMin))} · {hours(endMin - startMin)}{block.todo_id ? ' · updates the task' : ''}
           </Text>
         )}
+        {showTools && <TagSuggest text={block.text || ''} onChange={(t) => set({ text: t })} />}
         {showTools && (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4, marginBottom: 2 }}>
             {[null, 0, 1, 2].map((p) => (
