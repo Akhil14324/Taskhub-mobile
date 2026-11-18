@@ -406,11 +406,11 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         <View style={styles.valueRow}>
           <View style={{ flex: 1 }}>
             {todo.deadline_date
-              ? <Text style={styles.propValue}>{formatDue(todo.deadline_date)}</Text>
+              ? <Text style={styles.propValue}>{formatDue(todo.deadline_date)}{todo.deadline_time ? ` · ${formatTime(todo.deadline_time)}` : ''}</Text>
               : <Text style={styles.placeholder}>No deadline</Text>}
           </View>
           {editable && !!todo.deadline_date && (
-            <AnimatedPressable onPress={() => save({ deadline_date: null })} hitSlop={8}>
+            <AnimatedPressable onPress={() => save({ deadline_date: null, deadline_time: null })} hitSlop={8}>
               <Ionicons name="close-circle" size={18} color={colors.gray[400]} />
             </AnimatedPressable>
           )}
@@ -658,8 +658,8 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
         visible={deadlineOpen}
         onClose={() => setDeadlineOpen(false)}
         date={todo.deadline_date}
-        allowTime={false}
-        onChange={({ date }) => save({ deadline_date: date })}
+        time={todo.deadline_time}
+        onChange={({ date, time }) => save({ deadline_date: date, deadline_time: time || null })}
       />
       <DueDatePicker
         visible={remindOpen}

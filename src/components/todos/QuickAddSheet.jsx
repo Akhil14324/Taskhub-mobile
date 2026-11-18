@@ -146,6 +146,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const priority = pick('priority', 4);
   const recurrence = pick('recurrence');
   const deadline = pick('deadline_date');
+  const deadlineTime = deadline ? pick('deadline_time') : null;
   const duration = pick('duration_minutes');
   const listId = businessId || giveTo ? null : (override.list_id !== undefined ? override.list_id : (parsed.list?.id ?? defaults.list_id ?? null));
   const list = lists.find((l) => l.id === listId);
@@ -270,6 +271,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         requires_approval: businessId && review !== null ? review : undefined,
         labels: allLabels,
         deadline_date: deadline,
+        deadline_time: deadlineTime || undefined,
         duration_minutes: duration,
         ...peopleFields(mentionedPeople, meTagged, effectiveAssignId),
       }, stepTitles.length ? {
@@ -470,7 +472,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             />
           )}
           {deadline && (
-            <Chip small icon="alert-circle" label={`Deadline ${formatDue(deadline)}`} onRemove={() => setOverride((o) => ({ ...o, deadline_date: false }))} />
+            <Chip small icon="alert-circle" label={`Deadline ${formatDue(deadline)}${deadlineTime ? ` · ${formatTime(deadlineTime)}` : ''}`} onRemove={() => setOverride((o) => ({ ...o, deadline_date: false }))} />
           )}
           {duration && (
             <Chip small icon="time" label={formatDuration(duration)} onRemove={() => setOverride((o) => ({ ...o, duration_minutes: false }))} />
@@ -536,7 +538,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         {menu === 'more' && (
           <View>
             <View style={styles.menuRow}>
-              <Chip icon="alert-circle-outline" label={deadline ? `Deadline ${formatDue(deadline)}` : 'Deadline'} active={!!deadline} onPress={() => setDeadlineOpen(true)} />
+              <Chip icon="alert-circle-outline" label={deadline ? `Deadline ${formatDue(deadline)}${deadlineTime ? ` · ${formatTime(deadlineTime)}` : ''}` : 'Deadline'} active={!!deadline} onPress={() => setDeadlineOpen(true)} />
               <Chip icon="repeat" label={recurrence ? RECURRENCE_LABELS[recurrence] : 'Repeat'} active={!!recurrence} onPress={cycleRecurrence} />
               <Chip icon="document-text-outline" label="Description" onPress={() => setMenu('notes')} />
               {!multi && <Chip icon="git-branch-outline" label={steps.some((x) => x.trim()) ? `Sub-tasks (${steps.filter((x) => x.trim()).length})` : 'Sub-tasks'} active={steps.some((x) => x.trim())} onPress={() => setMenu('steps')} />}
@@ -722,8 +724,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
         visible={deadlineOpen}
         onClose={() => setDeadlineOpen(false)}
         date={deadline}
-        allowTime={false}
-        onChange={({ date }) => setOverride((o) => ({ ...o, deadline_date: date || false }))}
+        time={deadlineTime}
+        onChange={({ date, time }) => setOverride((o) => ({ ...o, deadline_date: date || false, deadline_time: time || false }))}
       />
     </BottomSheet>
   );
