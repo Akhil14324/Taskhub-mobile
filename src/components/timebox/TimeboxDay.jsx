@@ -67,27 +67,41 @@ function DoneMark({ value, onPress, disabled }) {
 }
 
 /**
- * Puts something that only lives in the timebox into the real to-do list (the Inbox, or the day and time when it has
- * a block) and links it, so it is never added twice. `build` says what to write back once the id is known.
+ * A day planner: whatever is typed into the timebox is a real to-do. It is created the moment the line is finished
+ * (Enter or leaving the field): in the Inbox for a top priority or a brain-dump line, on the day and at the start of
+ * its block (with the block's length) for a block. The box keeps the link, so nothing is created twice, and a
+ * finished line that is edited later renames its to-do. Days that are already past write nothing.
  */
-function useAddToTodo() {
-  const { createTodo } = useTodos();
-  return useCallback(async (payload, onLinked) => {
-    try {
-      await createTodo(payload, { onId: (id) => { if (id) onLinked(id); } });
-    } catch {
+function useAddToTodo(date) {
+  const { createTodo, updateTodo, todos } = useTodos();
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
+  const busy = useRef(new Set());
+  const on = !!date && date >= todayYmd();
+  const add = useCallback((payload, onLinked) => {
+    const title = (payload.title || '').trim();
+    const key = `${title}|${payload.due_time || ''}`;
+    if (!on || !title || busy.current.has(key)) return;
+    busy.current.add(key);
+    const free = () => busy.current.delete(key);
+    setTimeout(free, 15000); // a create that never answers must not lock the line for good
+    createTodo({ ...payload, title }, { silent: true, onId: (id) => { free(); if (id) onLinked(id); } }).catch(() => {
+      free();
       showToast({ message: 'Could not add it to your to-dos', tone: 'error', icon: 'alert-circle-outline' });
-    }
-  }, [createTodo]);
+    });
+  }, [createTodo, on]);
+  const retitle = useCallback((id, text) => {
+    const title = (text || '').trim();
+    const t = todosRef.current.find((x) => x.id === id);
+    if (!on || !title || !t || typeof id !== 'number' || t.title === title || t.permissions?.can_edit === false) return;
+    updateTodo(id, { title }).catch(() => {});
+  }, [on, updateTodo]);
+  return { add, retitle };
 }
 
-function AddToTodoBtn({ onPress }) {
-  return <IconBtn icon="download-outline" label="Add to my to-dos" onPress={onPress} />;
-}
-
-function TopThree({ box, update, readOnly, onPlace, placing }) {
+function TopThree({ box, update, readOnly, onPlace, placing, date }) {
   const colors = useColors();
-  const addToTodo = useAddToTodo();
+  const { add: addToTodo, retitle } = useAddToTodo(date);
   const set = (i, fields) => update((b) => {
     const list = [...b.priorities];
     while (list.length <= i) list.push({ text: '', done: false, todo_id: null });
@@ -98,6 +112,13 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
       : b.blocks;
     return { ...b, priorities: list, blocks };
   });
+  const commit = (i) => {
+    const p = box.priorities[i];
+    const title = p?.text?.trim();
+    if (!title) return;
+    if (p.todo_id) retitle(p.todo_id, title);
+    else addToTodo({ title }, (id) => update((b) => ({ ...b, priorities: b.priorities.map((x) => (x.text.trim() === title && !x.todo_id ? { ...x, todo_id: id } : x)) })));
+  };
   const rows = readOnly ? box.priorities : Array.from({ length: MAX_PRIORITIES }, (_, i) => box.priorities[i] || { text: '', done: false });
   return (
     <Card title="Top 3" icon="star-outline" right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>What must get done today</Text>}>
@@ -113,6 +134,8 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
             <TextInput
               value={p.text}
               onChangeText={(t) => set(i, { text: t })}
+              onBlur={() => commit(i)}
+              onSubmitEditing={() => commit(i)}
               placeholder={['The one thing that matters most', 'Second', 'Third'][i]}
               placeholderTextColor={colors.gray[400]}
               style={[{ flex: 1, fontSize: 15, color: colors.gray[900], paddingVertical: 4, textDecorationLine: p.done ? 'line-through' : 'none' }, noOutline]}
@@ -124,9 +147,6 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
             </View>
           )}
           {!readOnly && !!p.text && <IconBtn icon="time-outline" label="Give it a time" active={placing?.priority === i} onPress={() => onPlace({ text: p.text, priority: i, todo_id: p.todo_id || null, minutes: 60 })} />}
-          {!readOnly && !!p.text && !p.todo_id && (
-            <AddToTodoBtn onPress={() => addToTodo({ title: p.text }, (id) => set(i, { todo_id: id }))} />
-          )}
           <Pressable onPress={readOnly || !p.text ? undefined : () => set(i, { done: !p.done })} accessibilityLabel={p.done ? 'Done' : 'Not done yet'} hitSlop={6}>
             <Ionicons name={p.done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={p.done ? colors.green[600] : colors.gray[400]} />
           </Pressable>
@@ -136,15 +156,26 @@ function TopThree({ box, update, readOnly, onPlace, placing }) {
   );
 }
 
-function BrainDump({ box, update, readOnly, onPlace, placing }) {
+function BrainDump({ box, update, readOnly, onPlace, placing, date }) {
   const colors = useColors();
-  const addToTodo = useAddToTodo();
+  const { add: addToTodo, retitle } = useAddToTodo(date);
   const [draft, setDraft] = useState('');
   const [showWork, setShowWork] = useState(false);
   const [q, setQ] = useState('');
   const { user } = useAuth();
   const { todos } = useTodos();
-  const add = (item) => update((b) => ({ ...b, brain_dump: [...b.brain_dump, { done: false, todo_id: null, ...item }] }));
+  const linkDump = (title) => (id) => update((b) => ({ ...b, brain_dump: b.brain_dump.map((x) => (x.text.trim() === title && !x.todo_id ? { ...x, todo_id: id } : x)) }));
+  const add = (item) => {
+    update((b) => ({ ...b, brain_dump: [...b.brain_dump, { done: false, todo_id: null, ...item }] }));
+    if (!item.todo_id) addToTodo({ title: item.text }, linkDump(item.text.trim()));
+  };
+  const commit = (i) => {
+    const item = box.brain_dump[i];
+    const title = item?.text?.trim();
+    if (!title) return;
+    if (item.todo_id) retitle(item.todo_id, title);
+    else addToTodo({ title }, linkDump(title));
+  };
   const edit = (i, fields) => update((b) => ({ ...b, brain_dump: b.brain_dump.map((x, j) => (j === i ? { ...x, ...fields } : x)) }));
   const remove = (i) => update((b) => ({ ...b, brain_dump: b.brain_dump.filter((_, j) => j !== i) }));
   const promote = (i) => update((b) => {
@@ -234,7 +265,7 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
           {readOnly ? (
             <Text style={{ flex: 1, fontSize: 14, color: colors.gray[800], textDecorationLine: item.done ? 'line-through' : 'none' }}>{item.text}</Text>
           ) : (
-            <TextInput value={item.text} onChangeText={(t) => edit(i, { text: t })} style={[{ flex: 1, fontSize: 14, color: colors.gray[800], paddingVertical: 2, textDecorationLine: item.done ? 'line-through' : 'none' }, noOutline]} />
+            <TextInput value={item.text} onChangeText={(t) => edit(i, { text: t })} onBlur={() => commit(i)} onSubmitEditing={() => commit(i)} style={[{ flex: 1, fontSize: 14, color: colors.gray[800], paddingVertical: 2, textDecorationLine: item.done ? 'line-through' : 'none' }, noOutline]} />
           )}
           {!!item.todo_id && <Ionicons name="link-outline" size={14} color={colors.gray[400]} />}
           {!readOnly && isWeb && !!item.text && (
@@ -242,7 +273,6 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
               <Ionicons name="reorder-two-outline" size={18} color={colors.gray[400]} />
             </View>
           )}
-          {!readOnly && !item.todo_id && !!item.text && <AddToTodoBtn onPress={() => addToTodo({ title: item.text }, (id) => edit(i, { todo_id: id }))} />}
           {!readOnly && !full && <IconBtn icon="star-outline" label="Make it a top priority" onPress={() => promote(i)} />}
           {!readOnly && <IconBtn icon="time-outline" label="Give it a time" active={placing?.dump === i} onPress={() => onPlace({ text: item.text, todo_id: item.todo_id || null, dump: i })} />}
           {!readOnly && <IconBtn icon="close" label="Remove" onPress={() => remove(i)} />}
@@ -263,7 +293,7 @@ function BrainDump({ box, update, readOnly, onPlace, placing }) {
   );
 }
 
-function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus, top, onAddToTodo }) {
+function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus, top, onCommit }) {
   const colors = useColors();
   // While the bottom edge is being pulled, the block shows the length it would get; it is saved on release.
   const [draftEnd, setDraftEnd] = useState(null);
@@ -345,12 +375,13 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
               autoFocus={autoFocus}
               onFocus={() => onSelect(index)}
               onChangeText={(t) => set({ text: t })}
+              onBlur={() => onCommit(index)}
+              onSubmitEditing={() => onCommit(index)}
               placeholder="What will you do?"
               placeholderTextColor={colors.gray[400]}
               style={[{ flex: 1, fontSize: 14, color: colors.gray[900], paddingVertical: 2 }, noOutline]}
             />
           )}
-          {!readOnly && !block.todo_id && !!block.text && <IconBtn icon="download-outline" label="Add to my to-dos" onPress={() => onAddToTodo(index)} />}
           {!!block.todo_id && <IconBtn icon="open-outline" label="Open the to-do" onPress={() => onOpenTodo(block.todo_id)} />}
           {canMark && <DoneMark value={block.done} onPress={cycle} disabled={readOnly} />}
         </View>
@@ -385,7 +416,7 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
 
 function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo, markSynced }) {
   const colors = useColors();
-  const addToTodo = useAddToTodo();
+  const { add: addToTodo, retitle } = useAddToTodo(date);
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -433,11 +464,13 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
     },
   });
 
-  const addBlockToTodo = (index) => {
+  const commitBlock = (index) => {
     const b = box.blocks[index];
-    if (!b?.text) return;
+    const title = b?.text?.trim();
+    if (!title) return;
+    if (b.todo_id) { retitle(b.todo_id, title); return; }
     addToTodo(
-      { title: b.text, due_date: date, due_time: b.start, duration_minutes: toMin(b.end) - toMin(b.start) },
+      { title, due_date: date, due_time: b.start, duration_minutes: toMin(b.end) - toMin(b.start) },
       (id) => { markSynced(id, b); update((bx) => ({ ...bx, blocks: bx.blocks.map((x) => (x.start === b.start && x.end === b.end && !x.todo_id ? { ...x, todo_id: id } : x)) })); },
     );
   };
@@ -480,7 +513,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
   box.blocks.forEach((b, i) => {
     blockEls.push(
       <Block key={`b${i}`} block={b} index={i} blocks={box.blocks} readOnly={readOnly} canMark={canMark} selected={selected === i} onSelect={setSelected} update={update} onOpenTodo={onOpenTodo} autoFocus={fresh === i}
-        top={((toMin(b.start) - from) / STEP) * SLOT_H + 2} onAddToTodo={addBlockToTodo} />
+        top={((toMin(b.start) - from) / STEP) * SLOT_H + 2} onCommit={commitBlock} />
     );
   });
 
@@ -734,8 +767,8 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
 
   const onPlace = useCallback((item) => setPlacing((p) => (p && p.text === item.text ? null : item)), []);
   const parts = useMemo(() => ({
-    top: <TopThree box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} />,
-    dump: (!readOnly || box.brain_dump.length > 0) && <BrainDump box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} />,
+    top: <TopThree box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} date={date} />,
+    dump: (!readOnly || box.brain_dump.length > 0) && <BrainDump box={box} update={update} readOnly={readOnly} onPlace={onPlace} placing={placing} date={date} />,
     schedule: <Schedule box={box} update={update} readOnly={readOnly} date={date} placing={placing} setPlacing={setPlacing} onOpenTodo={onOpenTodo} markSynced={markSynced} />,
     end: <EndOfDay data={data} box={box} update={update} readOnly={readOnly} onSend={onSend} onMove={onMove ? moveDay : null} mine={mine} />,
   }), [box, update, readOnly, onPlace, placing, date, onOpenTodo, data, onSend, mine, markSynced, onMove, moveDay]);
