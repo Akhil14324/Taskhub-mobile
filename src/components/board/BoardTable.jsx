@@ -1,4 +1,5 @@
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -176,19 +177,14 @@ function HeaderCell({ column, canManage, onMenu, width, sticky, onResize, onRena
 function AddItemRow({ color, onAdd, word, width, indent = 0 }) {
   const colors = useColors();
   const { rowH } = useContext(Metrics);
-  const [text, setText] = useState('');
   return (
     <View style={{ height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
       {/* Stays at the left edge when the table is scrolled sideways, like the name column above it. */}
       <View style={{ flexDirection: 'row', height: rowH - 1, width, position: 'sticky', left: 0, zIndex: 4, backgroundColor: colors.white }}>
       <View style={{ width: 6, backgroundColor: paletteHex(color), opacity: 0.5 }} />
-      <TextInput accessibilityLabel={`Add ${word.toLowerCase()}`}
-        value={text}
-        onChangeText={setText}
-        placeholder={`+ Add ${word.toLowerCase()}`}
-        placeholderTextColor={colors.gray[400]}
-        onSubmitEditing={() => { if (text.trim()) { onAdd(text); setText(''); } }}
-        blurOnSubmit={false}
+      <MentionAddInput accessibilityLabel={`Add ${word.toLowerCase()}`}
+        placeholder={`+ Add ${word.toLowerCase()} (@ to tag)`}
+        onSubmit={onAdd}
         style={{ width: width - 6, paddingLeft: spacing.lg + 18 + indent, paddingRight: spacing.sm, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
       />
       </View>
@@ -476,11 +472,11 @@ export default function BoardTable({
                 </Pressable>
               )}
               {nameEdit === k.id && mayEdit(k) ? (
-                <TextInput
-                  autoFocus selectTextOnFocus defaultValue={k.title} accessibilityLabel={`Name of ${k.title}`}
-                  onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
-                  onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
-                  onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
+                <MentionAddInput
+                  autoFocus selectTextOnFocus keep initialValue={k.title} accessibilityLabel={`Name of ${k.title}`}
+                  onBlurText={(v) => { v = v.trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                  onSubmit={(v) => { setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
+                  onEscape={() => setNameEdit(null)}
                   style={{ flex: 1, height: rowH - 8, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
                 />
               ) : (
@@ -534,15 +530,10 @@ export default function BoardTable({
             <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
             <View style={{ width: nameW - 6 + UPD_W, height: rowH, justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
               <View pointerEvents="none" style={{ position: 'absolute', left: SUB_INDENT - 18, top: 0, bottom: '50%', width: 2, backgroundColor: colors.gray[300] }} />
-              <TextInput
+              <MentionAddInput
                 placeholder="+ Add subitem"
-                placeholderTextColor={colors.gray[400]}
                 accessibilityLabel="Add a subitem"
-                onSubmitEditing={(e) => {
-                  const text = e.nativeEvent.text;
-                  if (text?.trim()) { onAddItem(text, block.group.id, { parent_id: parent.id }); e.target.clear?.(); }
-                }}
-                blurOnSubmit={false}
+                onSubmit={(text) => onAddItem(text, block.group.id, { parent_id: parent.id })}
                 style={{ height: rowH - 4, paddingLeft: SUB_INDENT + 4, paddingRight: spacing.sm, fontSize: 13, color: colors.gray[900], outlineStyle: 'none' }}
               />
             </View>
@@ -581,11 +572,11 @@ export default function BoardTable({
               <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={hasKids ? colors.gray[600] : colors.gray[300]} />
             </Pressable>
             {nameEdit === t.id && mayEdit(t) ? (
-              <TextInput
-                autoFocus selectTextOnFocus defaultValue={t.title} accessibilityLabel={`Name of ${t.title}`}
-                onBlur={(e) => { const v = (e.nativeEvent?.text ?? e.target?.value ?? '').trim(); setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
-                onSubmitEditing={(e) => { const v = (e.nativeEvent?.text || '').trim(); setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
-                onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setNameEdit(null); }}
+              <MentionAddInput
+                autoFocus selectTextOnFocus keep initialValue={t.title} accessibilityLabel={`Name of ${t.title}`}
+                onBlurText={(v) => { v = v.trim(); setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
+                onSubmit={(v) => { setNameEdit(null); if (v && v !== t.title) onRenameItem(t, v); }}
+                onEscape={() => setNameEdit(null)}
                 style={{ flex: 1, height: rowH - 4, paddingHorizontal: 6, fontSize: 14, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
               />
             ) : (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -30,12 +31,9 @@ function IconBtn({ icon, label, onPress, active, count }) {
 /** A line you type into and press Enter, again and again: "+ Add task" / "+ Add subitem". Nothing pops up. */
 function AddLine({ placeholder, onAdd, autoFocus, indent = 0 }) {
   const colors = useColors();
-  const [text, setText] = useState('');
   return (
-    <TextInput
-      value={text} onChangeText={setText} autoFocus={autoFocus} placeholder={placeholder} placeholderTextColor={colors.gray[400]}
-      accessibilityLabel={placeholder}
-      onSubmitEditing={() => { if (text.trim()) { onAdd(text.trim()); setText(''); } }} blurOnSubmit={false}
+    <MentionAddInput
+      onSubmit={onAdd} autoFocus={autoFocus} placeholder={placeholder}
       style={{ height: 30, paddingHorizontal: 8, marginLeft: indent, fontSize: 13, color: colors.gray[900], outlineStyle: 'none', borderRadius: radius.sm }}
     />
   );

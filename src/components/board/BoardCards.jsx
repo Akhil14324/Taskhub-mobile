@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from 'react';
+import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -93,17 +94,12 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
 
 function AddLine({ word, onAdd }) {
   const colors = useColors();
-  const [text, setText] = useState('');
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.gray[300] }}>
       <Ionicons name="add" size={18} color={colors.gray[500]} />
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        placeholder={`Add ${word.toLowerCase()}`}
-        placeholderTextColor={colors.gray[400]}
-        onSubmitEditing={() => { if (text.trim()) { onAdd(text); setText(''); } }}
-        blurOnSubmit={false}
+      <MentionAddInput
+        placeholder={`Add ${word.toLowerCase()} (@ to tag)`}
+        onSubmit={onAdd}
         style={{ flex: 1, fontSize: 15, color: colors.gray[900], outlineStyle: 'none' }}
       />
     </View>
