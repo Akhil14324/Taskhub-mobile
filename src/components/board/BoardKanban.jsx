@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -30,12 +31,9 @@ function IconBtn({ icon, label, onPress, active, count }) {
 /** A line you type into and press Enter, again and again: "+ Add task" / "+ Add subitem". Nothing pops up. */
 function AddLine({ placeholder, onAdd, autoFocus, indent = 0 }) {
   const colors = useColors();
-  const [text, setText] = useState('');
   return (
-    <TextInput
-      value={text} onChangeText={setText} autoFocus={autoFocus} placeholder={placeholder} placeholderTextColor={colors.gray[400]}
-      accessibilityLabel={placeholder}
-      onSubmitEditing={() => { if (text.trim()) { onAdd(text.trim()); setText(''); } }} blurOnSubmit={false}
+    <MentionAddInput
+      onSubmit={onAdd} autoFocus={autoFocus} placeholder={placeholder}
       style={{ height: 30, paddingHorizontal: 8, marginLeft: indent, fontSize: 13, color: colors.gray[900], outlineStyle: 'none', borderRadius: radius.sm }}
     />
   );
@@ -53,8 +51,8 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
   const done = subs.filter((s) => s.is_done).length;
   const personCol = board.columns.find((c) => c.kind === 'person');
   const dateCol = board.columns.find((c) => c.system_key === 'date');
-  const save = (e) => {
-    const v = (e.nativeEvent?.text ?? '').trim();
+  const save = (text) => {
+    const v = String(text || '').trim();
     setEditing(false);
     if (v && v !== item.title) actions.updateFields(item, { title: v });
   };
@@ -66,9 +64,9 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
       <View style={{ backgroundColor: colors.white, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], padding: spacing.sm, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
           {editing && editable ? (
-            <TextInput
-              autoFocus selectTextOnFocus defaultValue={item.title} onBlur={save} onSubmitEditing={save}
-              onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setEditing(false); }}
+            <MentionAddInput
+              autoFocus selectTextOnFocus keep initialValue={item.title} accessibilityLabel={`Name of ${item.title}`}
+              onBlurText={save} onSubmit={save} onEscape={() => setEditing(false)}
               style={{ flex: 1, fontSize: 14, color: colors.gray[900], borderWidth: 2, borderColor: BRAND, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 2, outlineStyle: 'none' }}
             />
           ) : (
