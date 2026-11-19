@@ -20,6 +20,9 @@ import { confirmDialog, showToast } from '../../utils/events';
 export { anchorOf };
 
 const NAME_W = 340; // default width of the name column (people can drag it)
+const NAME_W_COMPACT = 180; // the same on a phone or tablet, where the rest of the table scrolls sideways
+const NAME_MIN = 160;
+const NAME_MIN_COMPACT = 110;
 const MIN_COL = 60;
 const MAX_COL = 600;
 const UPD_W = 46; // the "updates" column next to the name: opens the task window
@@ -126,7 +129,7 @@ function ResizeGrip({ onResize, startWidth, height }) {
     <View
       ref={attach}
       accessibilityLabel="Drag to resize the column"
-      style={{ position: 'absolute', right: -4, top: 0, width: 9, height, cursor: 'col-resize', zIndex: 6, alignItems: 'center' }}
+      style={{ position: 'absolute', right: -4, top: 0, width: 9, height, cursor: 'col-resize', zIndex: 6, alignItems: 'center', touchAction: 'none' }}
     >
       <View style={{ width: 3, height: '60%', marginTop: '10%', borderRadius: 2, backgroundColor: 'transparent' }} dataSet={{ grip: '1' }} />
     </View>
@@ -229,10 +232,13 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 }
 
 /**
- * The main table (desktop): one block per group with its own header row, a coloured edge, items with their
+ * The main table: one block per group with its own header row, a coloured edge, items with their
  * sub-items, an "add item" row and a summary row (status bar, number totals).
+ * `compact` (phones and tablets) keeps the very same table and columns: a narrower name column, header rows that
+ * stay at the top while scrolling down, and the columns swiped sideways inside the table.
  */
 export default function BoardTable({
+  compact = false,
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, addingGroup, focus, setFocus,
   pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn,
@@ -245,11 +251,14 @@ export default function BoardTable({
   useEffect(() => { // once the saved width has arrived, stop overriding it
     setLiveW((cur) => { const keys = Object.keys(cur); if (!keys.length) return cur; const n = { ...cur }; let changed = false; savedColumns.forEach((c) => { if (n[c.id] === c.width) { delete n[c.id]; changed = true; } }); return changed ? n : cur; });
   }, [savedColumns]);
-  const nameKey = `board.nameW.${board.board?.id}`;
-  const [nameW, setNameW] = useState(() => { try { return Math.min(MAX_COL, Math.max(160, Number(window.localStorage.getItem(nameKey)) || NAME_W)); } catch { return NAME_W; } });
+  // A phone remembers its own name width, so dragging it there never changes the desktop table.
+  const nameKey = `board.nameW.${compact ? 'm.' : ''}${board.board?.id}`;
+  const nameMin = compact ? NAME_MIN_COMPACT : NAME_MIN;
+  const nameDefault = compact ? NAME_W_COMPACT : NAME_W;
+  const [nameW, setNameW] = useState(() => { try { return Math.min(MAX_COL, Math.max(nameMin, Number(window.localStorage.getItem(nameKey)) || nameDefault)); } catch { return nameDefault; } });
   const resizeColumn = (column, width, final) => {
     const w = Math.round(Math.min(MAX_COL, Math.max(MIN_COL, width)));
-    if (column === 'name') { setNameW(Math.max(160, w)); if (final) { try { window.localStorage.setItem(nameKey, String(Math.max(160, w))); } catch { /* private mode */ } } return; }
+    if (column === 'name') { setNameW(Math.max(nameMin, w)); if (final) { try { window.localStorage.setItem(nameKey, String(Math.max(nameMin, w))); } catch { /* private mode */ } } return; }
     setLiveW((cur) => ({ ...cur, [column.id]: w }));
     const saved = savedColumns.find((x) => x.id === column.id);
     if (final && canManage && onResizeColumn && saved && w !== saved.width) onResizeColumn(saved, w);
@@ -638,14 +647,18 @@ export default function BoardTable({
 
   return (
     <Metrics.Provider value={metrics}>
-    <View ref={tableRef} style={{ flex: 1, overflow: 'auto' }}>
-      <View style={{ width: Math.max(tableWidth, 600), paddingBottom: 120 }}>
+    <View
+      ref={tableRef}
+      // Compact: a native momentum swipe sideways that does not hand the gesture to the page (no bounce, no browser back).
+      style={[{ flex: 1, overflow: 'auto' }, compact && { overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }]}
+    >
+      <View style={{ width: Math.max(tableWidth, 600), paddingBottom: 120, paddingTop: compact ? spacing.sm : 0 }}>
         {blocks.map((b) => {
           const isCollapsed = collapsed.has(b.group.id);
           return (
-            <View key={b.group.id ?? 'none'} dataSet={{ dropGroup: typeof b.group.id === 'number' ? String(b.group.id) : 'none' }} style={{ marginBottom: spacing.xl, width: layoutOf(b.group.id).width }}>
+            <View key={b.group.id ?? 'none'} dataSet={{ dropGroup: typeof b.group.id === 'number' ? String(b.group.id) : 'none' }} style={{ marginBottom: compact ? spacing.lg : spacing.xl, width: layoutOf(b.group.id).width }}>
               {/* Sticky: scrolling the columns sideways leaves the group name where it is. */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, position: 'sticky', left: 0, alignSelf: 'flex-start', zIndex: 5 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingLeft: compact ? spacing.sm : 0, position: 'sticky', left: 0, alignSelf: 'flex-start', zIndex: 5 }}>
                 <Pressable onPress={() => onToggleGroup(b.group.id)} hitSlop={6} accessibilityLabel={isCollapsed ? 'Expand group' : 'Collapse group'}>
                   <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={paletteHex(b.group.color)} />
                 </Pressable>
@@ -664,7 +677,8 @@ export default function BoardTable({
               </View>
               {!isCollapsed && (
                 <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'clip', backgroundColor: colors.white }}>
-                  <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+                  {/* Compact: the header row stays at the top of the table while its group scrolls under it. */}
+                  <View style={[{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }, compact && { position: 'sticky', top: 0, zIndex: 6, backgroundColor: colors.white }]}>
                     <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
                       <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
                       <View style={{ width: nameW - 6 + UPD_W, height: headH, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
@@ -708,7 +722,7 @@ export default function BoardTable({
       </View>
     </View>
     {sel.size > 0 && (
-      <View {...glass('capsule')} style={{ position: 'fixed', bottom: 28, left: 0, right: 0, alignSelf: 'center', marginHorizontal: 'auto', width: 'fit-content', zIndex: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white }}>
+      <View {...glass('capsule')} style={[{ position: 'fixed', bottom: 28, left: 0, right: 0, alignSelf: 'center', marginHorizontal: 'auto', width: 'fit-content', zIndex: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white }, compact && { bottom: 16, maxWidth: '94%', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.lg }]}>
         <View style={{ minWidth: 26, height: 26, borderRadius: 13, backgroundColor: BRAND, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{sel.size}</Text>
         </View>
