@@ -51,8 +51,8 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
   const done = subs.filter((s) => s.is_done).length;
   const personCol = board.columns.find((c) => c.kind === 'person');
   const dateCol = board.columns.find((c) => c.system_key === 'date');
-  const save = (e) => {
-    const v = (e.nativeEvent?.text ?? '').trim();
+  const save = (text) => {
+    const v = String(text || '').trim();
     setEditing(false);
     if (v && v !== item.title) actions.updateFields(item, { title: v });
   };
@@ -64,9 +64,9 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
       <View style={{ backgroundColor: colors.white, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], padding: spacing.sm, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
           {editing && editable ? (
-            <TextInput
-              autoFocus selectTextOnFocus defaultValue={item.title} onBlur={save} onSubmitEditing={save}
-              onKeyPress={(e) => { if (e.nativeEvent.key === 'Escape') setEditing(false); }}
+            <MentionAddInput
+              autoFocus selectTextOnFocus keep initialValue={item.title} accessibilityLabel={`Name of ${item.title}`}
+              onBlurText={save} onSubmit={save} onEscape={() => setEditing(false)}
               style={{ flex: 1, fontSize: 14, color: colors.gray[900], borderWidth: 2, borderColor: BRAND, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 2, outlineStyle: 'none' }}
             />
           ) : (
