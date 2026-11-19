@@ -7,6 +7,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { Avatar, Chip, PRIORITY } from '../kit';
 import { STATUS, healthColor, formatSeconds } from '../../utils/timeline';
 import { formatDue, MONTHS_SHORT } from '../../utils/dates';
+import { workDays } from '../../utils/workDays';
 import { glass } from '../../theme/glass';
 
 const DAY = 24 * 3600 * 1000;
@@ -19,7 +20,7 @@ const LABEL_W = 220;
 const LABEL_W_NARROW = 108; // phones: names get a slim column so the bars keep the room
 const BAR_H = 22;
 const BAR_TOP = 13;
-const TAIL_PX = 190; // room after the last bar for its "finished in" label
+const TAIL_PX = 320; // room after the last bar for its "finished in" / "last worked" label
 const ZOOMS = [
   { key: 'day', label: 'Days', px: 44 },
   { key: 'week', label: 'Weeks', px: 18 },
@@ -88,7 +89,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
 
   const narrow = viewW > 0 && viewW < 640;
   const labelW = narrow ? LABEL_W_NARROW : LABEL_W;
-  const tail = narrow ? 120 : TAIL_PX;
+  const tail = narrow ? 210 : TAIL_PX;
   const avail = Math.max(200, viewW - labelW);
   const fitPx = Math.max(narrow ? 22 : 14, Math.min(72, Math.floor((avail - tail) / span.spanDays)));
   const px = zoom === 'fit' ? fitPx : ZOOMS.find((z) => z.key === zoom).px;
@@ -321,6 +322,9 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                     + `${it.due_date ? `\nDue ${formatDue(it.due_date)}` : ''}`
                     + `${late ? `\nLate by ${formatSeconds(lateBy)}` : ''}`;
                   const captionLeft = Math.max(endX, dueX !== null ? dueX : 0) + 16;
+                  // "Done in 3 days" or "Last worked 2 days ago" (a status change counts as work).
+                  const lastSeg = it.segments[it.segments.length - 1];
+                  const wd = workDays({ ...it, status_since: lastSeg?.from }, { now: nowMs });
                   return (
                     <View key={it.id} style={[styles.barRow, { height: ROW }, focusId === it.id && styles.rowSelected]}>
                       <AnimatedPressable
@@ -381,6 +385,7 @@ export default function TimelineChart({ data, onOpen, selectedId, grouped = true
                         <Text style={[styles.captionText, { width: tail }]} numberOfLines={1}>
                           <Text style={styles.captionStrong}>{formatSeconds(total)}</Text>
                           {owner && !narrow ? `  ${firstName(owner)}` : ''}
+                          {wd.text ? <Text style={{ color: wd.done ? colors.green[600] : wd.stale ? red : colors.gray[600], fontWeight: wd.stale ? '700' : '400' }}>{`  ·  ${wd.text}`}</Text> : null}
                           {late ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(lateBy)} late`}</Text> : null}
                           {afterDue ? <Text style={{ color: red, fontWeight: '700' }}>{`  ${formatSeconds(afterDue)} after deadline`}</Text> : null}
                         </Text>
