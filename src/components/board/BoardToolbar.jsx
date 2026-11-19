@@ -210,8 +210,8 @@ export default function BoardToolbar({
         <Tool icon="funnel-outline" label="Filter" caret active={filterCount > 0} count={filterCount} onPress={open('filter')} hint="Narrow the board down by any column, like in a spreadsheet." />
         {kind === 'table' && <Tool icon="swap-vertical-outline" label="Sort" active={!!vs.sort} onPress={open('sort')} hint="Order the tasks inside each group by a column." />}
         {kind === 'table' && <Tool icon="eye-off-outline" label="Hide" active={(vs.hidden || []).length > 0} count={(vs.hidden || []).length} onPress={open('hide')} hint="Hide columns you do not need on this view. The data is not deleted." />}
-        {desktop && kind === 'table' && <Tool icon="albums-outline" label="Group by" active={!!vs.group_by} onPress={open('group')} hint="Group the tasks by any column instead of by the board's groups." />}
-        {desktop && kind === 'table' && <Tool icon="ellipsis-horizontal" label="" active={!!(vs.pinned || vs.header_height || vs.item_height || rules.length || Object.keys(defaults).length)} onPress={open('more')} />}
+        {kind === 'table' && <Tool icon="albums-outline" label="Group by" active={!!vs.group_by} onPress={open('group')} hint="Group the tasks by any column instead of by the board's groups." />}
+        {kind === 'table' && <Tool icon="ellipsis-horizontal" label="" active={!!(vs.pinned || vs.header_height || vs.item_height || rules.length || Object.keys(defaults).length)} onPress={open('more')} />}
       </ScrollView>
 
       {pop?.type === 'new' && (

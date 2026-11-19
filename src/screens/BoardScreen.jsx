@@ -12,7 +12,6 @@ import { useCatalog } from '../hooks/useBoards';
 import useDirectory from '../hooks/useDirectory';
 import { useTodos } from '../context/TodoContext';
 import BoardTable, { anchorOf } from '../components/board/BoardTable';
-import BoardCards from '../components/board/BoardCards';
 import BoardKanban from '../components/board/BoardKanban';
 import { BoardCalendar, BoardTimeline, BoardWorkload, BoardSummary } from '../components/board/BoardViews';
 import BoardProcess from '../components/board/BoardProcess';
@@ -443,8 +442,10 @@ export default function BoardScreen({ route }) {
           />
         ) : view.kind === 'activity' ? (
           <BoardProcess board={data} items={data.items} onOpenItem={openItem} />
-        ) : desktop ? (
+        ) : (
+          // Every width gets the same table; phones and tablets scroll it sideways (compact).
           <BoardTable
+            compact={!desktop}
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}
@@ -479,14 +480,6 @@ export default function BoardScreen({ route }) {
               for (const t of rows) await board.addItem(`${t.title} (copy)`, { groupId: t.business_section_id ?? undefined });
               showToast({ message: `Duplicated ${rows.length}`, tone: 'success', icon: 'copy' });
             }}
-          />
-        ) : (
-          <BoardCards
-            board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
-            onOpenItem={openItem} onOpenCell={openCell} onAddItem={addItem}
-            onAddGroup={newGroup}
-            addingGroup={!!board.pending.groups}
-            onGroupMenu={data.access.add ? (anchor, group) => setMenu({ type: 'group', anchor, group }) : null}
           />
         )}
       </View>
