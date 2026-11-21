@@ -17,6 +17,7 @@ import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 import ProgressDot from '../components/ProgressDot';
 import AskWhy from '../components/todos/AskWhy';
+import PeriodChips, { periodParams } from '../components/todos/PeriodChips';
 
 const RANGES = [7, 30, 90];
 /** First name, unless that is just an initial ("V Akhil"). */
@@ -63,7 +64,7 @@ export default function TeamMonitorScreen() {
 
   const load = useCallback(async (range = days) => {
     try {
-      const res = await api.get('/monitor/overview', { params: { days: range }, __skipOops: true });
+      const res = await api.get('/monitor/overview', { params: periodParams(range), __skipOops: true });
       setData(res.data);
       setError(null);
     } catch (err) {
@@ -204,7 +205,7 @@ export default function TeamMonitorScreen() {
             <Text style={styles.subtitle}>To-dos, steps, time taken and blockers of the people below you</Text>
           </View>
           <View style={[styles.ranges, desktop && { paddingHorizontal: 0, paddingVertical: 0 }]}>
-            {RANGES.map((r) => <Chip key={r} label={`Last ${r} days`} active={days === r} onPress={() => { setDays(r); load(r); }} />)}
+            <PeriodChips value={days} ranges={RANGES} onChange={(v) => { setDays(v); load(v); }} />
           </View>
         </View>
 
