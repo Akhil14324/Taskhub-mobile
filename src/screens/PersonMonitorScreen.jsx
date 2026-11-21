@@ -21,6 +21,7 @@ import { HealthBar, Stat, Avg } from './TeamMonitorScreen';
 import { WEEKDAYS_SHORT, parseYmd, addDays, formatDayHeader, toYmd, timeAgo } from '../utils/dates';
 import { describeEntry, formatSeconds, formatRatio, healthColor, todoHealth, todoMetrics, formatSecondsShort, STATUS } from '../utils/timeline';
 import { glass } from '../theme/glass';
+import PeriodChips, { periodParams } from '../components/todos/PeriodChips';
 
 const RANGES = [7, 30, 90];
 const VIEWS = [
@@ -50,7 +51,7 @@ export default function PersonMonitorScreen() {
 
   const load = useCallback(async (range = days) => {
     try {
-      const res = await api.get(`/monitor/people/${personId}`, { params: { days: range }, __skipOops: true });
+      const res = await api.get(`/monitor/people/${personId}`, { params: periodParams(range), __skipOops: true });
       setData(res.data);
       setError(null);
     } catch (err) {
@@ -134,9 +135,9 @@ export default function PersonMonitorScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.ranges}>
-          {RANGES.map((r) => (
-            <Chip key={r} label={`Last ${r} days`} active={days === r} onPress={() => { setDays(r); load(r); }} />
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+            <PeriodChips value={days} ranges={RANGES} onChange={(v) => { setDays(v); load(v); if (typeof v === 'string') setView('done'); }} />
+          </ScrollView>
         </View>
 
         {!data && !error && <SkeletonList count={4} type="notification" />}
