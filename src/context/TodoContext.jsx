@@ -577,8 +577,12 @@ export function TodoProvider({ children }) {
   }, []);
 
   // ---- history & goal ------------------------------------------------------
-  const fetchCompleted = useCallback(async (before) => {
-    const res = await api.get('/todos/completed', { params: before ? { before } : {}, __skipOops: true });
+  const fetchCompleted = useCallback(async (before, range = {}) => {
+    const params = {};
+    if (before) params.before = before;
+    if (range.from) params.from = range.from;
+    if (range.to) params.to = range.to;
+    const res = await api.get('/todos/completed', { params, __skipOops: true });
     return res.data;
   }, []);
 

@@ -139,6 +139,17 @@ export default function TodosScreen() {
   const [bulkSheet, setBulkSheet] = useState(null); // 'date' | 'priority' | 'move'
   const [moveCard, setMoveCard] = useState(null);
   const [history, setHistory] = useState({ items: [], hasMore: false, loading: false });
+  // Completed view date filter: { key: 'all' | 'today' | 'yesterday' | 'week' | 'day', day? }
+  const [doneRange, setDoneRange] = useState({ key: 'all' });
+  const [donePicker, setDonePicker] = useState(false);
+  const doneBounds = useMemo(() => {
+    const t = todayYmd();
+    if (doneRange.key === 'today') return { from: t, to: t };
+    if (doneRange.key === 'yesterday') { const y = addDays(t, -1); return { from: y, to: y }; }
+    if (doneRange.key === 'week') return { from: addDays(t, -6), to: t };
+    if (doneRange.key === 'day' && doneRange.day) return { from: doneRange.day, to: doneRange.day };
+    return {};
+  }, [doneRange]);
   const [gantt, setGantt] = useState({ data: null, loading: false });
   const [weeks, setWeeks] = useState(6);
   const [deletePrompt, setDeletePrompt] = useState(null);
@@ -338,18 +349,18 @@ export default function TodosScreen() {
     setHistory((h) => ({ ...h, loading: true }));
     try {
       const before = reset ? undefined : history.items[history.items.length - 1]?.done_at;
-      const data = await fetchCompleted(before);
+      const data = await fetchCompleted(before, doneBounds);
       mergeTodos(data.todos);
       setHistory((h) => ({ items: reset ? data.todos : [...h.items, ...data.todos], hasMore: data.has_more, loading: false }));
     } catch {
       setHistory((h) => ({ ...h, loading: false }));
     }
-  }, [fetchCompleted, mergeTodos, history.items]);
+  }, [fetchCompleted, mergeTodos, history.items, doneBounds]);
 
   useEffect(() => {
     if (view === 'done') loadHistory(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, doneBounds]);
 
   // ---- timeline data -------------------------------------------------------
   const loadGantt = useCallback(async () => {
@@ -1261,6 +1272,24 @@ export default function TodosScreen() {
     >
       {view === 'done' ? (
         <View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.doneFilters}>
+            {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'Last 7 days']].map(([key, label]) => (
+              <Chip key={key} label={label} active={doneRange.key === key} onPress={() => setDoneRange({ key })} />
+            ))}
+            <Chip
+              icon="calendar-outline"
+              label={doneRange.key === 'day' ? formatDayHeader(doneRange.day) : 'Pick a date'}
+              active={doneRange.key === 'day'}
+              onPress={() => setDonePicker(true)}
+            />
+          </ScrollView>
+          <DueDatePicker
+            visible={donePicker}
+            onClose={() => setDonePicker(false)}
+            date={doneRange.day || null}
+            allowTime={false}
+            onChange={({ date }) => setDoneRange(date ? { key: 'day', day: date } : { key: 'all' })}
+          />
           {historyGroups.map((g) => (
             <View key={g.day}>
               <Text style={styles.dayHead}>{formatDayHeader(g.day)} · {g.items.length}</Text>
@@ -1284,7 +1313,7 @@ export default function TodosScreen() {
             </View>
           ))}
           {!history.items.length && !history.loading && (
-            <EmptyHero icon="checkmark-done" title="Nothing completed yet" message="Finished to-dos show up here, newest first." />
+            <EmptyHero icon="checkmark-done" title={doneRange.key === 'all' ? 'Nothing completed yet' : 'Nothing completed on this date'} message={doneRange.key === 'all' ? 'Finished to-dos show up here, newest first.' : 'Pick another date or choose All.'} />
           )}
           {history.hasMore && (
             <AnimatedPressable style={styles.loadMore} onPress={() => loadHistory(false)} disabled={history.loading}>
@@ -1793,6 +1822,7 @@ const createStyles = (colors) => StyleSheet.create({
   addSectionText: { color: colors.brand[600], fontWeight: '600', fontSize: fontSize.sm },
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },
   doneToggleText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[500] },
+  doneFilters: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm },
   loadMore: { alignItems: 'center', paddingVertical: spacing.lg },
   loadMoreText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[600] },
   dragHandle: { paddingTop: 2, paddingRight: 2, cursor: 'grab' },
