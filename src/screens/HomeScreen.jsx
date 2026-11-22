@@ -8,7 +8,7 @@ import { useTodos } from '../context/TodoContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useColors, useTheme } from '../context/ThemeContext';
 import useAi from '../hooks/useAi';
-import HomeDashboard from '../components/home/HomeDashboard';
+import HomeFocus from '../components/home/HomeFocus';
 import { useHomeStats } from '../components/home/HomeWidgets';
 import { spacing, radius, fontSize } from '../theme/theme';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -23,7 +23,7 @@ import { showToast } from '../utils/events';
 import { glass } from '../theme/glass';
 
 /**
- * Home: the greeting and any banner, then the dashboard (components/home/HomeDashboard.jsx). The to-do store
+ * Home: the greeting and any banner, then the dashboard (components/home/HomeFocus.jsx). The to-do store
  * feeds every panel; only the team panels fetch.
  */
 export default function HomeScreen() {
@@ -87,12 +87,6 @@ export default function HomeScreen() {
               </Text>
             )}
           </View>
-          {desktop && (
-            <AnimatedPressable style={styles.addBtn} onPress={() => setAddOpen(true)}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.addBtnText}>Add task</Text>
-            </AnimatedPressable>
-          )}
           {!desktop && <IconButton icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} onPress={toggleTheme} />}
           {ai && <IconButton icon="sparkles-outline" onPress={() => navigation.navigate('Assistant')} />}
           {!desktop && <IconButton icon="notifications-outline" badge={unreadCount} onPress={() => navigation.navigate('Notifications')} />}
@@ -125,7 +119,7 @@ export default function HomeScreen() {
         )}
 
 
-        <HomeDashboard ctx={ctx} user={user} />
+        <HomeFocus ctx={ctx} user={user} />
 
       </ScrollView>
 
@@ -175,8 +169,7 @@ const createStyles = (colors) => StyleSheet.create({
   panelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   panelTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.gray[900] },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md, backgroundColor: colors.brand[600] },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
-  todayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.md },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },  todayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.md },
   ringValue: { fontSize: fontSize.sm, fontWeight: '800', color: colors.gray[800] },
   bigLine: { fontSize: fontSize.lg, fontWeight: '700', color: colors.gray[900] },
   mutedLine: { fontSize: fontSize.sm, color: colors.gray[500], marginTop: 2 },

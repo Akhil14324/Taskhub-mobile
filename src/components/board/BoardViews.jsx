@@ -5,11 +5,13 @@ import Svg, { Path } from 'react-native-svg';
 import api from '../../api/client';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
-import { Avatar } from '../kit';
+import { Avatar, PRIORITY } from '../kit';
 import {
-  todayYmd, addDays, parseYmd, toYmd, MONTHS_SHORT, WEEKDAYS_SHORT, timeAgo, formatDue,
+  todayYmd, addDays, parseYmd, toYmd, MONTHS_SHORT, WEEKDAYS_SHORT, timeAgo, formatDue, formatTime,
 } from '../../utils/dates';
+import { deadlineState, formatDuration } from '../../utils/todoMeta';
 import { progressMapOf } from '../../utils/progress';
+import { workDays } from '../../utils/workDays';
 import {
   statusLabelOf, paletteHex, paletteInk, cellValue, groupBlocks, numberSummary, formatNumber,
 } from './model';
@@ -370,17 +372,46 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
                       const t = r.item;
                       const bar = barOf(t);
                       const label = statusCol ? statusLabelOf(t, statusCol, board.values) : null;
+                      const fill = label?.color || 'blue';
+                      const ink = paletteInk(fill);
+                      // What the calendar shows for a task, on its bar: the title (struck out when done), the
+                      // priority edge, red when the deadline is near or passed, then time, person, deadline and
+                      // "Done in 3 days" / "Last worked 2 days ago" after the bar.
+                      const dl = deadlineState(t);
+                      const wd = workDays(t, { lastStepAt: progress.get(t.id)?.lastStepAt });
+                      const wdColor = wd.done ? colors.green[600] : wd.stale ? colors.red[600] : colors.gray[600];
+                      const prio = t.priority && t.priority < 4 ? PRIORITY[t.priority] : null;
+                      const titleInside = bar.w >= 90;
+                      const due = dueOf(t);
+                      const otherDeadline = !dl && t.deadline_date && t.deadline_date !== due ? t.deadline_date : null;
+                      const meta = [
+                        t.is_done ? 'Completed' : t.due_time ? `${formatTime(t.due_time)}${t.duration_minutes ? ` · ${formatDuration(t.duration_minutes)}` : ''}` : null,
+                        t.assignee_name ? t.assignee_name.split(' ')[0] : null,
+                        otherDeadline ? `deadline ${formatDue(otherDeadline)}` : null,
+                      ].filter(Boolean).join(' · ');
+                      const deadlineX = t.deadline_date && t.deadline_date !== due ? x(t.deadline_date) - bar.left + px / 2 - 6 : null;
                       return (
                         <View key={`t${t.id}`} style={{ position: 'absolute', top: i * ROW_H + 8, left: bar.left, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          {deadlineX !== null && (
+                            <View pointerEvents="none" accessibilityLabel={`Deadline ${formatDue(t.deadline_date)}`} style={{ position: 'absolute', left: deadlineX, top: -6, alignItems: 'center' }}>
+                              <Ionicons name="flag" size={12} color={dl ? colors.red[600] : colors.gray[500]} />
+                            </View>
+                          )}
                           <View
                             dataSet={{ ganttBar: String(t.id) }}
-                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}${pctOf(t) !== null ? `, ${pctOf(t)} percent done` : ''}`}
-                            style={{ width: bar.w, height: ROW_H - 16, borderRadius: 4, backgroundColor: paletteHex(label?.color || 'blue'), overflow: 'visible', flexDirection: 'row', alignItems: 'center', opacity: drag?.id === t.id && drag.mode !== 'link' ? 0.85 : 1 }}
+                            accessibilityLabel={`${t.title}, ${formatDue(bar.start)} to ${formatDue(bar.end)}${pctOf(t) !== null ? `, ${pctOf(t)} percent done` : ''}${dl ? `, ${dl.label.toLowerCase()}` : ''}${wd.text ? `, ${wd.text.toLowerCase()}` : ''}`}
+                            style={{
+                              width: bar.w, height: ROW_H - 16, borderRadius: 4, backgroundColor: paletteHex(fill), overflow: 'visible', flexDirection: 'row', alignItems: 'center',
+                              opacity: drag?.id === t.id && drag.mode !== 'link' ? 0.85 : t.is_done ? 0.6 : 1,
+                              borderLeftWidth: prio ? 3 : 0, borderLeftColor: prio?.color,
+                              ...(dl ? { borderWidth: 2, borderColor: colors.red[600], borderLeftWidth: prio ? 3 : 2, borderLeftColor: prio ? prio.color : colors.red[600] } : null),
+                            }}
                           >
                             {/* how much is done: the left part of the bar is darker */}
                             {!!pctOf(t) && <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pctOf(t)}%`, backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 4 }} />}
-                            <View ref={t.permissions?.can_edit && gantt ? grab(t, 'move') : undefined} style={{ flex: 1, height: '100%', justifyContent: 'center', paddingHorizontal: 6, cursor: t.permissions?.can_edit && gantt ? 'grab' : 'pointer' }}>
-                              {bar.w >= 54 && pctOf(t) !== null && <Text numberOfLines={1} pointerEvents="none" style={{ fontSize: 11, fontWeight: '600', color: paletteInk(label?.color || 'blue') }}>{pctOf(t)}%</Text>}
+                            <View ref={t.permissions?.can_edit && gantt ? grab(t, 'move') : undefined} style={{ flex: 1, height: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, cursor: t.permissions?.can_edit && gantt ? 'grab' : 'pointer' }}>
+                              {titleInside && <Text numberOfLines={1} pointerEvents="none" style={{ flex: 1, fontSize: 12, fontWeight: '600', color: ink, textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>}
+                              {bar.w >= (titleInside ? 130 : 54) && pctOf(t) !== null && <Text numberOfLines={1} pointerEvents="none" style={{ fontSize: 11, fontWeight: '600', color: ink }}>{pctOf(t)}%</Text>}
                             </View>
                             {gantt && t.permissions?.can_edit && (
                               <>
@@ -390,7 +421,17 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
                               </>
                             )}
                           </View>
-                          {!gantt && <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], width: 160 }}>{t.title}</Text>}
+                          <View pointerEvents="none" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: gantt && t.permissions?.can_edit ? 10 : 0 }}>
+                            {!titleInside && <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], maxWidth: 180, textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>}
+                            {!!dl && <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: colors.red[600] }}>{dl.label}</Text>}
+                            {!!meta && <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{meta}</Text>}
+                            {!!wd.text && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                <Ionicons name={wd.done ? 'checkmark-circle-outline' : 'time-outline'} size={13} color={wdColor} />
+                                <Text numberOfLines={1} style={{ fontSize: 12, color: wdColor, fontWeight: wd.stale ? '600' : '400' }}>{wd.text}</Text>
+                              </View>
+                            )}
+                          </View>
                         </View>
                       );
                     }
