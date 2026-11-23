@@ -17,9 +17,10 @@ import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 import ProgressDot from '../components/ProgressDot';
 import AskWhy from '../components/todos/AskWhy';
-import PeriodChips, { periodParams } from '../components/todos/PeriodChips';
+import { periodParams } from '../components/todos/PeriodChips';
+import DateFilterBar, { DEFAULT_RANGE } from '../components/monitor/DateFilterBar';
+import PeriodReport from '../components/monitor/PeriodReport';
 
-const RANGES = [7, 30, 90];
 /** First name, unless that is just an initial ("V Akhil"). */
 const shortName = (name) => { const parts = String(name || '').split(' ').filter(Boolean); return parts.find((w) => w.length > 1) || parts[0] || ''; };
 const FILTERS = [
@@ -55,7 +56,11 @@ export default function TeamMonitorScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const [days, setDays] = useState(30);
+  // The date filter ({ preset } or a custom { from, to }) and the member filter apply to everything on this screen.
+  const [days, setDays] = useState(DEFAULT_RANGE);
+  const [member, setMember] = useState(null);
+  const [roster, setRoster] = useState([]);
+  const [resolved, setResolved] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,13 +69,14 @@ export default function TeamMonitorScreen() {
 
   const load = useCallback(async (range = days) => {
     try {
-      const res = await api.get('/monitor/overview', { params: periodParams(range), __skipOops: true });
+      const res = await api.get('/monitor/overview', { params: { ...periodParams(range), person_id: member || undefined }, __skipOops: true });
       setData(res.data);
+      if (!member) setRoster(res.data.people.map((p) => ({ id: p.id, name: p.name })));
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load the team');
     }
-  }, [days]);
+  }, [days, member]);
 
   useFocusEffect(useCallback(() => { load(days); }, [load, days]));
 
@@ -95,12 +101,12 @@ export default function TeamMonitorScreen() {
   const open = (p) => navigation.navigate('PersonMonitor', { personId: p.id, name: p.name, days });
 
   const kpis = team ? [
-    ['Open tasks', team.open, 'blue', 'list-outline'],
-    ['Overdue', team.overdue, team.overdue ? 'red' : 'grey', 'alert-circle-outline'],
-    ['Stuck', team.blocked, team.blocked ? 'orange' : 'grey', 'hand-left-outline'],
-    ['Tasks done', team.completed, team.completed ? 'green' : 'grey', 'checkmark-done-outline'],
-    ['Steps done', team.steps?.finished || 0, team.steps?.finished ? 'green' : 'grey', 'footsteps-outline'],
-    ['Stalled', team.steps?.stalled || 0, team.steps?.stalled ? 'red' : 'grey', 'hourglass-outline'],
+    ['Open now', team.open, 'blue', 'list-outline'],
+    ['Overdue now', team.overdue, team.overdue ? 'red' : 'grey', 'alert-circle-outline'],
+    ['Stuck now', team.blocked, team.blocked ? 'orange' : 'grey', 'hand-left-outline'],
+    ['Tasks done (period)', team.completed, team.completed ? 'green' : 'grey', 'checkmark-done-outline'],
+    ['Steps done (period)', team.steps?.finished || 0, team.steps?.finished ? 'green' : 'grey', 'footsteps-outline'],
+    ['Stalled now', team.steps?.stalled || 0, team.steps?.stalled ? 'red' : 'grey', 'hourglass-outline'],
   ] : [];
 
   const attention = (
@@ -204,18 +210,31 @@ export default function TeamMonitorScreen() {
             <BackTitle title="Team monitor" style={styles.title} />
             <Text style={styles.subtitle}>To-dos, steps, time taken and blockers of the people below you</Text>
           </View>
-          <View style={[styles.ranges, desktop && { paddingHorizontal: 0, paddingVertical: 0 }]}>
-            <PeriodChips value={days} ranges={RANGES} onChange={(v) => { setDays(v); load(v); }} />
-          </View>
+        </View>
+
+        <View style={{ gap: spacing.sm, paddingHorizontal: desktop ? 0 : spacing.lg, paddingBottom: spacing.sm }}>
+          <DateFilterBar value={days} resolved={resolved} onChange={(v) => setDays(v)} />
+          {roster.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }} style={{ flexGrow: 0 }}>
+              <Chip icon="people" label="All members" active={!member} onPress={() => setMember(null)} />
+              {roster.map((p) => <Chip key={p.id} label={shortName(p.name)} active={member === p.id} onPress={() => setMember(p.id)} />)}
+            </ScrollView>
+          )}
         </View>
 
         {!data && !error && <SkeletonList count={5} type="notification" />}
         {!!error && <EmptyHero icon="lock-closed" title="Not available" message={error} />}
 
+        {!error && (
+          <View style={{ paddingHorizontal: desktop ? 0 : spacing.lg, marginTop: spacing.sm, marginBottom: spacing.md }}>
+            <PeriodReport value={days} personId={member} people={roster} onResolved={setResolved} />
+          </View>
+        )}
+
         {team && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: desktop ? 0 : spacing.lg, marginTop: desktop ? spacing.md : 0 }}>
             {kpis.map(([label, value, tone, icon]) => <Kpi key={label} label={label} value={value} tone={tone} icon={icon} small={!desktop} />)}
-            <Kpi label="On time" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} tone={team.on_time_rate === null ? 'grey' : team.on_time_rate >= 80 ? 'green' : team.on_time_rate >= 50 ? 'orange' : 'red'} icon="timer-outline" small={!desktop} />
+            <Kpi label="On time (period)" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} tone={team.on_time_rate === null ? 'grey' : team.on_time_rate >= 80 ? 'green' : team.on_time_rate >= 50 ? 'orange' : 'red'} icon="timer-outline" small={!desktop} />
           </View>
         )}
         {team && (

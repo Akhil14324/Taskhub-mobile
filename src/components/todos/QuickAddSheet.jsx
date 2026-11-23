@@ -18,7 +18,7 @@ import {
 } from '../../utils/quickAdd';
 import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
 import { DURATION_PRESETS, formatDuration } from '../../utils/todoMeta';
-import { showToast, emit } from '../../utils/events';
+import { showToast } from '../../utils/events';
 import useVoiceInput from '../../hooks/useVoiceInput';
 import VoiceLive from '../VoiceLive';
 import autoGrow, { virtualKeyboardUp } from '../../utils/autoGrow';
@@ -345,7 +345,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
       onClosed={onClosed}
       onOpened={() => inputRef.current?.focus()}
     >
-      <View style={styles.wrap} dataSet={{ buddyPerch: 'quickadd' }}>
+      <View style={styles.wrap}>
         {hasBusinesses && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeRow} keyboardShouldPersistTaps="always">
             <Chip small icon="person-outline" label="Personal" active={!businessId} onPress={() => setOverride((o) => ({ ...o, business_id: null }))} />
@@ -398,7 +398,6 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
           ref={inputRef}
           value={text}
           onChangeText={(v) => {
-            emit('buddy', { type: 'typing' });
             // Some touch keyboards do not report Enter as a key: catch the newline it types.
             if (!multi && v.length === text.length + 1 && v.endsWith('\n') && virtualKeyboardUp()) { submitNext.current = true; setText(v.replace(/\n+$/, '')); return; }
             setText(v);

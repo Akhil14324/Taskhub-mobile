@@ -5,9 +5,12 @@ import { todayYmd, addDays, formatDayHeader } from '../../utils/dates';
 
 /**
  * The period filter of the monitor screens. A value is a number of days back (7 / 30 / 90) or one day as 'YYYY-MM-DD'
- * (what was completed on that day). `periodParams()` turns it into the API query.
+ * (what was completed on that day), or { preset, from?, to? } from the Team monitor's date filter. `periodParams()` turns it into the API query.
  */
-export const periodParams = (value) => (typeof value === 'string' ? { from: value, to: value } : { days: value });
+export const periodParams = (value) => {
+  if (value && typeof value === 'object') return value.preset === 'custom' ? { preset: 'custom', from: value.from, to: value.to } : { preset: value.preset };
+  return typeof value === 'string' ? { from: value, to: value } : { days: value };
+};
 
 export default function PeriodChips({ value, onChange, ranges = [7, 30, 90] }) {
   const [picker, setPicker] = useState(false);

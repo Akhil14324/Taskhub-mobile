@@ -5,13 +5,10 @@ import QuickAddSheet from './todos/QuickAddSheet';
 import TemplatesSheet from './todos/TemplatesSheet';
 import CommandPalette from './CommandPalette';
 import AttentionAlert from './AttentionAlert';
-import WaterReminder from './WaterReminder';
-import StretchBreak from './StretchBreak';
 import FocusMode from './FocusMode';
 import RoulettePicker from './RoulettePicker';
 import BusyBar from './BusyBar';
 import ActingAsBar from './ActingAsBar';
-import CatBuddy from './buddy/CatBuddy';
 import AutomationHost from './automation/AutomationHost';
 import TimeboxMorning from './timebox/TimeboxMorning';
 import { configureFeedback } from '../utils/feedback';
@@ -56,15 +53,13 @@ export default function GlobalHost() {
       <TemplatesSheet visible={!!templates} onClose={() => setTemplates(null)} defaults={templates || {}} />
       <CommandPalette visible={palette} onClose={() => setPalette(false)} />
       <BusyBar />
-      <ActingAsBar />
-      <WaterReminder />
-      <StretchBreak />
+      <ActingAsBar />
+
       <RoulettePicker />
       <FocusMode />
       <AttentionAlert />
       <AutomationHost />
       <TimeboxMorning userId={user?.id} />
-      <CatBuddy />
     </>
   );
 }

@@ -46,7 +46,6 @@ import TodosScreen from '../screens/TodosScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import AssistantScreen from '../screens/AssistantScreen';
-import WorkflowsScreen from '../screens/WorkflowsScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
@@ -104,7 +103,6 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 // The Assistant lays out its own dashboard and chat, so it takes the full width (not framed).
-const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
@@ -127,7 +125,6 @@ const PushGroupInfo = T(FramedGroupInfo);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
 const PushAssistant = T(AssistantScreen);
-const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
 // Boards fill the window (the table is wide); the Boards home centres itself.
@@ -162,7 +159,6 @@ const LINKING = {
       TeamMonitor: 'team-monitor',
       PersonMonitor: { path: 'team-monitor/:personId', ...num },
       Assistant: 'assistant',
-      Workflows: 'workflows',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
       Boards: 'boards',
@@ -246,7 +242,6 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
   return (
     <View
       {...glass('capsule')}
-      dataSet={{ buddyFloor: '1' }}
       style={{ height: 66, marginHorizontal: 14, marginBottom: Math.max(insets.bottom, 10), borderRadius: 33, backgroundColor: colors.white }}
     >
       <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
@@ -359,7 +354,6 @@ function MainTabs() {
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
-    { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
@@ -610,7 +604,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
             <Stack.Screen name="Assistant" component={PushAssistant} />
-            <Stack.Screen name="Workflows" component={PushWorkflows} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Boards" component={PushBoards} />
