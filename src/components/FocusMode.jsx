@@ -8,7 +8,7 @@ import { useChat } from '../context/ChatContext';
 import useFeature from '../hooks/useFeature';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
-import { on as onEvent, emit } from '../utils/events';
+import { on as onEvent } from '../utils/events';
 import { playReminder } from '../utils/feedback';
 import { todayYmd } from '../utils/dates';
 import { setFocusActive, focusToday, addFocus } from '../utils/focus';
@@ -116,7 +116,6 @@ export default function FocusMode() {
     setTotals(addFocus(userId, todayYmd(), run.minutes));
     playReminder();
     try { window.screen.orientation.unlock(); } catch { /* ignore */ }
-    emit('buddy', { type: 'focus-done', minutes: run.minutes });
     setStage('done');
   }, [userId]);
 

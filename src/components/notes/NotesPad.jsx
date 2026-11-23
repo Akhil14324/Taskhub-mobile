@@ -13,6 +13,15 @@ import RichText, { textToHtml } from './RichText';
 import SheetGrid from './SheetGrid';
 import { TEXT_TEMPLATES, SHEET_TEMPLATES } from './templates';
 
+/** "23 Nov, 3:42 PM" (with the year when it is not this one). */
+function editedAt(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const opts = { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleString(undefined, opts);
+}
+
 /** One picture, shown whole at its own proportions. Tap to see it large. */
 function NotePicture({ image, onOpen, onRemove }) {
   const colors = useColors();
@@ -222,6 +231,14 @@ function NoteEditor({ note, desktop, onBack, onChanged, onDeleted }) {
   }, [title, tick, save]);
   useEffect(() => () => { if (dirty.current) api.patch(`/notes/${note.id}`, latest.current).catch(() => {}); }, [note.id]);
 
+  // Closing the tab with a change still on its way: ask first, so nothing typed is lost.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const warn = (e) => { if (dirty.current) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, []);
+
   const addFiles = useCallback(async (files) => {
     for (const file of files) {
       if (!String(file.type).startsWith('image/')) { showToast({ message: 'Notes take pictures only', tone: 'error' }); continue; }
@@ -278,7 +295,7 @@ function NoteEditor({ note, desktop, onBack, onChanged, onDeleted }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
         {!desktop && <Pressable onPress={() => { if (dirty.current) save(); onBack(); }} accessibilityLabel="Back to notes" hitSlop={8}><Ionicons name="chevron-back" size={22} color={colors.gray[700]} /></Pressable>}
         <Text style={{ flex: 1, fontSize: 12, color: state === 'error' ? colors.red[600] : colors.gray[500] }}>
-          {state === 'saving' ? 'Saving...' : state === 'error' ? 'Could not save. Check your connection.' : `Saved · ${timeAgo(note.updated_at)}`}
+          {state === 'saving' ? 'Saving...' : state === 'error' ? 'Could not save. Check your connection.' : `Saved · Last edited ${editedAt(note.updated_at)}`}
         </Text>
         {!sheet && (
           <Pressable onPress={pick} accessibilityLabel="Add a picture. You can also paste or drop one." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>

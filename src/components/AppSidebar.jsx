@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import useAi from '../hooks/useAi';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import BrandMark from './BrandMark';
@@ -36,7 +35,6 @@ const SECTION_OF = {
   TeamMonitor: 'monitor',
   Reports: 'reports',
   Assistant: 'assistant',
-  Workflows: 'workflows',
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
@@ -107,7 +105,6 @@ function Entry({ icon, activeIcon, label, badge, active, onPress, hint, p }) {
  * "go to" keyboard shortcuts (G then H / T / C / A / M / N / O / P) and the "?" help.
  */
 export default function AppSidebar({ routeName }) {
-  const ai = useAi();
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { theme, toggleTheme } = useTheme();
@@ -161,7 +158,7 @@ export default function AppSidebar({ routeName }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
       <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
         <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
-        {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
+        <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="AI Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />
         <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
         <Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
         <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
@@ -172,7 +169,6 @@ export default function AppSidebar({ routeName }) {
         {user?.can_monitor && (
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )}
-        <Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
         <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Notes" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
         {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
         {featureOn(user?.preferences, 'automation') && <Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />}

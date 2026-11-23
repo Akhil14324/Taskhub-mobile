@@ -94,7 +94,6 @@ const InlineQuickAdd = forwardRef(function InlineQuickAdd({ defaults = {}, lists
       ref={wrapRef}
       collapsable={false}
       style={styles.slot}
-      dataSet={hidden ? undefined : { buddyFloor: '1' }}
       onTouchStart={hidden ? undefined : arm}
       onPointerDown={hidden ? undefined : arm}
     >

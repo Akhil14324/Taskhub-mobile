@@ -134,6 +134,8 @@ export default function TodosScreen() {
   }, []);
   const [boardGroup, setBoardGroup] = useState('status');
   const [collapsed, setCollapsed] = useState(() => new Set());
+  // Assigned view: 'toMe' (given to me by others) or 'byMe' (given by me to others).
+  const [assignedTab, setAssignedTab] = useState('toMe');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkSheet, setBulkSheet] = useState(null); // 'date' | 'priority' | 'move'
@@ -277,6 +279,13 @@ export default function TodosScreen() {
     assigned: openPersonal.filter((t) => isAssignedTodo(t) && !t.parent_id).length + openBizToMe.filter((t) => !t.parent_id && t.created_by !== meId).length + openWatched.filter((t) => !t.parent_id).length,
     lists: Object.fromEntries(lists.map((l) => [l.id, openPersonal.filter((t) => t.list_id === l.id && !t.parent_id).length])),
   }), [open, openPersonal, openBizToMe, openWatched, lists, today, meId]);
+
+  // Open assigned to-dos split by direction, for the two tabs in the Assigned view.
+  const assignedCounts = useMemo(() => {
+    const all = [...openPersonal.filter((t) => isAssignedTodo(t)), ...openBizToMe.filter((t) => t.created_by !== meId), ...openWatched].filter((t) => !t.parent_id);
+    const toMe = all.filter((t) => t.assignee_id === meId).length;
+    return { toMe, byMe: all.length - toMe };
+  }, [openPersonal, openBizToMe, openWatched, meId]);
 
   const bizCounts = useMemo(() => {
     const out = {};
@@ -518,10 +527,11 @@ export default function TodosScreen() {
         });
         byPerson.forEach((items, name) => sectionsOut.push({ key: `${label}:${name}`, title: `${label} ${name}`, items }));
       };
-      group(toMe, 'From', (t) => t.created_by_name);
-      group(byMe, 'Assigned to', (t) => t.assignee_name);
+      if (assignedTab === 'toMe') group(toMe, 'From', (t) => t.created_by_name);
+      else group(byMe, 'Assigned to', (t) => t.assignee_name);
       if (!sectionsOut.length) sectionsOut.push({ key: 'empty', title: null, items: [] });
-      done = [...personal.filter((t) => t.is_done && isAssignedTodo(t)), ...bizToMe.filter((t) => t.is_done && t.created_by !== meId), ...watched.filter((t) => t.is_done)];
+      const doneAll = [...personal.filter((t) => t.is_done && isAssignedTodo(t)), ...bizToMe.filter((t) => t.is_done && t.created_by !== meId), ...watched.filter((t) => t.is_done)];
+      done = doneAll.filter((t) => (t.assignee_id === meId) === (assignedTab === 'toMe'));
     } else if (currentList) {
       manualOrder = true;
       const inList = openPersonal.filter((t) => t.list_id === currentList.id && match(t));
@@ -553,7 +563,7 @@ export default function TodosScreen() {
     }
     const ids = sectionsOut.flatMap((s) => s.items.filter((t) => !t.parent_id || !s.items.some((p) => p.id === t.parent_id)).map((t) => t.id));
     return { sections: sectionsOut, doneItems: done, visibleIds: ids, manual: manualOrder && !q };
-  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, bizToMe, openBizToMe, business, bizId, bizTodos, bizSections, bizArchived, listGroup]);
+  }, [todos, mine, open, openPersonal, personal, view, today, currentList, listSections, inboxSections, archivedSections, showArchived, activeFilter, labelName, search, meId, bizToMe, openBizToMe, business, bizId, bizTodos, bizSections, bizArchived, listGroup, assignedTab]);
 
   const todayItems = useMemo(() => mine.filter((t) => t.due_date === today), [mine, today]);
   const todayDone = todayItems.filter((t) => t.is_done).length;
@@ -1323,6 +1333,18 @@ export default function TodosScreen() {
         </View>
       ) : (
         <>
+          {view === 'assigned' && !onBoard && !onCalendar && !onTimeline && (
+            <View style={styles.assignedTabs}>
+              {[{ key: 'toMe', label: 'Assigned to Me', n: assignedCounts.toMe }, { key: 'byMe', label: 'Assigned by Me', n: assignedCounts.byMe }].map((tab) => {
+                const active = assignedTab === tab.key;
+                return (
+                  <AnimatedPressable key={tab.key} onPress={() => setAssignedTab(tab.key)} style={[styles.assignedTab, active && styles.assignedTabActive]}>
+                    <Text style={[styles.assignedTabText, active && styles.assignedTabTextActive]} numberOfLines={1}>{tab.label} ({tab.n})</Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+          )}
           <View ref={listAreaRef}>
             <TodoTreeList
               sections={sectionsWithRight}
@@ -1820,6 +1842,11 @@ const createStyles = (colors) => StyleSheet.create({
   sectionActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   addSection: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   addSectionText: { color: colors.brand[600], fontWeight: '600', fontSize: fontSize.sm },
+  assignedTabs: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm, flexWrap: 'wrap' },
+  assignedTab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.gray[100] },
+  assignedTabActive: { backgroundColor: colors.brand[100] },
+  assignedTabText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[700] },
+  assignedTabTextActive: { fontWeight: '700', color: colors.brand[700] },
   doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.sm },
   doneToggleText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[500] },
   doneFilters: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm },

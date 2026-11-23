@@ -29,8 +29,8 @@ function Tool({ icon, label, text, active, onRun, colors }) {
 const Divider = ({ colors }) => <View style={{ width: 1, height: 18, backgroundColor: colors.gray[200], marginHorizontal: 4 }} />;
 
 /**
- * A small word processor for one note: headings, three text sizes, bold / italic / underline / strike, bullets,
- * numbers and tick lists. It edits the page's own markup (contentEditable) and reports every change as
+ * A small word processor for one note: three headings, bold / italic / underline, bullets, numbers, checklists,
+ * a divider and undo / redo. It edits the page's own markup (contentEditable) and reports every change as
  * `onChange(html, text)`. The server stores only the markup this editor produces (backend utils/noteContent.js).
  * Styling of the written text lives in public/index.html (.th-note).
  */
@@ -112,6 +112,27 @@ export default function RichText({ initialHtml, placeholder, onChange }) {
     if (list?.hasAttribute('data-check')) { list.removeAttribute('data-check'); report(); readState(); } else run('insertUnorderedList');
   };
 
+  // A divider goes after the line (or list) the caret is in, never inside it, followed by an empty line to keep writing on.
+  const divider = () => {
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    const sel = document.getSelection();
+    let node = sel?.anchorNode && el.contains(sel.anchorNode) ? sel.anchorNode : null;
+    while (node && node.parentNode !== el) node = node.parentNode;
+    const hr = document.createElement('hr');
+    const next = document.createElement('div');
+    next.appendChild(document.createElement('br'));
+    if (node) node.after(hr, next); else el.append(hr, next);
+    const range = document.createRange();
+    range.setStart(next, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    report();
+    readState();
+  };
+
   const heading = (tag) => run('formatBlock', on.block === tag ? 'DIV' : tag);
 
   // A click on the box in front of a tick-list line ticks it (the box is drawn by CSS, left of the text).
@@ -141,26 +162,21 @@ export default function RichText({ initialHtml, placeholder, onChange }) {
     <View style={{ gap: 10 }}>
       <View style={{ position: 'sticky', top: 0, zIndex: 3, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200], borderRadius: 10 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 2, padding: 4 }}>
-          {t({ text: 'Title', label: 'Large heading', active: on.block === 'H1', onRun: () => heading('H1') })}
-          {t({ text: 'Heading', label: 'Heading', active: on.block === 'H2', onRun: () => heading('H2') })}
-          {t({ text: 'Subheading', label: 'Small heading', active: on.block === 'H3', onRun: () => heading('H3') })}
-          <Divider colors={colors} />
-          {t({ text: 'A-', label: 'Smaller text', onRun: () => run('fontSize', '2') })}
-          {t({ text: 'A', label: 'Normal text size', onRun: () => run('fontSize', '3') })}
-          {t({ text: 'A+', label: 'Larger text', onRun: () => run('fontSize', '5') })}
+          {t({ text: 'H1', label: 'Heading 1: main heading', active: on.block === 'H1', onRun: () => heading('H1') })}
+          {t({ text: 'H2', label: 'Heading 2: subheading', active: on.block === 'H2', onRun: () => heading('H2') })}
+          {t({ text: 'H3', label: 'Heading 3: small heading', active: on.block === 'H3', onRun: () => heading('H3') })}
           <Divider colors={colors} />
           {t({ text: 'B', label: 'Bold (Ctrl+B)', active: on.bold, onRun: () => run('bold') })}
           {t({ text: 'I', label: 'Italic (Ctrl+I)', active: on.italic, onRun: () => run('italic') })}
           {t({ text: 'U', label: 'Underline (Ctrl+U)', active: on.underline, onRun: () => run('underline') })}
-          {t({ text: 'S', label: 'Strike through', active: on.strike, onRun: () => run('strikeThrough') })}
           <Divider colors={colors} />
           {t({ icon: 'list-outline', label: 'Bullet list', active: on.ul, onRun: bullets })}
           {t({ icon: 'reorder-four-outline', label: 'Numbered list', active: on.ol, onRun: () => run('insertOrderedList') })}
-          {t({ icon: 'checkbox-outline', label: 'Tick list', active: on.checklist, onRun: toggleChecklist })}
+          {t({ icon: 'checkbox-outline', label: 'Checklist', active: on.checklist, onRun: toggleChecklist })}
+          {t({ icon: 'remove-outline', label: 'Divider', onRun: divider })}
           <Divider colors={colors} />
           {t({ icon: 'arrow-undo-outline', label: 'Undo (Ctrl+Z)', onRun: () => run('undo') })}
           {t({ icon: 'arrow-redo-outline', label: 'Redo (Ctrl+Y)', onRun: () => run('redo') })}
-          {t({ icon: 'backspace-outline', label: 'Clear the formatting of the selection', onRun: () => { run('removeFormat'); run('formatBlock', 'DIV'); } })}
         </ScrollView>
       </View>
       {createElement('div', {

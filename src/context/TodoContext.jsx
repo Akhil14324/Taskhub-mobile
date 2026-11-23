@@ -3,7 +3,7 @@ import api from '../api/client';
 import { feedback } from '../utils/feedback';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
-import { showToast, emit, confirmDialog } from '../utils/events';
+import { showToast, confirmDialog } from '../utils/events';
 import { openNotificationTarget } from '../navigation/navigationRef';
 import { formatDue } from '../utils/dates';
 import {
@@ -204,7 +204,6 @@ export function TodoProvider({ children }) {
         const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
         showToast({ message: `Sent to ${who} · not on your list`, tone: 'success', icon: 'person-add' });
       }
-      emit('buddy', { type: 'added' });
       return null;
     }
     if (tempId && res.data.todo.dumped_at) { setTodos((prev) => prev.filter((t) => t.id !== tempId)); upsert(res.data.todo); }
@@ -227,7 +226,6 @@ export function TodoProvider({ children }) {
         : {};
       showToast({ message: `Added${where}${due}${steps.actionLabel ? ' · does it have steps?' : ''}`, tone: 'success', icon: t.business_id ? 'briefcase' : t.due_date ? 'calendar' : 'file-tray', ...steps });
     }
-    if (!res.data.todo.parent_id) emit('buddy', { type: 'added' });
     return res.data.todo;
   }, [upsert, fetchTodos]);
 
@@ -313,10 +311,9 @@ export function TodoProvider({ children }) {
       }));
     }
     if (completing && !needsReview) {
-      // After the first frame of the tick, so sound synthesis and the buddy never share it.
+      // After the first frame of the tick, so sound synthesis never shares it.
       setTimeout(() => {
         feedback.complete();
-        emit('buddy', { type: 'complete', todo });
       }, 60);
     }
     try {

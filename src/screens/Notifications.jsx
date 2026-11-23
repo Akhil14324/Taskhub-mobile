@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +19,7 @@ import { openNotificationTarget } from '../navigation/navigationRef';
 import { timeAgo } from '../utils/dates';
 import { showToast, confirmDialog } from '../utils/events';
 import { glass } from '../theme/glass';
+import { CATEGORIES, categoryOf } from '../utils/notificationMeta';
 
 function getNotifIcons(colors) {
   return {
@@ -41,6 +42,9 @@ function getNotifIcons(colors) {
     todo_shared: { icon: 'list', color: colors.brand[600], bg: colors.brand[50] },
     todo_reminder: { icon: 'alarm', color: colors.amber[600], bg: colors.amber[50] },
     todo_deadline: { icon: 'alert-circle', color: colors.red[600], bg: colors.red[50] },
+    todo_upcoming: { icon: 'time', color: colors.amber[600], bg: colors.amber[50] },
+    todo_deadline_changed: { icon: 'calendar', color: colors.amber[600], bg: colors.amber[50] },
+    ai_recommendation: { icon: 'sparkles', color: colors.purple[600], bg: colors.purple[50] },
     todo_done: { icon: 'checkmark-circle', color: colors.green[600], bg: colors.green[50] },
     todo_comment: { icon: 'chatbubble-ellipses', color: colors.brand[600], bg: colors.brand[50] },
     todo_assigned: { icon: 'person-add', color: colors.brand[600], bg: colors.brand[50] },
@@ -55,7 +59,7 @@ function getNotifIcons(colors) {
   };
 }
 
-const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, onPress }) => {
+const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, onPress, onDelete }) => {
   const config = notifIcons[item.type] || { icon: 'notifications', color: colors.gray[600], bg: colors.gray[100] };
   return (
     <AnimatedPressable onPress={() => onPress(item)} haptic="light">
@@ -69,6 +73,9 @@ const NotificationItem = memo(({ item, colors, styles, notifIcons, getDynamic, o
           <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
         </View>
         {!item.is_read && <View style={styles.unreadDot} />}
+        <AnimatedPressable onPress={() => onDelete(item)} accessibilityLabel="Delete notification" style={styles.deleteBtn}>
+          <Ionicons name="close" size={16} color={colors.gray[400]} />
+        </AnimatedPressable>
       </View>
     </AnimatedPressable>
   );
@@ -86,6 +93,7 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [category, setCategory] = useState('all');
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -117,6 +125,12 @@ export default function Notifications() {
   }, [notifications, lang, translateDynamic]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const counts = useMemo(() => {
+    const out = {};
+    notifications.forEach((n) => { const c = categoryOf(n.type); out[c] = (out[c] || 0) + 1; });
+    return out;
+  }, [notifications]);
+  const shown = useMemo(() => (category === 'all' ? notifications : notifications.filter((n) => categoryOf(n.type) === category)), [notifications, category]);
 
   const handlePress = useCallback(async (item) => {
     if (!item.is_read) {
@@ -152,6 +166,30 @@ export default function Notifications() {
     }
   };
 
+  const handleDelete = useCallback(async (item) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== item.id));
+    if (!item.is_read) decrementUnread();
+    try {
+      await api.delete(`/notifications/${item.id}`);
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not delete', tone: 'error' });
+      fetchNotifications();
+      refreshCounts();
+    }
+  }, [decrementUnread, fetchNotifications, refreshCounts]);
+
+  const handleClearAll = async () => {
+    const ok = await confirmDialog({ title: 'Clear all notifications?', message: 'Everything in this list is removed, including unread ones.', confirmLabel: 'Clear all', destructive: true });
+    if (!ok) return;
+    try {
+      await api.delete('/notifications');
+      setNotifications([]);
+      refreshCounts();
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not clear', tone: 'error' });
+    }
+  };
+
   const notifIcons = useMemo(() => getNotifIcons(colors), [colors]);
 
   const renderItem = useCallback(
@@ -164,10 +202,11 @@ export default function Notifications() {
           notifIcons={notifIcons}
           getDynamic={getDynamic}
           onPress={handlePress}
+          onDelete={handleDelete}
         />
       </FadeInItem>
     ),
-    [colors, styles, notifIcons, getDynamic, handlePress]
+    [colors, styles, notifIcons, getDynamic, handlePress, handleDelete]
   );
 
   return (
@@ -180,7 +219,24 @@ export default function Notifications() {
         </View>
         {unreadCount > 0 && <IconButton icon="checkmark-done" color={colors.brand[600]} onPress={handleMarkAllRead} accessibilityLabel={t('markAllRead')} />}
         {notifications.some((n) => n.is_read) && <IconButton icon="trash-outline" onPress={handleClearRead} accessibilityLabel="Clear read" />}
+        {notifications.length > 0 && <IconButton icon="close-circle-outline" onPress={handleClearAll} accessibilityLabel="Clear all" />}
       </View>
+
+      {!loading && notifications.length > 0 && (
+        <View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {[{ key: 'all', label: 'All', icon: 'apps-outline', n: notifications.length }, ...CATEGORIES.map((c) => ({ ...c, n: counts[c.key] || 0 }))].map((c) => {
+              const active = category === c.key;
+              return (
+                <AnimatedPressable key={c.key} onPress={() => setCategory(c.key)} style={[styles.chip, active && styles.chipActive]}>
+                  <Ionicons name={c.icon} size={14} color={active ? '#fff' : colors.gray[600]} />
+                  <Text style={[styles.chipText, active && { color: '#fff' }]}>{c.label}{c.n ? ` ${c.n}` : ''}</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {error ? <View style={{ paddingHorizontal: spacing.lg }}><ErrorBanner message={error} /></View> : null}
 
@@ -188,10 +244,10 @@ export default function Notifications() {
         <SkeletonList count={6} type="notification" />
       ) : (
         <FlatList
-          data={notifications}
+          data={shown}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
-          extraData={lang}
+          extraData={[lang, category]}
           initialNumToRender={12}
           maxToRenderPerBatch={8}
           windowSize={10}
@@ -201,7 +257,7 @@ export default function Notifications() {
           ListEmptyComponent={
             <EmptyState
               icon={<Ionicons name="notifications-off-outline" size={32} color={colors.gray[300]} />}
-              message={t('noNotifications')}
+              message={category === 'all' ? t('noNotifications') : 'Nothing in this category'}
             />
           }
         />
@@ -232,5 +288,10 @@ const createStyles = (colors) => StyleSheet.create({
   notifBody: { fontSize: fontSize.sm, color: colors.gray[600], marginTop: 2 },
   notifMessage: { fontSize: fontSize.base, color: colors.gray[900] },
   notifTime: { fontSize: fontSize.xs, color: colors.gray[400], marginTop: 4 },
+  chips: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.gray[100] },
+  chipActive: { backgroundColor: colors.brand[600] },
+  chipText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[700] },
+  deleteBtn: { padding: 6, marginLeft: spacing.xs },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand[600], marginLeft: spacing.sm },
 });
