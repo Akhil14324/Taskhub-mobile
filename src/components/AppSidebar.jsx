@@ -17,18 +17,16 @@ import { Avatar } from './kit';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { usePanel } from './Panel';
 import { SlideGroup, SlideItem } from './SlideGroup';
-import { useEngage } from '../context/EngageContext';
 import { openPalette, on } from '../utils/events';
 import { navigationRef } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
 import { useHint } from '../utils/shortcutRegistry';
 import { todayYmd } from '../utils/dates';
+import { getItemAsync, setItemAsync, deleteItemAsync } from '../utils/secureStorage';
 
 // Which sidebar entry owns which route.
 const SECTION_OF = {
   Dashboard: 'home',
-  Progress: 'progress',
-  Recap: 'progress',
   Todos: 'todos',
   ChatList: 'chat',
   ChatThread: 'chat',
@@ -115,8 +113,6 @@ export default function AppSidebar({ routeName }) {
   const { totalUnread } = useChat();
   const { todos } = useTodos();
   const { unreadCount } = useNotifications();
-  const { myDay } = useEngage();
-  const dayBadge = (myDay?.waiting_on_you || []).length;
   const [help, setHelp] = useState(false);
   const panel = usePanel('app.sidebar');
   const p = panel.p;
@@ -132,7 +128,6 @@ export default function AppSidebar({ routeName }) {
     'nav.mywork': () => go('MyWork'),
     'nav.timebox': () => go('Timebox'),
     'nav.boards': () => go('Boards'),
-    'nav.progress': () => go('Progress'),
     'nav.todos': () => go('Todos'),
     'nav.chat': () => go('ChatList'),
     'nav.monitor': () => (user?.can_monitor ? go('TeamMonitor') : false),
@@ -142,6 +137,72 @@ export default function AppSidebar({ routeName }) {
     'app.help': () => setHelp(true),
     'app.sidebar': () => panel.toggle(),
   }, true);
+
+  const orderKey = `sidebar.order.${user?.id || 0}`;
+  const [order, setOrder] = useState(null);
+  const [arrange, setArrange] = useState(false);
+  useEffect(() => { getItemAsync(orderKey).then((v) => { try { setOrder(v ? JSON.parse(v) : null); } catch (e) { setOrder(null); } }); }, [orderKey]);
+  const all = [
+    { id: 'search', node: (
+<Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
+    ) },
+    ...(ai ? [{ id: 'assistant', node: (<Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />) }] : []),
+    { id: 'mywork', node: (
+<Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
+    ) },
+    { id: 'timebox', node: (
+<Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
+    ) },
+    { id: 'home', node: (
+<Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
+    ) },
+    { id: 'todo', node: (
+<Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
+    ) },
+    { id: 'boards', node: (
+<Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
+    ) },
+    { id: 'chat', node: (
+<Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
+    ) },
+    ...(user?.can_monitor ? [{ id: 'teammonitor', node: ((
+          <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
+        )) }] : []),
+    { id: 'workflows', node: (
+<Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
+    ) },
+    { id: 'notes', node: (
+<Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Notes" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
+    ) },
+    ...(featureOn(user?.preferences, 'leaderboard') ? [{ id: 'leaderboard', node: (<Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />) }] : []),
+    ...(featureOn(user?.preferences, 'automation') ? [{ id: 'automations', node: (<Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />) }] : []),
+    ...(user?.permissions?.manage_access ? [{ id: 'whocandowhat', node: ((
+          <Entry p={p} icon="key-outline" activeIcon="key" label="Who can do what" active={section === 'access'} onPress={() => go('Access')} />
+        )) }] : []),
+    ...((user?.permissions?.view_all_todos || user?.permissions?.chat_audit) ? [{ id: 'everything', node: ((
+          <Entry p={p} icon="eye-outline" activeIcon="eye" label={user?.is_owner ? 'Super admin' : 'Everything'} active={section === 'everything'} onPress={() => go('Everything')} />
+        )) }] : []),
+    { id: 'notifications', node: (
+<Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
+    ) },
+    { id: 'organisation', node: (
+<Entry p={p} icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />
+    ) },
+  ];
+  const ordered = useMemo(() => {
+    if (!order) return all;
+    const rank = (id) => { const i = order.indexOf(id); return i < 0 ? 1e6 : i; };
+    return [...all].sort((a, b) => rank(a.id) - rank(b.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, section, totalUnread, dueCount, unreadCount, user, ai]);
+  const move = (id, dir) => {
+    const ids = ordered.map((e) => e.id);
+    const i = ids.indexOf(id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setOrder(ids); setItemAsync(orderKey, JSON.stringify(ids));
+  };
+  const resetOrder = () => { setOrder(null); deleteItemAsync(orderKey); };
 
   // The sidebar narrows to an icon rail (not away: it is how you move around) and widens again, as one spring.
   const widthStyle = useAnimatedStyle(() => ({ width: RAIL + (FULL - RAIL) * Math.min(1.02, p.value) }));
@@ -159,37 +220,28 @@ export default function AppSidebar({ routeName }) {
 
       <Animated.View style={[navWidth, { flex: 1, minHeight: 0 }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-      <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
-        <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
-        {ai && <Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />}
-        <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
-        <Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
-        <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
-        <Entry p={p} icon="sunny-outline" activeIcon="sunny" label="Progress" badge={dayBadge} active={section === 'progress'} onPress={() => go('Progress')} hint={hint('nav.progress')} />
-        <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
-        <Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
-        <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />
-        {user?.can_monitor && (
-          <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
-        )}
-        <Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
-        <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Notes" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
-        {featureOn(user?.preferences, 'leaderboard') && <Entry p={p} icon="trophy-outline" activeIcon="trophy" label="Leaderboard" active={section === 'leaderboard'} onPress={() => go('Leaderboard')} />}
-        {featureOn(user?.preferences, 'automation') && <Entry p={p} icon="flash-outline" activeIcon="flash" label="Automations" active={section === 'automations'} onPress={() => go('Automations')} />}
-        {user?.permissions?.manage_access && (
-          <Entry p={p} icon="key-outline" activeIcon="key" label="Who can do what" active={section === 'access'} onPress={() => go('Access')} />
-        )}
-        {(user?.permissions?.view_all_todos || user?.permissions?.chat_audit) && (
-          <Entry p={p} icon="eye-outline" activeIcon="eye" label={user?.is_owner ? 'Super admin' : 'Everything'} active={section === 'everything'} onPress={() => go('Everything')} />
-        )}
-        <Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
-        <Entry p={p} icon="git-network-outline" activeIcon="git-network" label="Organisation" active={section === 'org'} onPress={() => go('Organization')} />
-      </SlideGroup>
+      {arrange ? (
+        <View style={styles.group}>
+          {ordered.map((e, i) => (
+            <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View pointerEvents="none" style={{ flex: 1 }}>{e.node}</View>
+              <AnimatedPressable onPress={() => move(e.id, -1)} disabled={i === 0} accessibilityLabel={`Move ${e.id} up`} style={{ padding: 6, opacity: i === 0 ? 0.3 : 1 }}><Ionicons name="chevron-up" size={16} color={colors.gray[600]} /></AnimatedPressable>
+              <AnimatedPressable onPress={() => move(e.id, 1)} disabled={i === ordered.length - 1} accessibilityLabel={`Move ${e.id} down`} style={{ padding: 6, opacity: i === ordered.length - 1 ? 0.3 : 1 }}><Ionicons name="chevron-down" size={16} color={colors.gray[600]} /></AnimatedPressable>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <SlideGroup style={styles.group} pillStyle={{ borderRadius: radius.lg }}>
+          {ordered.map((e) => e.node)}
+        </SlideGroup>
+      )}
       </ScrollView>
       </Animated.View>
 
       <View style={styles.group}>
         <Entry p={p} icon={panel.open ? 'chevron-back-outline' : 'chevron-forward-outline'} label={panel.open ? 'Collapse sidebar' : 'Expand sidebar'} hint={hint('app.sidebar')} onPress={panel.toggle} />
+        <Entry p={p} icon={arrange ? 'checkmark-outline' : 'reorder-three-outline'} label={arrange ? 'Done arranging' : 'Arrange sidebar'} onPress={() => setArrange((a) => !a)} />
+        {arrange && !!order && <Entry p={p} icon="refresh-outline" label="Reset order" onPress={resetOrder} />}
         <Entry p={p} icon="keypad-outline" label="Keyboard shortcuts" hint={hint('app.help')} onPress={() => setHelp(true)} />
         <Entry p={p} icon={theme === 'dark' ? 'sunny-outline' : 'moon-outline'} label={theme === 'dark' ? 'Light mode' : 'Dark mode'} onPress={toggleTheme} />
       </View>

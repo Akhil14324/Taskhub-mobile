@@ -184,7 +184,7 @@ export const FILTER_ASSIGNED_OPTIONS = [
 // Built-in views, shown next to the saved ones.
 export const BUILTIN_FILTERS = [
   { id: 'overdue', name: 'Overdue', icon: 'alert-circle', config: { ...FILTER_DEFAULT, due: 'overdue' } },
-  { id: 'p1', name: 'Priority 1', icon: 'flag', config: { ...FILTER_DEFAULT, priorities: [1] } },
+  { id: 'p1', name: 'Critical', icon: 'flag', config: { ...FILTER_DEFAULT, priorities: [1] } },
   { id: 'week', name: 'Next 7 days', icon: 'calendar', config: { ...FILTER_DEFAULT, due: 'week' } },
   { id: 'nodate', name: 'No date', icon: 'remove-circle', config: { ...FILTER_DEFAULT, due: 'nodate' } },
   { id: 'others', name: 'Assigned by others', icon: 'person-circle', config: { ...FILTER_DEFAULT, assigned: 'others' } },

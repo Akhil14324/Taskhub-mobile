@@ -29,7 +29,7 @@ export default function DailyReportCard({ refreshKey = 0 }) {
 
   if (!today || today.weekend) return null;
 
-  const open = () => navigation.navigate('Progress', { tab: 'standup' });
+  const open = () => navigation.navigate('Boards');
   const posted = today.posted;
 
   if (posted) {

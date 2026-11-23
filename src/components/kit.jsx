@@ -45,10 +45,10 @@ export function setDarkMode(value) { darkMode = !!value; }
 export const isDarkMode = () => darkMode;
 export const darkestRed = () => (darkMode ? '#f0697f' : '#d83a52');
 export const PRIORITY = {
-  1: { label: 'Priority 1', short: 'P1', get color() { return darkestRed(); } },
-  2: { label: 'Priority 2', short: 'P2', get color() { return darkMode ? '#fec26f' : '#e8932a'; } },
-  3: { label: 'Priority 3', short: 'P3', get color() { return darkMode ? '#8dbbfd' : '#D4621A'; } },
-  4: { label: 'Priority 4', short: 'P4', color: '#9699a6' },
+  1: { label: 'Critical', short: 'Critical', get color() { return darkestRed(); } },
+  2: { label: 'High', short: 'High', get color() { return darkMode ? '#fec26f' : '#e8932a'; } },
+  3: { label: 'Medium', short: 'Medium', get color() { return darkMode ? '#8dbbfd' : '#D4621A'; } },
+  4: { label: 'Low', short: 'Low', color: '#9699a6' },
 };
 
 const AVATAR_COLORS = ['#D4621A', '#00c875', '#fdab3d', '#a25ddc', '#e2445c', '#579bfc', '#037f4c', '#ff158a', '#5559df', '#7f5347'];

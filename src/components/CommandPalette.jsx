@@ -72,7 +72,6 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'dump-all', group: 'Actions', icon: 'archive', label: 'Dump everything', run: () => dumpEverything() },
     { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
     { id: 'meetings', group: 'Go to', icon: 'document-text-outline', label: 'Notes: notepad and meetings', run: () => go('MeetingNotes') },
-    { id: 'progress', group: 'Go to', icon: 'sunny-outline', label: 'Progress: today, stand-up, wins, goals', hint: hint('nav.progress'), run: () => go('Progress') },
     { id: 'recap', group: 'Go to', icon: 'stats-chart-outline', label: 'Week in review', run: () => go('Recap') },
     { id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') },
     { id: 'todos', group: 'Go to', icon: 'checkbox-outline', label: 'To-do and business tasks', hint: hint('nav.todos'), run: () => go('Todos') },

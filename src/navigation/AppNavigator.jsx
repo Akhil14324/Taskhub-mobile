@@ -40,8 +40,6 @@ import LoginScreen from '../screens/Login';
 import SignupScreen from '../screens/Signup';
 import ForgotPasswordScreen from '../screens/ForgotPassword';
 import HomeScreen from '../screens/HomeScreen';
-import ProgressScreen from '../screens/ProgressScreen';
-import RecapScreen from '../screens/RecapScreen';
 import TodosScreen from '../screens/TodosScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
@@ -116,8 +114,6 @@ const FramedEverything = framed(EverythingScreen, 1100);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
 const FramedNotifications = framed(NotificationsScreen, 1100);
 const FramedProfile = framed(ProfileScreen, 1000);
-const FramedProgress = framed(ProgressScreen, WIDE);
-const FramedRecap = framed(RecapScreen, 920);
 
 // The native stack does no transition in a browser, so every screen animates itself when it gains focus.
 const TabHome = T(HomeScreen, 'tab', 'Dashboard');
@@ -144,19 +140,18 @@ const PushEverything = T(FramedEverything);
 const PushPersonMonitor = T(FramedPersonMonitor);
 const PushNotifications = T(FramedNotifications);
 const PushProfile = T(FramedProfile);
-const PushProgress = T(FramedProgress);
-const PushRecap = T(FramedRecap);
 
 const Stack = createNativeStackNavigator();
 
 // Every screen has its own address, so reloading the browser (or opening a link) stays on that screen instead of
 // falling back to Home. Ids in the address are numbers.
 const num = { parse: { id: Number, conversationId: Number, personId: Number }, stringify: {} };
-const LINKING = {
+// The address '/' opens the person's chosen start page (Boards unless they picked otherwise).
+const linkingFor = (start) => ({
   prefixes: [],
   config: {
     screens: {
-      Main: { path: '', screens: { Dashboard: '', Todos: 'todos', ChatList: 'chat', More: 'more' } },
+      Main: { path: start === 'boards' ? 'main' : '', screens: { Dashboard: start === 'home' || !['todos', 'chat'].includes(start) ? (start === 'boards' ? 'home' : '') : 'home', Todos: 'todos', ChatList: 'chat', More: 'more' } },
       ChatThread: { path: 'chat/:conversationId', ...num },
       GroupInfo: 'group-info',
       Organization: 'organization',
@@ -166,7 +161,7 @@ const LINKING = {
       Workflows: 'workflows',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
-      Boards: 'boards',
+      Boards: start === 'boards' ? '' : 'boards',
       Board: { path: 'boards/:id', ...num },
       MyWork: 'my-work',
       Timebox: 'timebox',
@@ -177,8 +172,6 @@ const LINKING = {
       Everything: 'everything',
       Notifications: 'notifications',
       Profile: 'profile',
-      Progress: 'progress',
-      Recap: 'recap',
       Legal: 'legal',
       Login: 'login',
       Signup: 'signup',
@@ -187,7 +180,7 @@ const LINKING = {
       Oops: 'oops',
     },
   },
-};
+});
 const Tab = createBottomTabNavigator();
 
 /**
@@ -360,7 +353,6 @@ function MainTabs() {
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
-    { group: 'Work', label: 'My day & progress', icon: 'sunny-outline', route: 'Progress' },
     { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
@@ -547,6 +539,8 @@ export default function AppNavigator() {
   const desktop = useIsDesktop();
   const notificationListenerRef = useRef(null);
   const [routeName, setRouteName] = useState(null);
+  const startPage = user?.preferences?.startPage || 'boards';
+  const linking = useMemo(() => linkingFor(startPage), [startPage]);
 
   // The default navigation theme paints a pale grey behind screens that do not fill the window.
   const navTheme = useMemo(() => ({
@@ -588,8 +582,9 @@ export default function AppNavigator() {
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
       {showShell && <AppSidebar routeName={routeName} />}
       <View style={{ flex: 1, minWidth: 0 }}>
-    <NavigationContainer ref={navigationRef} theme={navTheme} linking={LINKING} onReady={syncRoute} onStateChange={syncRoute}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
+        initialRouteName={user && !user.must_change_password && startPage === 'boards' ? 'Boards' : undefined}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: 'transparent' },
@@ -627,8 +622,6 @@ export default function AppNavigator() {
             <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />
             <Stack.Screen name="Notifications" component={PushNotifications} />
             <Stack.Screen name="Profile" component={PushProfile} />
-            <Stack.Screen name="Progress" component={PushProgress} />
-            <Stack.Screen name="Recap" component={PushRecap} />
           </>
         )}
         <Stack.Screen name="Legal" component={LegalScreen} />
