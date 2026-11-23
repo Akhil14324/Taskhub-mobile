@@ -47,7 +47,6 @@ import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import AssistantScreen from '../screens/AssistantScreen';
 import WorkflowsScreen from '../screens/WorkflowsScreen';
-import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
@@ -104,7 +103,7 @@ const FramedChatList = ChatListEntry;
 const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
-const FramedAssistant = framed(AssistantScreen, 760);
+// The Assistant lays out its own dashboard and chat, so it takes the full width (not framed).
 const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
@@ -127,7 +126,7 @@ const PushChatThread = T(FramedChatThread);
 const PushGroupInfo = T(FramedGroupInfo);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
-const PushAssistant = T(FramedAssistant);
+const PushAssistant = T(AssistantScreen);
 const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
@@ -352,9 +351,8 @@ function MainTabs() {
   const today = todayYmd();
   const todoBadge = todos.filter((td) => !td.is_done && td.due_date && td.due_date <= today && (!td.business_id || td.assignee_id === user?.id)).length;
 
-  const ai = useAi();
   const moreItems = [
-    ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
+    { group: 'Work', label: 'AI Assistant', icon: 'sparkles-outline', route: 'Assistant' },
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
     { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
