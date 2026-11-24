@@ -113,7 +113,7 @@ const TIME_PRESETS = ['09:00', '12:00', '15:00', '17:00', '18:00'];
 /**
  * Date and optional time in one compact window: a month calendar, quick picks, and a time that can be typed
  * ("5pm", "17:30"), tapped from presets or set on a clock. Picking a date does not close it, so a time can follow;
- * Done closes. onChange({ date: 'YYYY-MM-DD' | null, time: 'HH:MM' | null }) fires on every change.
+ * Done applies and closes (closing any other way changes nothing). onChange({ date: 'YYYY-MM-DD' | null, time: 'HH:MM' | null }).
  */
 export default function DueDatePicker({ visible, onClose, date, time, onChange, allowTime = true }) {
   const colors = useColors();
@@ -123,6 +123,7 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
   const [pickedTime, setPickedTime] = useState(time || null);
   const [text, setText] = useState(time ? formatTime(time) : '');
   const [clockOpen, setClockOpen] = useState(false);
+  const initialDate = date; const initialTime = time;
 
   useEffect(() => {
     if (visible) {
@@ -134,10 +135,10 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Choices are kept inside until Done, so a date and a time can be set one after the other.
   const apply = (nextDate, nextTime) => {
     setD(nextDate); setPickedTime(nextTime);
     setText(nextTime ? formatTime(nextTime) : '');
-    onChange({ date: nextDate, time: nextDate || nextTime ? nextTime : null });
   };
   const chooseDate = (ymd) => {
     if (!allowTime) { onChange({ date: ymd, time: null }); onClose(); return; }
@@ -149,6 +150,12 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
     if (!text.trim()) { if (pickedTime) chooseTime(null); return; }
     const v = parseTimeText(text);
     if (v) chooseTime(v); else setText(pickedTime ? formatTime(pickedTime) : '');
+  };
+  const finish = () => {
+    const typed = text.trim() ? (parseTimeText(text) || pickedTime) : null;
+    const date = d || (typed ? todayYmd() : null);
+    if (date || date !== (initialDate || null) || typed !== (initialTime || null)) onChange({ date, time: date ? typed : null });
+    onClose();
   };
 
   const quick = [
@@ -251,7 +258,7 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
         <AnimatedPressable onPress={() => { onChange({ date: null, time: null }); onClose(); }} haptic="light" style={styles.footerGhost}>
           <Text style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[600] }}>Clear</Text>
         </AnimatedPressable>
-        <AnimatedPressable onPress={() => { commitText(); onClose(); }} haptic="light" style={styles.footerPrimary}>
+        <AnimatedPressable onPress={finish} haptic="light" style={styles.footerPrimary}>
           <Text style={{ fontSize: fontSize.base, fontWeight: '700', color: '#fff' }}>Done</Text>
         </AnimatedPressable>
       </View>
