@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme/theme';
@@ -98,36 +98,65 @@ function nextMonday() {
   return toYmd(d);
 }
 
+/** "5pm", "5:30 pm", "17:30", "1730" -> 'HH:MM', or null. */
+export function parseTimeText(text) {
+  const m = String(text || '').trim().toLowerCase().replace(/\./g, '').match(/^(\d{1,2})(?::?(\d{2}))?\s*(am|pm|a|p)?$/);
+  if (!m) return null;
+  let h = Number(m[1]); const min = m[2] ? Number(m[2]) : 0; const ap = m[3];
+  if (min > 59) return null;
+  if (ap) { if (h < 1 || h > 12) return null; h = (h % 12) + (ap[0] === 'p' ? 12 : 0); } else if (h > 23) return null;
+  return `${pad2(h)}:${pad2(min)}`;
+}
+
+const TIME_PRESETS = ['09:00', '12:00', '15:00', '17:00', '18:00'];
+
 /**
- * Todoist-style scheduler: quick picks, a month calendar and optional time.
- * onChange({ date: 'YYYY-MM-DD' | null, time: 'HH:MM' | null })
+ * Date and optional time in one compact window: a month calendar, quick picks, and a time that can be typed
+ * ("5pm", "17:30"), tapped from presets or set on a clock. Picking a date does not close it, so a time can follow;
+ * Done closes. onChange({ date: 'YYYY-MM-DD' | null, time: 'HH:MM' | null }) fires on every change.
  */
 export default function DueDatePicker({ visible, onClose, date, time, onChange, allowTime = true }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [view, setView] = useState(() => parseYmd(date) || new Date());
+  const [d, setD] = useState(date || null);
   const [pickedTime, setPickedTime] = useState(time || null);
+  const [text, setText] = useState(time ? formatTime(time) : '');
   const [clockOpen, setClockOpen] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setView(parseYmd(date) || new Date());
+      setD(date || null);
       setPickedTime(time || null);
+      setText(time ? formatTime(time) : '');
       setClockOpen(false);
     }
-  }, [visible, date, time]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const choose = (ymd) => {
-    onChange({ date: ymd, time: ymd ? pickedTime : null });
-    onClose();
+  const apply = (nextDate, nextTime) => {
+    setD(nextDate); setPickedTime(nextTime);
+    setText(nextTime ? formatTime(nextTime) : '');
+    onChange({ date: nextDate, time: nextDate || nextTime ? nextTime : null });
+  };
+  const chooseDate = (ymd) => {
+    if (!allowTime) { onChange({ date: ymd, time: null }); onClose(); return; }
+    if (ymd) setView(parseYmd(ymd));
+    apply(ymd, ymd ? pickedTime : null);
+  };
+  const chooseTime = (v) => apply(d || todayYmd(), v);
+  const commitText = () => {
+    if (!text.trim()) { if (pickedTime) chooseTime(null); return; }
+    const v = parseTimeText(text);
+    if (v) chooseTime(v); else setText(pickedTime ? formatTime(pickedTime) : '');
   };
 
   const quick = [
-    { label: 'Today', icon: 'today-outline', color: colors.brand[600], value: todayYmd() },
-    { label: 'Tomorrow', icon: 'sunny-outline', color: colors.brand[700], value: addDays(todayYmd(), 1) },
-    { label: 'This weekend', icon: 'cafe-outline', color: colors.brand[600], value: nextSaturday() },
-    { label: 'Next week', icon: 'arrow-forward-circle-outline', color: colors.brand[700], value: nextMonday() },
-    { label: 'No date', icon: 'close-circle-outline', color: colors.gray[500], value: null },
+    { label: 'Today', value: todayYmd() },
+    { label: 'Tomorrow', value: addDays(todayYmd(), 1) },
+    { label: 'Weekend', value: nextSaturday() },
+    { label: 'Next week', value: nextMonday() },
+    { label: 'No date', value: null },
   ];
 
   const year = view.getFullYear();
@@ -139,42 +168,43 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
   const today = todayYmd();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight={640}>
-      <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <Text style={styles.current}>{date ? `${formatDue(date)}${pickedTime ? ` · ${formatTime(pickedTime)}` : ''}` : 'No date'}</Text>
-        {quick.map((q) => (
-          <AnimatedPressable key={q.label} style={styles.quickRow} onPress={() => choose(q.value)} haptic="light">
-            <Ionicons name={q.icon} size={20} color={q.color} />
-            <Text style={styles.quickLabel}>{q.label}</Text>
-            {q.value && <Text style={styles.quickHint}>{WEEKDAYS_SHORT[parseYmd(q.value).getDay()]}</Text>}
-          </AnimatedPressable>
-        ))}
+    <BottomSheet visible={visible} onClose={onClose} maxHeight={720}>
+      <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing.sm }}>
+        <Text style={styles.current}>{d ? `${formatDue(d)}${pickedTime ? ` · ${formatTime(pickedTime)}` : ''}` : 'No date'}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {quick.map((q) => {
+            const active = q.value === d;
+            return (
+              <AnimatedPressable key={q.label} onPress={() => chooseDate(q.value)} haptic="light" style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && { color: '#fff' }]}>{q.label}</Text>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
 
         <View style={styles.calHeader}>
-          <AnimatedPressable onPress={() => setView(new Date(year, month - 1, 1))} hitSlop={10} haptic="light">
+          <AnimatedPressable onPress={() => setView(new Date(year, month - 1, 1))} hitSlop={10} haptic="light" accessibilityLabel="Previous month">
             <Ionicons name="chevron-back" size={22} color={colors.gray[600]} />
           </AnimatedPressable>
           <Text style={styles.calTitle}>{view.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</Text>
-          <AnimatedPressable onPress={() => setView(new Date(year, month + 1, 1))} hitSlop={10} haptic="light">
+          <AnimatedPressable onPress={() => setView(new Date(year, month + 1, 1))} hitSlop={10} haptic="light" accessibilityLabel="Next month">
             <Ionicons name="chevron-forward" size={22} color={colors.gray[600]} />
           </AnimatedPressable>
         </View>
         <View style={styles.grid}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <Text key={`h${i}`} style={styles.weekday}>{d}</Text>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => (
+            <Text key={`h${i}`} style={styles.weekday}>{w}</Text>
           ))}
           {cells.map((day, i) => {
             if (!day) return <View key={`e${i}`} style={styles.cell} />;
             const ymd = toYmd(new Date(year, month, day));
-            const selected = ymd === date;
+            const selected = ymd === d;
             const isToday = ymd === today;
             const past = ymd < today;
             return (
-              <AnimatedPressable key={ymd} style={styles.cell} onPress={() => choose(ymd)} haptic="light">
+              <AnimatedPressable key={ymd} style={styles.cell} onPress={() => chooseDate(ymd)} haptic="light">
                 <View style={[styles.day, selected && styles.daySelected, isToday && !selected && styles.dayToday]}>
-                  <Text style={[styles.dayText, past && styles.dayPast, selected && styles.dayTextSelected, isToday && !selected && styles.dayTextToday]}>
-                    {day}
-                  </Text>
+                  <Text style={[styles.dayText, past && styles.dayPast, selected && styles.dayTextSelected, isToday && !selected && styles.dayTextToday]}>{day}</Text>
                 </View>
               </AnimatedPressable>
             );
@@ -182,34 +212,49 @@ export default function DueDatePicker({ visible, onClose, date, time, onChange, 
         </View>
 
         {allowTime && (
-          <>
-            <Text style={styles.timeTitle}>Time</Text>
+          <View style={styles.timeBlock}>
             <View style={styles.timeFieldRow}>
-              <AnimatedPressable onPress={() => setClockOpen((o) => !o)} {...glass('inset')} style={[styles.timeField, clockOpen && styles.timeFieldOpen]} haptic="light" accessibilityLabel="Pick a time">
-                <Ionicons name="time-outline" size={18} color={pickedTime ? colors.brand[600] : colors.gray[500]} />
-                <Text style={[styles.timeFieldText, !pickedTime && { color: colors.gray[500], fontWeight: '500' }]}>{pickedTime ? formatTime(pickedTime) : 'Add a time'}</Text>
+              <Ionicons name="time-outline" size={18} color={pickedTime ? colors.brand[600] : colors.gray[500]} />
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                onBlur={commitText}
+                onSubmitEditing={commitText}
+                placeholder="Time, e.g. 5pm or 17:30 (optional)"
+                placeholderTextColor={colors.gray[400]}
+                accessibilityLabel="Time"
+                style={styles.timeInput}
+              />
+              <AnimatedPressable onPress={() => setClockOpen((o) => !o)} hitSlop={8} haptic="light" accessibilityLabel="Pick the time on a clock">
+                <Ionicons name={clockOpen ? 'chevron-up-circle-outline' : 'stopwatch-outline'} size={22} color={clockOpen ? colors.brand[600] : colors.gray[500]} />
               </AnimatedPressable>
               {!!pickedTime && (
-                <AnimatedPressable onPress={() => { setPickedTime(null); setClockOpen(false); onChange({ date: date || null, time: null }); }} hitSlop={8} haptic="light" accessibilityLabel="Remove the time">
+                <AnimatedPressable onPress={() => { setClockOpen(false); chooseTime(null); }} hitSlop={8} haptic="light" accessibilityLabel="Remove the time">
                   <Ionicons name="close-circle" size={22} color={colors.gray[400]} />
                 </AnimatedPressable>
               )}
             </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {TIME_PRESETS.map((v) => (
+                <AnimatedPressable key={v} onPress={() => chooseTime(v)} haptic="light" style={[styles.chip, pickedTime === v && styles.chipActive]}>
+                  <Text style={[styles.chipText, pickedTime === v && { color: '#fff' }]}>{formatTime(v)}</Text>
+                </AnimatedPressable>
+              ))}
+            </ScrollView>
             {clockOpen && (
-              <ClockDial
-                colors={colors}
-                value={pickedTime}
-                onPick={(v, close) => {
-                  setPickedTime(v);
-                  onChange({ date: date || todayYmd(), time: v });
-                  if (close) setClockOpen(false);
-                }}
-              />
+              <ClockDial colors={colors} value={pickedTime} onPick={(v, close) => { chooseTime(v); if (close) setClockOpen(false); }} />
             )}
-            <View style={{ height: spacing.md }} />
-          </>
+          </View>
         )}
       </ScrollView>
+      <View style={styles.footer}>
+        <AnimatedPressable onPress={() => { onChange({ date: null, time: null }); onClose(); }} haptic="light" style={styles.footerGhost}>
+          <Text style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[600] }}>Clear</Text>
+        </AnimatedPressable>
+        <AnimatedPressable onPress={() => { commitText(); onClose(); }} haptic="light" style={styles.footerPrimary}>
+          <Text style={{ fontSize: fontSize.base, fontWeight: '700', color: '#fff' }}>Done</Text>
+        </AnimatedPressable>
+      </View>
     </BottomSheet>
   );
 }
@@ -252,8 +297,17 @@ const createStyles = (colors) => StyleSheet.create({
   dayPast: { color: colors.gray[400] },
   dayTextSelected: { color: '#fff', fontWeight: '700' },
   dayTextToday: { color: '#D4621A', fontWeight: '700' },
+  chips: { gap: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.gray[100] },
+  chipActive: { backgroundColor: '#D4621A' },
+  chipText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[700] },
+  timeBlock: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.gray[200] },
+  timeInput: { flex: 1, paddingVertical: 8, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' },
+  footer: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm, paddingHorizontal: spacing.sm },
+  footerGhost: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.gray[100] },
+  footerPrimary: { flex: 2, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: '#D4621A' },
   timeTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.gray[600], marginTop: spacing.lg, paddingHorizontal: spacing.sm },
-  timeFieldRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.sm },
+  timeFieldRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.gray[100] },
   timeField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md, backgroundColor: colors.gray[100], borderWidth: 1, borderColor: 'transparent' },
   timeFieldOpen: { borderColor: colors.brand[600] },
   timeFieldText: { fontSize: fontSize.base, fontWeight: '700', color: colors.gray[900] },
