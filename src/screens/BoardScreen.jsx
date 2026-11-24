@@ -567,6 +567,9 @@ export default function BoardScreen({ route }) {
           onExport={exportCsv}
           onDuplicated={(copy) => navigation.push('Board', { id: copy.id })}
           onArchive={async () => { await board.updateBoard({ archived: true }); navigation.goBack(); }}
+          onDelete={user?.is_owner ? async () => {
+            try { await api.delete(`/boards/${b.id}`); showToast({ message: `Deleted "${b.name}"`, tone: 'success', icon: 'trash' }); navigation.navigate('Boards'); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the board', tone: 'error', icon: 'alert-circle' }); }
+          } : null}
         />
       )}
       <BoardAutomate visible={automate} board={b} onClose={() => setAutomate(false)} />

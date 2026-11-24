@@ -380,7 +380,7 @@ const COPY_ITEMS = [['none', 'Only the structure'], ['open', 'With open items'],
  * The board's own menu (F-BRD-05, F-TPL-02, F-IMP-01, F-EXP-01): automate, duplicate, save as a template,
  * import, export, archive. Duplicating and saving a template never change the board itself.
  */
-export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onExport, onDuplicated, onArchive }) {
+export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onExport, onDuplicated, onArchive, onDelete }) {
   const colors = useColors();
   const [stage, setStage] = useState('menu');
   const [withItems, setWithItems] = useState('none');
@@ -452,6 +452,17 @@ export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onE
                 onClose();
                 const ok = await confirmDialog({ title: `Archive "${b.name}"?`, message: 'The board is hidden from the list. Its items stay, nothing is deleted, and it can be brought back.', confirmLabel: 'Archive' });
                 if (ok) onArchive();
+              }}
+            />
+          )}
+          {!!onDelete && b.kind !== 'my_todos' && (
+            <MenuRow
+              icon="trash-outline"
+              label="Delete board for good"
+              onPress={async () => {
+                onClose();
+                const ok = await confirmDialog({ title: `Delete "${b.name}"?`, message: 'The board and every task on it are deleted. This is for the super admin only. The rows are kept in the deleted-rows archive, but the board is gone from the app.', confirmLabel: 'Delete board', destructive: true });
+                if (ok) onDelete();
               }}
             />
           )}

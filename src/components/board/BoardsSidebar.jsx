@@ -101,6 +101,20 @@ export default function BoardsSidebar({ boardId }) {
               {s.key === space.key && <Ionicons name="checkmark" size={16} color={BRAND} />}
             </Pressable>
           ))}
+          {!!user?.is_owner && space.key.startsWith('b') && (
+            <Pressable
+              onPress={async () => {
+                setMenu(null);
+                const typed = typeof window !== 'undefined' ? window.prompt(`Delete the workspace "${space.name}" with all its boards and tasks?\nThis cannot be undone from the app. Type its name to confirm.`) : null;
+                if (typed !== space.name) { if (typed !== null) showToast({ message: 'The name did not match. Nothing was deleted.', tone: 'error' }); return; }
+                try { await api.delete(`/org/businesses/${space.key.slice(1)}`, { params: { confirm: space.name } }); setPicked(null); refreshBoards(); showToast({ message: `Deleted ${space.name}`, tone: 'success', icon: 'trash' }); navigation.navigate('Boards'); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the workspace', tone: 'error' }); }
+              }}
+              style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, marginTop: 4, borderTopWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.red[600]} />
+              <Text style={{ flex: 1, fontSize: 14, color: colors.red[600], fontWeight: '600' }}>Delete this workspace</Text>
+            </Pressable>
+          )}
           {!!user?.is_leader && (
             <Pressable
               onPress={() => { setMenu(null); setCreatingSpace(true); }}
