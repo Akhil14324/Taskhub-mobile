@@ -103,7 +103,14 @@ export function cellValue(item, column, values) {
 }
 
 /** The day (YYYY-MM-DD, the viewer's own calendar) a task was entered, from its created_at. It never changes. */
-export const enteredDay = (item) => (item?.created_at ? toYmd(new Date(item.created_at)) : null);
+export const enteredAt = (item) => item?.created_at || item?.updated_at || null; // no creation stamp: the next one we have
+export const enteredDay = (item) => (enteredAt(item) ? toYmd(new Date(enteredAt(item))) : null);
+
+/** "3:42 pm" in the viewer's own time. */
+export function enteredTime(item) {
+  const at = enteredAt(item);
+  return at ? new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '';
+}
 
 /** "Mon 24 Nov" (with the year when it is not this year): an absolute day, so a record never reads "Yesterday". */
 export function enteredLabel(ymd) {
@@ -131,7 +138,7 @@ export function cellText(item, column, values, people = []) {
     case 'location': return v.address || '';
     case 'checkbox': return v ? 'Yes' : '';
     case 'priority': return v ? `P${v}` : '';
-    case 'entered_date': return enteredDay(item) || '';
+    case 'entered_date': { const d = enteredDay(item); return d ? `${d} ${new Date(enteredAt(item)).toTimeString().slice(0, 5)}` : ''; }
     case 'dependency': return (v || []).map((d) => d.title).join(', ');
     default: return typeof v === 'object' ? JSON.stringify(v) : String(v);
   }

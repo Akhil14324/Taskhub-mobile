@@ -7,7 +7,7 @@ import { Avatar, PRIORITY } from '../kit';
 import { formatDue, daysFromToday, timeAgo } from '../../utils/dates';
 import useLoad, { loadText } from '../../hooks/useLoad';
 import {
-  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel,
+  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime,
 } from './model';
 
 /**
@@ -292,7 +292,7 @@ export const CellView = memo(function CellView({ item, column, values, people, c
       return <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{timeAgo(v)}{key === 'created' && item.created_by_name ? ` · ${item.created_by_name}` : ''}</Text>;
     case 'entered_date': {
       const day = enteredDay(item);
-      return day ? <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{enteredLabel(day)}</Text> : <Empty />;
+      return day ? <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{enteredLabel(day)}, {enteredTime(item)}</Text> : <Empty />;
     }
     case 'auto_number':
       return <Text style={{ fontSize: 12, color: colors.gray[500] }}>#{v}</Text>;
