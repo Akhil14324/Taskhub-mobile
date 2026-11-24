@@ -1,3 +1,4 @@
+import { Tr } from '../kit';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
@@ -481,7 +482,7 @@ export default function BoardTable({
                 />
               ) : (
                 <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'text' }}>
-                  <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}>{k.title}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}><Tr>{k.title}</Tr></Text>
                 </Pressable>
               )}
               {prog && (

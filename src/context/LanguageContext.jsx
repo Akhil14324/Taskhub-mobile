@@ -2,6 +2,11 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, u
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translations } from '../i18n/translations';
 import { translateBatch } from '../i18n/translateService';
+import { useAuth } from './AuthContext';
+
+// People whose app opens in Telugu by default (matched on name or username); anyone can still switch.
+const TELUGU_DEFAULT = ['ashok', 'chandra'];
+export const wantsTelugu = (u) => !!u && (u.preferences?.language === 'te' || (!u.preferences?.language && TELUGU_DEFAULT.some((n) => `${u.name || ''} ${u.username || ''}`.toLowerCase().includes(n))));
 
 const LanguageContext = createContext(null);
 
@@ -13,13 +18,15 @@ export function LanguageProvider({ children }) {
   const initRef = useRef(false);
 
   // Load saved language on mount
+  const { user } = useAuth();
   useEffect(() => {
+    if (!user) return;
     (async () => {
-      const saved = await AsyncStorage.getItem('lang');
-      if (saved === 'te') AsyncStorage.removeItem('lang'); // Telugu is not wired up; always English
+      const saved = await AsyncStorage.getItem(`lang.${user.id}`);
+      setLang(saved === 'te' || saved === 'en' ? saved : (wantsTelugu(user) ? 'te' : 'en'));
       initRef.current = true;
     })();
-  }, []);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Collect all English keys once
   const allKeys = useMemo(() => Object.keys(translations.en), []);
@@ -59,14 +66,14 @@ export function LanguageProvider({ children }) {
 
   const changeLang = useCallback((newLang) => {
     setLang(newLang);
-    AsyncStorage.setItem('lang', newLang);
+    AsyncStorage.setItem(`lang.${user?.id}`, newLang);
     setDynamicCache({});
   }, []);
 
   const toggleLang = useCallback(() => {
     setLang((prev) => {
       const next = prev === 'en' ? 'te' : 'en';
-      AsyncStorage.setItem('lang', next);
+      AsyncStorage.setItem(`lang.${user?.id}`, next);
       setDynamicCache({});
       return next;
     });
@@ -99,6 +106,24 @@ export function LanguageProvider({ children }) {
     [dynamicCache, lang]
   );
 
+  // tr(text): translated text of anything typed by people (task titles, names). Misses are queued and fetched in one batch.
+  const pending = useRef(new Set());
+  const timer = useRef(null);
+  const tr = useCallback((text) => {
+    if (lang === 'en' || !text || typeof text !== 'string' || !/[A-Za-z]/.test(text)) return text;
+    if (dynamicCache[text] !== undefined) return dynamicCache[text];
+    pending.current.add(text);
+    if (!timer.current) {
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        const batch = [...pending.current].filter((x) => dynamicCache[x] === undefined).slice(0, 100);
+        pending.current = new Set();
+        if (batch.length) translateDynamic(batch);
+      }, 80);
+    }
+    return text;
+  }, [lang, dynamicCache, translateDynamic]);
+
   const t = useCallback(
     (key) => {
       if (lang === 'en') {
@@ -122,8 +147,8 @@ export function LanguageProvider({ children }) {
   );
 
   const value = useMemo(
-    () => ({ lang, changeLang, toggleLang, t, translating, translateDynamic, getDynamic }),
-    [lang, t, translating, translateDynamic, getDynamic]
+    () => ({ lang, changeLang, toggleLang, t, tr, translating, translateDynamic, getDynamic }),
+    [lang, t, tr, translating, translateDynamic, getDynamic]
   );
 
   return (

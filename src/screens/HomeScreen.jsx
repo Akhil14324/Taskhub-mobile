@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,12 +26,16 @@ import { glass } from '../theme/glass';
  * Home: the greeting and any banner, then the dashboard (components/home/HomeDashboard.jsx). The to-do store
  * feeds every panel; only the team panels fetch.
  */
+import { homeAllowed } from '../utils/access';
+
 export default function HomeScreen() {
   const colors = useColors();
   const { theme, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { user: me } = useAuth();
+  useEffect(() => { if (me && !homeAllowed(me)) navigation.navigate('Boards'); }, [me, navigation]);
   const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
   const { todos, fetchTodos, fetchInsights, toggleTodo } = useTodos();

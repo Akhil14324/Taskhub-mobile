@@ -21,6 +21,7 @@ import { openPalette, on } from '../utils/events';
 import { navigationRef } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
 import { useHint } from '../utils/shortcutRegistry';
+import { homeAllowed } from '../utils/access';
 import { todayYmd } from '../utils/dates';
 import { getItemAsync, setItemAsync, deleteItemAsync } from '../utils/secureStorage';
 
@@ -153,9 +154,9 @@ export default function AppSidebar({ routeName }) {
     { id: 'timebox', node: (
 <Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
     ) },
-    { id: 'home', node: (
+    ...(homeAllowed(user) ? [{ id: 'home', node: (
 <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
-    ) },
+    ) }] : []),
     { id: 'todo', node: (
 <Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
     ) },

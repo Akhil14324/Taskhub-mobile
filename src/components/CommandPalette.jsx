@@ -4,6 +4,7 @@ import { View, Text, TextInput, StyleSheet, Modal, Pressable, ScrollView, Platfo
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors, useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { homeAllowed } from '../utils/access';
 import { useTodos } from '../context/TodoContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
@@ -73,7 +74,7 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
     { id: 'meetings', group: 'Go to', icon: 'document-text-outline', label: 'Notes: notepad and meetings', run: () => go('MeetingNotes') },
     { id: 'recap', group: 'Go to', icon: 'stats-chart-outline', label: 'Week in review', run: () => go('Recap') },
-    { id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') },
+    ...(homeAllowed(user) ? [{ id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') }] : []),
     { id: 'todos', group: 'Go to', icon: 'checkbox-outline', label: 'To-do and business tasks', hint: hint('nav.todos'), run: () => go('Todos') },
     { id: 'chat', group: 'Go to', icon: 'chatbubble-outline', label: 'Chat', hint: hint('nav.chat'), run: () => go('ChatList') },
     ...(user?.can_monitor ? [{ id: 'monitor', group: 'Go to', icon: 'speedometer-outline', label: 'Team monitor', hint: hint('nav.monitor'), run: () => go('TeamMonitor') }] : []),

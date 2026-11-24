@@ -1,3 +1,4 @@
+import { Tr } from '../kit';
 import { memo, useMemo, useState } from 'react';
 import MentionAddInput from './MentionAddInput';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
@@ -43,7 +44,7 @@ export const ItemCard = memo(function ItemCard({ item, board, people, onOpenItem
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
         <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: item.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: item.is_done ? 'line-through' : 'none' }}>
-          {item.title}
+          <Tr>{item.title}</Tr>
         </Text>
         {cols.person && (
           <Pressable onPress={tap(cols.person)} hitSlop={6}>

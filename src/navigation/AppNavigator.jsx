@@ -22,6 +22,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useLang } from '../context/LanguageContext';
 import { useColors } from '../context/ThemeContext';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { homeAllowed } from '../utils/access';
 import AppSidebar from '../components/AppSidebar';
 import GlobalHost from '../components/GlobalHost';
 import '../utils/shareTarget';
@@ -234,6 +235,7 @@ function AnimatedTabIcon({ name, focused, color, size = 22, badge }) {
  * the new one) when you change module; each tab squishes like water under the finger.
  */
 function GlassTabBar({ state, descriptors, navigation, onMore }) {
+  const { user } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t } = useLang();
@@ -245,6 +247,7 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
     >
       <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
         {state.routes.map((route, index) => {
+          if (route.name === 'Dashboard' && !homeAllowed(user)) return null;
           const { options } = descriptors[route.key];
           const isMore = route.name === 'More';
           const focused = !isMore && state.index === index;
@@ -377,7 +380,7 @@ function MainTabs() {
   return (
     <>
       <Tab.Navigator
-        initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || 'Dashboard'}
+        initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || (homeAllowed(user) ? 'Dashboard' : 'Todos')}
         tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={openMore} />}
         screenOptions={{
           headerShown: false,

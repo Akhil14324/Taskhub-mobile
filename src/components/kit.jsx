@@ -1,3 +1,4 @@
+import { useLang } from '../context/LanguageContext';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -389,8 +390,16 @@ export function splitMentions(text) {
  * Text with @mentions picked out in brand red on a light red tint, so a tagged person is obvious at a
  * glance. Use inside a <Text> (it returns nested Text runs).
  */
+/** Person-typed text shown in the viewer's language (Telugu for people who use it; unchanged in English). */
+export function Tr({ children }) {
+  const { tr } = useLang();
+  return typeof children === 'string' ? tr(children) : children;
+}
+
 export function MentionText({ text, style }) {
   const colors = useColors();
+  const { tr } = useLang();
+  text = tr(text);
   const runs = splitMentions(text);
   if (!runs.some((r) => r.mention)) return text;
   return runs.map((r, i) => (r.mention

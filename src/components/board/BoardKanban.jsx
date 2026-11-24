@@ -11,7 +11,7 @@ import Popover, { anchorOf } from './Popover';
 import { PaletteGrid, CellView } from './Cells';
 import { showToast, confirmDialog } from '../../utils/events';
 import api from '../../api/client';
-import { Avatar } from '../kit';
+import { Avatar, Tr } from '../kit';
 
 const DROP_OUTLINE = '2px dashed #D4621A';
 
@@ -71,7 +71,7 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
             />
           ) : (
             <Pressable onPress={() => (editable ? setEditing(true) : onOpenItem(item.id))} style={{ flex: 1, cursor: editable ? 'text' : 'pointer' }}>
-              <Text style={{ fontSize: 14, color: item.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: item.is_done ? 'line-through' : 'none' }}>{item.title}</Text>
+              <Text style={{ fontSize: 14, color: item.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: item.is_done ? 'line-through' : 'none' }}><Tr>{item.title}</Tr></Text>
             </Pressable>
           )}
           <IconBtn icon="expand-outline" label={`Open ${item.title}`} onPress={() => onOpenItem(item.id)} />
@@ -93,7 +93,7 @@ function KanbanCard({ item, board, people, statusCol, lanes, actions, onOpenItem
                 <Ionicons name={s.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={s.is_done ? colors.green[600] : colors.gray[400]} />
               </Pressable>
               <Pressable onPress={() => onOpenItem(s.id)} style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ fontSize: 13, color: s.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: s.is_done ? 'line-through' : 'none' }}>{s.title}</Text>
+                <Text numberOfLines={1} style={{ fontSize: 13, color: s.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: s.is_done ? 'line-through' : 'none' }}><Tr>{s.title}</Tr></Text>
               </Pressable>
             </View>
           ))}
