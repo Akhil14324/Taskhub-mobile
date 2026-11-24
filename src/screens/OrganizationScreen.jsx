@@ -260,7 +260,7 @@ export default function OrganizationScreen() {
                         ))}
                         {groups.length === 0 && <Text style={[styles.muted, { marginTop: spacing.md }]}>No team members yet.</Text>}
                         <View style={styles.bizActions}>
-                          <Chip small icon="clipboard" label="Tasks" onPress={() => navigation.navigate('Main', { screen: 'Todos', params: { business_id: b.id } })} />
+                          <Chip small icon="clipboard" label="Tasks" onPress={() => navigation.navigate('Main', { initial: false, screen: 'Todos', params: { business_id: b.id } })} />
                           {iManage && <Chip small icon="person-add" label="Add member" onPress={() => setAddMemberFor(b)} />}
                           {canEditBiz && <Chip small icon="create-outline" label="Edit" onPress={() => setBizEditor(b)} />}
                         </View>

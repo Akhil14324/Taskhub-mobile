@@ -57,7 +57,7 @@ function SharedTaskCard({ meta }) {
                 </View>
               )}
             </View>
-            <AnimatedPressable onPress={() => navigation.navigate('Main', { screen: 'Todos', params: { highlightId: task.id } })} haptic="medium" style={styles.openBtn}>
+            <AnimatedPressable onPress={() => navigation.navigate('Main', { initial: false, screen: 'Todos', params: { highlightId: task.id } })} haptic="medium" style={styles.openBtn}>
               <Text style={styles.openText}>Open task</Text>
               <Ionicons name="arrow-forward" size={14} color={isOwn ? colors.brand[600] : colors.white} />
             </AnimatedPressable>

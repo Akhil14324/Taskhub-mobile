@@ -18,7 +18,7 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { usePanel } from './Panel';
 import { SlideGroup, SlideItem } from './SlideGroup';
 import { openPalette, on } from '../utils/events';
-import { navigationRef } from '../navigation/navigationRef';
+import { navigationRef, openTab } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
 import { useHint } from '../utils/shortcutRegistry';
 import { homeAllowed } from '../utils/access';
@@ -57,7 +57,7 @@ const TABS = new Set(['Dashboard', 'Todos', 'ChatList', 'BoardsTab']);
 
 function go(name) {
   if (!navigationRef.isReady()) return;
-  if (TABS.has(name)) navigationRef.navigate('Main', { screen: name });
+  if (TABS.has(name)) openTab(name);
   else navigationRef.navigate(name);
 }
 

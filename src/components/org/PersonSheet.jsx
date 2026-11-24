@@ -46,7 +46,7 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
   const assignTask = () => {
     onClose();
     const bizId = person.memberships?.[0]?.business_id || person.businesses?.[0]?.id;
-    navigation.navigate('Main', { screen: 'Todos', params: { create: { assigned_user_id: person.id, business_id: bizId } } });
+    navigation.navigate('Main', { initial: false, screen: 'Todos', params: { create: { assigned_user_id: person.id, business_id: bizId } } });
   };
 
   const resetPassword = async () => {

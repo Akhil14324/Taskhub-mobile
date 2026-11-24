@@ -45,7 +45,7 @@ export default function WorkflowsScreen({ embedded = false }) {
   const runNow = async (w) => {
     try {
       const res = await api.post(`/workflows/${w.id}/run`);
-      showToast({ message: 'Started', tone: 'success', actionLabel: 'Open', onAction: () => res.data.todo_id && navigation.navigate('Main', { screen: 'Todos', params: { highlightId: res.data.todo_id } }) });
+      showToast({ message: 'Started', tone: 'success', actionLabel: 'Open', onAction: () => res.data.todo_id && navigation.navigate('Main', { initial: false, screen: 'Todos', params: { highlightId: res.data.todo_id } }) });
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not start it', tone: 'error' });
     }

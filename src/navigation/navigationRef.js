@@ -17,6 +17,20 @@ export function getCurrentRoute() {
   return navigationRef.getCurrentRoute();
 }
 
+/**
+ * Go to one of the main tabs (Dashboard, BoardsTab, Todos, ChatList). From a pushed screen (Notes, Team monitor ...)
+ * a single navigate('Main', { screen }) pops back to the tab shell but resets it to the person's start tab, which
+ * is why clicking a module in the sidebar landed on the start page. So pop first, then pick the tab.
+ */
+export function openTab(name, params) {
+  if (!navigationRef.isReady()) return;
+  const go = () => navigationRef.navigate('Main', { initial: false, screen: name, params });
+  if (navigationRef.getCurrentRoute() && navigationRef.getRootState()?.routes?.length > 1) {
+    navigationRef.navigate('Main');
+    setTimeout(go, 60);
+  } else go();
+}
+
 /** Navigate once the container is mounted (e.g. from a notification tap on cold start). */
 export function navigateWhenReady(name, params, attempts = 40) {
   if (navigationRef.isReady()) {
@@ -46,7 +60,7 @@ export function openNotificationTarget(data = {}) {
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
   if (data.screen === 'Timebox' || data.type === 'timebox') return navigateWhenReady('Timebox', data.date ? { date: data.date } : undefined);
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
-  if (todoId) return navigateWhenReady('Main', { screen: 'Todos', params: { highlightId: todoId } });
+  if (todoId) return navigateWhenReady('Main', { initial: false, screen: 'Todos', params: { highlightId: todoId } });
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');
 }

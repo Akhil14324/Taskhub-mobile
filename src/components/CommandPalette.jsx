@@ -8,7 +8,7 @@ import { homeAllowed } from '../utils/access';
 import { useTodos } from '../context/TodoContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
-import { navigationRef, openNotificationTarget } from '../navigation/navigationRef';
+import { navigationRef, openNotificationTarget, openTab } from '../navigation/navigationRef';
 import { openQuickAdd, openTemplates, openShortcuts } from '../utils/events';
 import { formatDue } from '../utils/dates';
 import useBackClose from '../hooks/useBackClose';
@@ -16,7 +16,7 @@ import api from '../api/client';
 
 const go = (name, params) => {
   if (!navigationRef.isReady()) return;
-  if (['Dashboard', 'Todos', 'ChatList', 'BoardsTab'].includes(name)) navigationRef.navigate('Main', { screen: name, params });
+  if (['Dashboard', 'Todos', 'ChatList', 'BoardsTab'].includes(name)) openTab(name, params);
   else navigationRef.navigate(name, params);
 };
 

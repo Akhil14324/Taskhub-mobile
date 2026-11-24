@@ -54,7 +54,7 @@ export default function AutomationHost() {
               window.speechSynthesis.speak(new SpeechSynthesisUtterance(fx.text));
             }
             break;
-          case 'open': if (fx.screen === 'Todos' || fx.screen === 'Dashboard' || fx.screen === 'ChatList') navigate('Main', { screen: fx.screen }); else navigate(fx.screen); break;
+          case 'open': if (fx.screen === 'Todos' || fx.screen === 'Dashboard' || fx.screen === 'ChatList') navigate('Main', { initial: false, screen: fx.screen }); else navigate(fx.screen); break;
           case 'open_todo': openNotificationTarget({ type: 'todo_reminder', todoId: fx.todoId, noAlert: true }); break;
           case 'focus': {
             const t = (todosRef.current || []).find((x) => x.id === fx.todoId);
