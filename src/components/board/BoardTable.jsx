@@ -449,6 +449,8 @@ export default function BoardTable({
   // A task's steps are rows of the same table, indented inside the task: the name starts further right than the
   // task's own, and Owner / Status / Date sit under the same columns, so columns line up from top to bottom.
   const SUB_INDENT = 52;
+  // Sub-items are drawn as small rows under their task: shorter and with smaller type.
+  const subH = Math.max(24, Math.round(rowH * 0.78));
   const subIds = new Set(subColumns.map((c) => c.id));
   const subBg = colors.gray[50];
 
@@ -459,10 +461,10 @@ export default function BoardTable({
     const left = SUB_INDENT + depth * 20;
     return (
       <View key={k.id}>
-        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
-          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: rowH }, stickyName]}>
+        <View style={{ flexDirection: 'row', height: subH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
+          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: subH }, stickyName]}>
             <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
-            <View style={{ width: nameW - 6, height: rowH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: left, paddingRight: spacing.sm, borderRightWidth: 1, borderColor: colors.gray[200] }}>
+            <View style={{ width: nameW - 6, height: subH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: left, paddingRight: spacing.sm, borderRightWidth: 1, borderColor: colors.gray[200] }}>
               <View pointerEvents="none" style={{ position: 'absolute', left: left - 18, top: 0, bottom: 0, width: 2, backgroundColor: colors.gray[300] }} />
               {own.length ? (
                 <Pressable onPress={() => toggleParent(k.id)} hitSlop={6} accessibilityLabel={open ? 'Hide steps' : 'Show steps'}>
@@ -479,11 +481,11 @@ export default function BoardTable({
                   onBlurText={(v) => { v = v.trim(); setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
                   onSubmit={(v) => { setNameEdit(null); if (v && v !== k.title) onRenameItem(k, v); }}
                   onEscape={() => setNameEdit(null)}
-                  style={{ flex: 1, height: rowH - 8, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
+                  style={{ flex: 1, height: subH - 8, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
                 />
               ) : (
-                <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'text' }}>
-                  <Text numberOfLines={1} style={{ fontSize: 13, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}><Tr>{k.title}</Tr></Text>
+                <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: subH, justifyContent: 'center', cursor: 'text' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}><Tr>{k.title}</Tr></Text>
                 </Pressable>
               )}
               {prog && (
@@ -510,7 +512,7 @@ export default function BoardTable({
             </Pressable>
           </View>
           {layoutOf(block.group.id).list.map(({ c, sticky }) => (
-            <View key={c.id} style={[{ width: c.width, height: rowH, borderRightWidth: 1, borderColor: colors.gray[200] }, sticky ? [sticky, { backgroundColor: subBg }] : null]}>
+            <View key={c.id} style={[{ width: c.width, height: subH, overflow: 'hidden', borderRightWidth: 1, borderColor: colors.gray[200] }, sticky ? [sticky, { backgroundColor: subBg }] : null]}>
               {subIds.has(c.id) ? (
                 <Cell item={k} column={c} values={values} people={people} width={c.width} focused={false}
                   onOpen={(e, item, column) => onOpenCell(anchorOf(e), item, column)} onToggle={onToggleValue} />
@@ -527,16 +529,16 @@ export default function BoardTable({
     <View>
       {renderSubRows(kids, block, 0)}
       {canAdd && (
-        <View style={{ flexDirection: 'row', height: rowH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
-          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: rowH }, stickyName]}>
+        <View style={{ flexDirection: 'row', height: subH, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: subBg }}>
+          <View style={[{ flexDirection: 'row', backgroundColor: subBg, height: subH }, stickyName]}>
             <View style={{ width: 6, backgroundColor: paletteHex(block.group.color), opacity: 0.55 }} />
-            <View style={{ width: nameW - 6 + UPD_W, height: rowH, justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+            <View style={{ width: nameW - 6 + UPD_W, height: subH, justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
               <View pointerEvents="none" style={{ position: 'absolute', left: SUB_INDENT - 18, top: 0, bottom: '50%', width: 2, backgroundColor: colors.gray[300] }} />
               <MentionAddInput
                 placeholder="+ Add subitem"
                 accessibilityLabel="Add a subitem"
                 onSubmit={(text) => onAddItem(text, block.group.id, { parent_id: parent.id })}
-                style={{ height: rowH - 4, paddingLeft: SUB_INDENT + 4, paddingRight: spacing.sm, fontSize: 13, color: colors.gray[900], outlineStyle: 'none' }}
+                style={{ height: subH - 4, paddingLeft: SUB_INDENT + 4, paddingRight: spacing.sm, fontSize: 13, color: colors.gray[900], outlineStyle: 'none' }}
               />
             </View>
           </View>

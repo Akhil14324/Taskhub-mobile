@@ -93,7 +93,7 @@ const FramedSignup = framed(SignupScreen, 480);
 const FramedForgotPassword = framed(ForgotPasswordScreen, 480);
 const FramedChangePassword = framed(ChangePasswordScreen, 480);
 // Pages that have to fill a desktop window (like Home and To-do do) get a wide frame; only forms stay narrow.
-const WIDE = 1560;
+const WIDE = 2200;
 // Desktop shows list and conversation side by side; phones keep two screens.
 function ChatThreadEntry(props) { return useIsDesktop() ? <ChatWorkspace /> : <ChatThreadScreen {...props} />; }
 function ChatListEntry(props) { return useIsDesktop() ? <ChatWorkspace /> : <ChatListScreen {...props} />; }
@@ -103,16 +103,16 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 const FramedAssistant = framed(AssistantScreen, 760);
-const FramedLeaderboard = framed(LeaderboardScreen, 1100);
-const FramedAutomation = framed(AutomationScreen, 1100);
-const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
-const FramedRecycleBin = framed(RecycleBinScreen, 920);
-const FramedDump = framed(DumpScreen, 960);
-const FramedAccess = framed(AccessScreen, 1100);
-const FramedEverything = framed(EverythingScreen, 1100);
+const FramedLeaderboard = framed(LeaderboardScreen, 1400);
+const FramedAutomation = framed(AutomationScreen, 1500);
+const FramedMeetingNotes = framed(MeetingNotesScreen, 1500);
+const FramedRecycleBin = framed(RecycleBinScreen, 1400);
+const FramedDump = framed(DumpScreen, 1400);
+const FramedAccess = framed(AccessScreen, 1600);
+const FramedEverything = framed(EverythingScreen, 1600);
 const FramedPersonMonitor = framed(PersonMonitorScreen, WIDE);
-const FramedNotifications = framed(NotificationsScreen, 1100);
-const FramedProfile = framed(ProfileScreen, 1000);
+const FramedNotifications = framed(NotificationsScreen, 1400);
+const FramedProfile = framed(ProfileScreen, 1300);
 
 // The native stack does no transition in a browser, so every screen animates itself when it gains focus.
 const TabHome = T(HomeScreen, 'tab', 'Dashboard');
