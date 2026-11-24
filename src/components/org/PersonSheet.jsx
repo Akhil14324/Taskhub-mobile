@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { openTab } from '../../navigation/navigationRef';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
@@ -46,7 +47,7 @@ export default function PersonSheet({ person, onClose, canManage, onEdit, onChan
   const assignTask = () => {
     onClose();
     const bizId = person.memberships?.[0]?.business_id || person.businesses?.[0]?.id;
-    navigation.navigate('Main', { initial: false, screen: 'Todos', params: { create: { assigned_user_id: person.id, business_id: bizId } } });
+    openTab('Todos', { create: { assigned_user_id: person.id, business_id: bizId } });
   };
 
   const resetPassword = async () => {

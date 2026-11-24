@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openTab } from '../navigation/navigationRef';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,7 +39,7 @@ import BoardToolbar from '../components/board/BoardToolbar';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import BoardItemSheet from '../components/board/BoardItemSheet';
 import useShortcuts from '../hooks/useShortcuts';
-import { showToast, confirmDialog } from '../utils/events';
+import { showToast, confirmDialog, openQuickAdd } from '../utils/events';
 import api from '../api/client';
 import { toCsv, downloadText } from '../utils/csv';
 import { looksLikeCells, toTsv } from '../utils/sheet';
@@ -97,6 +98,7 @@ export default function BoardScreen({ route }) {
   const [openTodoId, setOpenTodoId] = useState(null);
   const [automate, setAutomate] = useState(false);
   const [workflows, setWorkflows] = useState(false);
+  useShortcuts({ 'todo.quickAdd': () => openQuickAdd() }, true);
   const [importing, setImporting] = useState(false); // true, or { text, groupId } when cells were pasted on the board
   // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
   // tab when they may change it, otherwise it lasts until they leave.
@@ -564,6 +566,7 @@ export default function BoardScreen({ route }) {
           anchor={menu.anchor} data={data} onClose={() => setMenu(null)}
           onAutomate={() => setAutomate(true)}
           onWorkflows={() => setWorkflows(true)}
+          onClassic={() => openTab('Todos', b.business_id ? { business_id: b.business_id } : undefined)}
           onImport={() => setImporting(true)}
           onExport={exportCsv}
           onDuplicated={(copy) => navigation.push('Board', { id: copy.id })}

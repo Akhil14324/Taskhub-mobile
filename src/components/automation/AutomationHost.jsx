@@ -6,7 +6,7 @@ import { useTodos } from '../../context/TodoContext';
 import { emit, showToast } from '../../utils/events';
 import { featureOn } from '../../utils/features';
 import { playReminder, playMeow, playSound } from '../../utils/feedback';
-import { navigate, openNotificationTarget } from '../../navigation/navigationRef';
+import { navigate, openNotificationTarget, openTab } from '../../navigation/navigationRef';
 
 const SENSOR_CHECK_MS = 5 * 60 * 1000;
 const LOCATION_EVERY_MS = 60 * 1000;
@@ -54,7 +54,7 @@ export default function AutomationHost() {
               window.speechSynthesis.speak(new SpeechSynthesisUtterance(fx.text));
             }
             break;
-          case 'open': if (fx.screen === 'Todos' || fx.screen === 'Dashboard' || fx.screen === 'ChatList') navigate('Main', { initial: false, screen: fx.screen }); else navigate(fx.screen); break;
+          case 'open': if (fx.screen === 'Todos' || fx.screen === 'Dashboard' || fx.screen === 'ChatList') openTab(fx.screen); else navigate(fx.screen); break;
           case 'open_todo': openNotificationTarget({ type: 'todo_reminder', todoId: fx.todoId, noAlert: true }); break;
           case 'focus': {
             const t = (todosRef.current || []).find((x) => x.id === fx.todoId);

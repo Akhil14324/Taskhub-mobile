@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { openTab } from '../navigation/navigationRef';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -57,7 +58,7 @@ function SharedTaskCard({ meta }) {
                 </View>
               )}
             </View>
-            <AnimatedPressable onPress={() => navigation.navigate('Main', { initial: false, screen: 'Todos', params: { highlightId: task.id } })} haptic="medium" style={styles.openBtn}>
+            <AnimatedPressable onPress={() => openTab('Todos', { highlightId: task.id })} haptic="medium" style={styles.openBtn}>
               <Text style={styles.openText}>Open task</Text>
               <Ionicons name="arrow-forward" size={14} color={isOwn ? colors.brand[600] : colors.white} />
             </AnimatedPressable>

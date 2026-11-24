@@ -18,6 +18,7 @@ const toMin = (hm) => { const m = /^(\d{2}):(\d{2})/.exec(hm || ''); return m ? 
 export default function BoardTimebox({ items, onOpenItem, onToggle, onAddAt }) {
   const colors = useColors();
   const [day, setDay] = useState(todayYmd());
+  const [anyLimit, setAnyLimit] = useState(40); // a busy day can have hundreds of undated-time tasks
   const today = todayYmd();
 
   const { timed, anytime } = useMemo(() => {
@@ -59,9 +60,9 @@ export default function BoardTimebox({ items, onOpenItem, onToggle, onAddAt }) {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100, gap: spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {nav('chevron-back', () => setDay(addDays(day, -1)), 'Previous day')}
+        {nav('chevron-back', () => { setAnyLimit(40); setDay(addDays(day, -1)); }, 'Previous day')}
         <Text style={{ fontSize: 18, fontWeight: '700', color: colors.gray[900], minWidth: 150, textAlign: 'center' }}>{day === today ? 'Today' : formatDayHeader(day)}</Text>
-        {nav('chevron-forward', () => setDay(addDays(day, 1)), 'Next day')}
+        {nav('chevron-forward', () => { setAnyLimit(40); setDay(addDays(day, 1)); }, 'Next day')}
         {day !== today && (
           <Pressable onPress={() => setDay(today)} style={{ marginLeft: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.gray[100] }}>
             <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray[700] }}>Today</Text>
@@ -73,7 +74,12 @@ export default function BoardTimebox({ items, onOpenItem, onToggle, onAddAt }) {
       {anytime.length > 0 && (
         <View style={{ gap: 6 }}>
           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray[500], textTransform: 'uppercase', letterSpacing: 0.6 }}>Any time</Text>
-          {anytime.map((t) => row(t))}
+          {anytime.slice(0, anyLimit).map((t) => row(t))}
+          {anytime.length > anyLimit && (
+            <Pressable onPress={() => setAnyLimit(anyLimit + 60)} style={{ paddingVertical: 8 }}>
+              <Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Show {Math.min(60, anytime.length - anyLimit)} more of {anytime.length - anyLimit}</Text>
+            </Pressable>
+          )}
         </View>
       )}
 

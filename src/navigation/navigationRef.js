@@ -31,6 +31,12 @@ export function openTab(name, params) {
   } else go();
 }
 
+/** Run `fn` once the container is mounted. */
+export function whenReady(fn, attempts = 40) {
+  if (navigationRef.isReady()) { fn(); return; }
+  if (attempts > 0) setTimeout(() => whenReady(fn, attempts - 1), 150);
+}
+
 /** Navigate once the container is mounted (e.g. from a notification tap on cold start). */
 export function navigateWhenReady(name, params, attempts = 40) {
   if (navigationRef.isReady()) {
@@ -60,7 +66,7 @@ export function openNotificationTarget(data = {}) {
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
   if (data.screen === 'Timebox' || data.type === 'timebox') return navigateWhenReady('Timebox', data.date ? { date: data.date } : undefined);
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
-  if (todoId) return navigateWhenReady('Main', { initial: false, screen: 'Todos', params: { highlightId: todoId } });
+  if (todoId) return whenReady(() => openTab('Todos', { highlightId: todoId }));
   if (data.type === 'user_joined') return navigateWhenReady('Organization');
   return navigateWhenReady('Notifications');
 }

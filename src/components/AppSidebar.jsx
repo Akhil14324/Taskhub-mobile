@@ -17,7 +17,7 @@ import { Avatar } from './kit';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { usePanel } from './Panel';
 import { SlideGroup, SlideItem } from './SlideGroup';
-import { openPalette, on } from '../utils/events';
+import { openPalette, openQuickAdd, on } from '../utils/events';
 import { navigationRef, openTab } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
 import { useHint } from '../utils/shortcutRegistry';
@@ -43,7 +43,7 @@ const SECTION_OF = {
   MyWork: 'mywork',
   Timebox: 'timebox',
   RecycleBin: 'recycle',
-  Dump: 'boards',
+  Dump: 'dump',
   Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',
@@ -148,6 +148,9 @@ export default function AppSidebar({ routeName }) {
 <Entry p={p} icon="search-outline" label="Search" hint={hint('app.palette')} onPress={openPalette} />
     ) },
     ...(ai ? [{ id: 'assistant', node: (<Entry p={p} icon="sparkles-outline" activeIcon="sparkles" label="Assistant" active={section === 'assistant'} onPress={() => go('Assistant')} />) }] : []),
+    { id: 'addtask', node: (
+<Entry p={p} icon="add-circle-outline" label="Add task" onPress={() => openQuickAdd()} hint={hint('todo.quickAdd')} />
+    ) },
     { id: 'mywork', node: (
 <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
     ) },
@@ -177,6 +180,12 @@ export default function AppSidebar({ routeName }) {
     ...((user?.permissions?.view_all_todos || user?.permissions?.chat_audit) ? [{ id: 'everything', node: ((
           <Entry p={p} icon="eye-outline" activeIcon="eye" label={user?.is_owner ? 'Super admin' : 'Everything'} active={section === 'everything'} onPress={() => go('Everything')} />
         )) }] : []),
+    { id: 'dump', node: (
+<Entry p={p} icon="archive-outline" activeIcon="archive" label="Dump" active={routeName === 'Dump'} onPress={() => go('Dump')} />
+    ) },
+    { id: 'recycle', node: (
+<Entry p={p} icon="trash-outline" activeIcon="trash" label="Recycle bin" active={section === 'recycle'} onPress={() => go('RecycleBin')} />
+    ) },
     { id: 'notifications', node: (
 <Entry p={p} icon="notifications-outline" activeIcon="notifications" label="Notifications" badge={unreadCount} active={section === 'notifications'} onPress={() => go('Notifications')} />
     ) },

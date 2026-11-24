@@ -31,7 +31,7 @@ const ROW_H = 38;
 const Metrics = createContext({ rowH: ROW_H, headH: 34, pinned: 0 });
 const ITEM_HEIGHTS = { compact: 30, normal: 38, tall: 56 };
 const HEADER_HEIGHTS = { single: 34, double: 54, triple: 74 };
-const PAGE = 100; // rows drawn per group before "Show more"
+const PAGE = 40; // rows drawn per group before "Show more" (each row is ~35 DOM nodes, so a long board stays quick)
 // The group box clips with overflow 'clip', not 'hidden': a hidden box would become the scroll container and the pinned columns could not stick.
 // "entry" -> "entries", "task" -> "tasks"
 const plural = (w) => (/[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /(s|x|ch|sh)$/.test(w) ? `${w}es` : `${w}s`);

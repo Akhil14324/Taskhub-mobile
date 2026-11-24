@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { openTab } from '../navigation/navigationRef';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,7 +46,7 @@ export default function WorkflowsScreen({ embedded = false }) {
   const runNow = async (w) => {
     try {
       const res = await api.post(`/workflows/${w.id}/run`);
-      showToast({ message: 'Started', tone: 'success', actionLabel: 'Open', onAction: () => res.data.todo_id && navigation.navigate('Main', { initial: false, screen: 'Todos', params: { highlightId: res.data.todo_id } }) });
+      showToast({ message: 'Started', tone: 'success', actionLabel: 'Open', onAction: () => res.data.todo_id && openTab('Todos', { highlightId: res.data.todo_id }) });
     } catch (err) {
       showToast({ message: err.response?.data?.error || 'Could not start it', tone: 'error' });
     }
