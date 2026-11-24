@@ -25,6 +25,7 @@ const MIN_COL = 60;
 const MAX_COL = 600;
 const UPD_W = 46; // the "updates" column next to the name: opens the task window
 const ADD_W = 44;
+import CommentsCell, { COMMENTS_W } from './CommentsCell';
 const ROW_H = 38;
 // Heights the "..." menu can change (Item height, Header height) and how many columns stay put when scrolling sideways.
 const Metrics = createContext({ rowH: ROW_H, headH: 34, pinned: 0 });
@@ -361,12 +362,12 @@ export default function BoardTable({
         list.push({ c, ci, sticky: vi < pinned ? { position: 'sticky', left: x, zIndex: 3 } : null });
         x += c.width; vi += 1;
       });
-      const out = { list, cols: list.map((e) => e.c), width: x + ADD_W };
+      const out = { list, cols: list.map((e) => e.c), width: x + COMMENTS_W + ADD_W };
       cache.set(key, out);
       return out;
     };
   }, [columns, NAME_BLOCK, pinned]);
-  const tableWidth = nameW + UPD_W + columns.reduce((s, c) => s + c.width, 0) + ADD_W;
+  const tableWidth = nameW + UPD_W + columns.reduce((s, c) => s + c.width, 0) + COMMENTS_W + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
   const [shown, setShown] = useState(() => new Map());
@@ -630,6 +631,7 @@ export default function BoardTable({
               />
             </View>
           ))}
+          <CommentsCell item={t} height={rowH} />
           <View style={{ width: ADD_W }} />
         </View>
         {open && renderSubTasks(t, kids, block)}
@@ -674,6 +676,9 @@ export default function BoardTable({
                       </View>
                     </View>
                     {layoutOf(b.group.id).list.map(({ c, sticky }) => <HeaderCell key={c.id} column={c} width={c.width} canManage={canManage} sticky={sticky} onResize={resizeColumn} onMenu={(e, col) => onColumnMenu(anchorOf(e), col)} onRename={onRenameColumn} />)}
+                    <View style={{ width: COMMENTS_W, height: headH, justifyContent: 'center', alignItems: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
+                      <Text style={{ fontSize: 13, color: colors.gray[600], fontWeight: '500' }}>Comments</Text>
+                    </View>
                     <Pressable
                       disabled={!canManage}
                       onPress={(e) => onAddColumn(anchorOf(e), typeof b.group.id === 'number' ? b.group.id : null)}
