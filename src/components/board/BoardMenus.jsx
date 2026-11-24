@@ -380,7 +380,7 @@ const COPY_ITEMS = [['none', 'Only the structure'], ['open', 'With open items'],
  * The board's own menu (F-BRD-05, F-TPL-02, F-IMP-01, F-EXP-01): automate, duplicate, save as a template,
  * import, export, archive. Duplicating and saving a template never change the board itself.
  */
-export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onExport, onDuplicated, onArchive, onDelete }) {
+export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onExport, onDuplicated, onArchive, onDelete, onWorkflows }) {
   const colors = useColors();
   const [stage, setStage] = useState('menu');
   const [withItems, setWithItems] = useState('none');
@@ -440,6 +440,7 @@ export function BoardMoreMenu({ anchor, data, onClose, onAutomate, onImport, onE
       {stage === 'menu' && (
         <View>
           <MenuRow icon="flash-outline" label="Automate" onPress={() => { onClose(); onAutomate(); }} />
+          {!!onWorkflows && <MenuRow icon="repeat-outline" label="Workflows" onPress={() => { onClose(); onWorkflows(); }} />}
           <MenuRow icon="copy-outline" label="Duplicate board" onPress={() => setStage('duplicate')} />
           <MenuRow icon="albums-outline" label="Save as a template" onPress={() => setStage('template')} />
           {data.access.add && <MenuRow icon="cloud-upload-outline" label="Import from Excel (paste or file)" onPress={() => { onClose(); onImport(); }} />}

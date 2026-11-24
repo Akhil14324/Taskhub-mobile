@@ -563,6 +563,7 @@ export default function BoardScreen({ route }) {
         <BoardMoreMenu
           anchor={menu.anchor} data={data} onClose={() => setMenu(null)}
           onAutomate={() => setAutomate(true)}
+          onWorkflows={() => setWorkflows(true)}
           onImport={() => setImporting(true)}
           onExport={exportCsv}
           onDuplicated={(copy) => navigation.push('Board', { id: copy.id })}

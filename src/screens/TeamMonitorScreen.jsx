@@ -239,9 +239,15 @@ export default function TeamMonitorScreen() {
             <BackTitle title="Team monitor" style={styles.title} />
             <Text style={styles.subtitle}>The people below you: what is open, late, stuck, entered and done</Text>
           </View>
-          <View style={[styles.ranges, desktop && { paddingHorizontal: 0, paddingVertical: 0 }]}>
-            <PeriodChips value={days} ranges={[7, 30, 90]} onChange={(v) => { setDays(v); load(v); }} />
-          </View>
+          {desktop ? (
+            <View style={[styles.ranges, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+              <PeriodChips value={days} ranges={[7, 30, 90]} onChange={(v) => { setDays(v); load(v); }} />
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ranges} style={{ flexGrow: 0 }}>
+              <PeriodChips value={days} ranges={[7, 30, 90]} onChange={(v) => { setDays(v); load(v); }} />
+            </ScrollView>
+          )}
         </View>
 
         {businesses.length > 1 && (
