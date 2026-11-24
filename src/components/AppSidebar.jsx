@@ -35,7 +35,6 @@ const SECTION_OF = {
   TeamMonitor: 'monitor',
   Reports: 'reports',
   Assistant: 'assistant',
-  Workflows: 'workflows',
   PersonMonitor: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
@@ -169,9 +168,6 @@ export default function AppSidebar({ routeName }) {
     ...(user?.can_monitor ? [{ id: 'teammonitor', node: ((
           <Entry p={p} icon="speedometer-outline" activeIcon="speedometer" label="Team monitor" active={section === 'monitor'} onPress={() => go('TeamMonitor')} />
         )) }] : []),
-    { id: 'workflows', node: (
-<Entry p={p} icon="repeat-outline" activeIcon="repeat" label="Workflows" active={section === 'workflows'} onPress={() => go('Workflows')} />
-    ) },
     { id: 'notes', node: (
 <Entry p={p} icon="document-text-outline" activeIcon="document-text" label="Notes" active={section === 'meetings'} onPress={() => go('MeetingNotes')} />
     ) },

@@ -16,6 +16,10 @@ import BoardCards from '../components/board/BoardCards';
 import BoardKanban from '../components/board/BoardKanban';
 import { BoardCalendar, BoardTimeline, BoardWorkload, BoardSummary } from '../components/board/BoardViews';
 import BoardProcess from '../components/board/BoardProcess';
+import BoardTimebox from '../components/board/BoardTimebox';
+import DayReportLauncher from '../components/timebox/DayReportLauncher';
+import Modal from '../components/Modal';
+import WorkflowsScreen from './WorkflowsScreen';
 import { todayYmd, addDays } from '../utils/dates';
 import CellEditorHost from '../components/board/CellEditorHost';
 import Popover from '../components/board/Popover';
@@ -47,7 +51,7 @@ const VIEW_KINDS = [
   ['dashboard', 'Dashboard', 'speedometer-outline'],
 ];
 const DRAWN_VIEWS = new Set(VIEW_KINDS.map((v) => v[0]));
-const VIEW_ICONS = Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i]));
+const VIEW_ICONS = { ...Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i])), timebox: 'hourglass-outline' };
 
 // Quick filters, saved with the view (F-FLT-04).
 function applyQuick(items, f, meId) {
@@ -92,6 +96,7 @@ export default function BoardScreen({ route }) {
   const [menu, setMenu] = useState(null); // { type: 'addColumn' | 'column' | 'group' | 'rename' | 'newItem' | 'newGroup', anchor, ... }
   const [openTodoId, setOpenTodoId] = useState(null);
   const [automate, setAutomate] = useState(false);
+  const [workflows, setWorkflows] = useState(false);
   const [importing, setImporting] = useState(false); // true, or { text, groupId } when cells were pasted on the board
   // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
   // tab when they may change it, otherwise it lasts until they leave.
@@ -149,8 +154,9 @@ export default function BoardScreen({ route }) {
     return () => document.removeEventListener('paste', onPaste);
   }, [data, importing, openTodoId, editing, focus]);
 
-  const views = useMemo(() => (data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), [data]);
-  const view = views.find((v) => v.id === viewId) || views[0] || { kind: 'table' };
+  // Timebox is the same tasks as one day, hour by hour. It needs no stored view, so every board has it, after the others.
+  const views = useMemo(() => [...(data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), { id: '__timebox', kind: 'timebox', name: 'Timebox', synthetic: true }], [data]);
+  const view = views.find((v) => v.id === viewId) || views.find((v) => !v.synthetic) || views[0];
   const word = itemWordOf(data);
   const canSaveView = !!view.id && !!(view.owner_id || data?.access?.manage);
 
@@ -374,6 +380,13 @@ export default function BoardScreen({ route }) {
               {desktop && <Text style={{ fontSize: 13, color: BRAND, fontWeight: '500' }}>{board.busy[board.busy.length - 1]}</Text>}
             </View>
           )}
+          <DayReportLauncher desktop={desktop} />
+          {desktop && (
+            <Pressable onPress={() => setWorkflows(true)} accessibilityLabel="Workflows. Work that starts itself on a schedule." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="repeat-outline" size={16} color={colors.gray[700]} />
+              <Text style={{ fontSize: 14, color: colors.gray[800] }}>Workflows</Text>
+            </Pressable>
+          )}
           {desktop && (
             <Pressable onPress={() => setAutomate(true)} accessibilityLabel="Automate. Rules that act for you, like notifying someone when a task is late." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="flash-outline" size={16} color={colors.gray[700]} />
@@ -391,8 +404,8 @@ export default function BoardScreen({ route }) {
           onAdd={(anchor) => setMenu({ type: 'addView', anchor })}
           onRename={(v, name) => board.updateView(v, { name })}
           onClose={closeView}
-          canChange={(v) => !!(v.owner_id || data.access.manage)}
-          canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id).length > 1}
+          canChange={(v) => !v.synthetic && !!(v.owner_id || data.access.manage)}
+          canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id && !x.synthetic).length > 1}
         />
       </View>
       {view.kind !== 'activity' && view.kind !== 'dashboard' && view.kind !== 'chart' && (
@@ -441,6 +454,8 @@ export default function BoardScreen({ route }) {
             canSave={canSaveView} onOpenItem={openItem}
             onSave={(widgets) => board.updateView(view, { settings: { widgets } })}
           />
+        ) : view.kind === 'timebox' ? (
+          <BoardTimebox items={items} onOpenItem={openItem} onToggle={(t) => board.setStatus(t, t.is_done ? 'todo' : 'done')} onAddAt={data.access.add ? (day, time) => newTask(null, undefined, { due_date: day, due_time: time }) : null} />
         ) : view.kind === 'activity' ? (
           <BoardProcess board={data} items={data.items} onOpenItem={openItem} />
         ) : desktop ? (
@@ -555,6 +570,7 @@ export default function BoardScreen({ route }) {
         />
       )}
       <BoardAutomate visible={automate} board={b} onClose={() => setAutomate(false)} />
+      <Modal open={workflows} onClose={() => setWorkflows(false)} title="Workflows" width={820}><View style={{ height: 600 }}><WorkflowsScreen embedded /></View></Modal>
       <BoardImport
         visible={!!importing} board={data} onClose={() => setImporting(false)} onDone={board.reload}
         initialText={importing?.text} initialGroupId={importing?.groupId}

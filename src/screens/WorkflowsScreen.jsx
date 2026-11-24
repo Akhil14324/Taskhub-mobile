@@ -18,7 +18,7 @@ import { showToast, confirmDialog } from '../utils/events';
 const EVERY = { daily: 'Every day', weekly: 'Every week', monthly: 'Every month' };
 
 /** Work that starts itself: each workflow creates its to-do and steps on schedule. */
-export default function WorkflowsScreen() {
+export default function WorkflowsScreen({ embedded = false }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -57,12 +57,12 @@ export default function WorkflowsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, paddingTop: desktop ? spacing.lg : insets.top }}>
+    <View style={{ flex: 1, paddingTop: embedded ? 0 : desktop ? spacing.lg : insets.top }}>
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 110 + insets.bottom }}
         refreshControl={<BrandedRefresh refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
-        <BackTitle title="Workflows" />
+        {!embedded && <BackTitle title="Workflows" />}
         <Text style={styles.sub}>Work you repeat, set up once. Each round starts by itself with its steps ready.</Text>
 
         {ideas.length > 0 && (

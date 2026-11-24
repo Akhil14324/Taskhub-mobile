@@ -45,7 +45,6 @@ import TodosScreen from '../screens/TodosScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import TeamMonitorScreen from '../screens/TeamMonitorScreen';
 import AssistantScreen from '../screens/AssistantScreen';
-import WorkflowsScreen from '../screens/WorkflowsScreen';
 import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
@@ -104,7 +103,6 @@ const FramedGroupInfo = framed(GroupInfoScreen, 1000);
 const FramedOrganization = framed(OrganizationScreen, WIDE);
 const FramedTeamMonitor = framed(TeamMonitorScreen, WIDE);
 const FramedAssistant = framed(AssistantScreen, 760);
-const FramedWorkflows = framed(WorkflowsScreen, 800);
 const FramedLeaderboard = framed(LeaderboardScreen, 1100);
 const FramedAutomation = framed(AutomationScreen, 1100);
 const FramedMeetingNotes = framed(MeetingNotesScreen, 920);
@@ -125,7 +123,6 @@ const PushGroupInfo = T(FramedGroupInfo);
 const PushOrganization = T(FramedOrganization);
 const PushTeamMonitor = T(FramedTeamMonitor);
 const PushAssistant = T(FramedAssistant);
-const PushWorkflows = T(FramedWorkflows);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
 // Boards fill the window (the table is wide); the Boards home centres itself.
@@ -159,7 +156,6 @@ const linkingFor = (start) => ({
       TeamMonitor: 'team-monitor',
       PersonMonitor: { path: 'team-monitor/:personId', ...num },
       Assistant: 'assistant',
-      Workflows: 'workflows',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
       Boards: start === 'boards' ? '' : 'boards',
@@ -356,7 +352,6 @@ function MainTabs() {
     { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
-    { group: 'Work', label: 'Workflows', icon: 'repeat-outline', route: 'Workflows' },
     { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
     ...(user?.can_monitor ? [{ group: 'Work', label: 'Team monitor', icon: 'speedometer-outline', route: 'TeamMonitor' }] : []),
     ...(featureOn(user?.preferences, 'leaderboard') ? [{ group: 'Work', label: 'Leaderboard', icon: 'trophy-outline', route: 'Leaderboard' }] : []),
@@ -610,7 +605,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Organization" component={PushOrganization} />
             <Stack.Screen name="TeamMonitor" component={PushTeamMonitor} />
             <Stack.Screen name="Assistant" component={PushAssistant} />
-            <Stack.Screen name="Workflows" component={PushWorkflows} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Boards" component={PushBoards} />
