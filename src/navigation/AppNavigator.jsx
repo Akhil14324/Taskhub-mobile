@@ -117,6 +117,7 @@ const FramedProfile = framed(ProfileScreen, 1000);
 // The native stack does no transition in a browser, so every screen animates itself when it gains focus.
 const TabHome = T(HomeScreen, 'tab', 'Dashboard');
 const TabTodos = T(TodosScreen, 'tab', 'Todos');
+const TabBoards = T(BoardsHomeScreen, 'tab', 'BoardsTab');
 const TabChat = T(FramedChatList, 'tab', 'ChatList');
 const PushChatThread = T(FramedChatThread);
 const PushGroupInfo = T(FramedGroupInfo);
@@ -149,7 +150,7 @@ const linkingFor = (start) => ({
   prefixes: [],
   config: {
     screens: {
-      Main: { path: start === 'boards' ? 'main' : '', screens: { Dashboard: start === 'home' || !['todos', 'chat'].includes(start) ? (start === 'boards' ? 'home' : '') : 'home', Todos: 'todos', ChatList: 'chat', More: 'more' } },
+      Main: { path: '', screens: { BoardsTab: start === 'boards' ? '' : 'boards-home', Dashboard: start === 'home' ? '' : 'home', Todos: start === 'todos' ? '' : 'todos', ChatList: start === 'chat' ? '' : 'chat', More: 'more' } },
       ChatThread: { path: 'chat/:conversationId', ...num },
       GroupInfo: 'group-info',
       Organization: 'organization',
@@ -158,7 +159,7 @@ const linkingFor = (start) => ({
       Assistant: 'assistant',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
-      Boards: start === 'boards' ? '' : 'boards',
+      Boards: 'boards',
       Board: { path: 'boards/:id', ...num },
       MyWork: 'my-work',
       Timebox: 'timebox',
@@ -243,7 +244,7 @@ function GlassTabBar({ state, descriptors, navigation, onMore }) {
     >
       <SlideGroup style={{ flex: 1, flexDirection: 'row', padding: 5, alignItems: 'stretch' }} pillStyle={{ borderRadius: 28 }}>
         {state.routes.map((route, index) => {
-          if (route.name === 'Dashboard' && !homeAllowed(user)) return null;
+          if ((route.name === 'Dashboard' && !homeAllowed(user)) || route.name === 'Todos') return null; // To-do lives in Boards now
           const { options } = descriptors[route.key];
           const isMore = route.name === 'More';
           const focused = !isMore && state.index === index;
@@ -327,7 +328,7 @@ function MainTabs() {
   const [warm, setWarm] = useState(() => new Set());
   useEffect(() => {
     let cancelled = false;
-    const order = ['Todos', 'Dashboard', 'ChatList'];
+    const order = ['BoardsTab', 'Dashboard', 'ChatList'];
     const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 600));
     const next = (i) => {
       if (cancelled || i >= order.length) return;
@@ -375,7 +376,7 @@ function MainTabs() {
   return (
     <>
       <Tab.Navigator
-        initialRouteName={{ todos: 'Todos', chat: 'ChatList' }[user?.preferences?.startPage] || (homeAllowed(user) ? 'Dashboard' : 'Todos')}
+        initialRouteName={{ todos: 'Todos', chat: 'ChatList', home: homeAllowed(user) ? 'Dashboard' : 'BoardsTab' }[user?.preferences?.startPage] || 'BoardsTab'}
         tabBar={desktop ? () => null : (props) => <GlassTabBar {...props} onMore={openMore} />}
         screenOptions={{
           headerShown: false,
@@ -402,6 +403,17 @@ function MainTabs() {
           },
         }}
       >
+        <Tab.Screen
+          name="BoardsTab"
+          component={TabBoards}
+          options={{
+            lazy: !warm.has('BoardsTab'),
+            tabBarLabel: 'Boards',
+            tabBarIcon: ({ focused, color }) => (
+              <AnimatedTabIcon name={focused ? 'grid' : 'grid-outline'} focused={focused} color={color} badge={todoBadge} />
+            ),
+          }}
+        />
         <Tab.Screen
           name="Dashboard"
           component={TabHome}
@@ -582,7 +594,6 @@ export default function AppNavigator() {
       <View style={{ flex: 1, minWidth: 0 }}>
     <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
       <Stack.Navigator
-        initialRouteName={user && !user.must_change_password && startPage === 'boards' ? 'Boards' : undefined}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: 'transparent' },

@@ -16,7 +16,7 @@ import api from '../api/client';
 
 const go = (name, params) => {
   if (!navigationRef.isReady()) return;
-  if (['Dashboard', 'Todos', 'ChatList'].includes(name)) navigationRef.navigate('Main', { screen: name, params });
+  if (['Dashboard', 'Todos', 'ChatList', 'BoardsTab'].includes(name)) navigationRef.navigate('Main', { screen: name, params });
   else navigationRef.navigate(name, params);
 };
 
@@ -75,7 +75,6 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'meetings', group: 'Go to', icon: 'document-text-outline', label: 'Notes: notepad and meetings', run: () => go('MeetingNotes') },
     { id: 'recap', group: 'Go to', icon: 'stats-chart-outline', label: 'Week in review', run: () => go('Recap') },
     ...(homeAllowed(user) ? [{ id: 'home', group: 'Go to', icon: 'home-outline', label: 'Home', hint: hint('nav.home'), run: () => go('Dashboard') }] : []),
-    { id: 'todos', group: 'Go to', icon: 'checkbox-outline', label: 'To-do and business tasks', hint: hint('nav.todos'), run: () => go('Todos') },
     { id: 'chat', group: 'Go to', icon: 'chatbubble-outline', label: 'Chat', hint: hint('nav.chat'), run: () => go('ChatList') },
     ...(user?.can_monitor ? [{ id: 'monitor', group: 'Go to', icon: 'speedometer-outline', label: 'Team monitor', hint: hint('nav.monitor'), run: () => go('TeamMonitor') }] : []),
     { id: 'notifications', group: 'Go to', icon: 'notifications-outline', label: 'Notifications', hint: hint('nav.notifications'), run: () => go('Notifications') },

@@ -28,7 +28,7 @@ import { getItemAsync, setItemAsync, deleteItemAsync } from '../utils/secureStor
 // Which sidebar entry owns which route.
 const SECTION_OF = {
   Dashboard: 'home',
-  Todos: 'todos',
+  Todos: 'boards',
   ChatList: 'chat',
   ChatThread: 'chat',
   GroupInfo: 'chat',
@@ -39,10 +39,11 @@ const SECTION_OF = {
   Leaderboard: 'leaderboard',
   Automations: 'automations',
   Boards: 'boards',
+  BoardsTab: 'boards',
   MyWork: 'mywork',
   Timebox: 'timebox',
   RecycleBin: 'recycle',
-  Dump: 'todos',
+  Dump: 'boards',
   Board: 'boards',
   MeetingNotes: 'meetings',
   Access: 'access',
@@ -52,7 +53,7 @@ const SECTION_OF = {
   Profile: 'profile',
 };
 
-const TABS = new Set(['Dashboard', 'Todos', 'ChatList']);
+const TABS = new Set(['Dashboard', 'Todos', 'ChatList', 'BoardsTab']);
 
 function go(name) {
   if (!navigationRef.isReady()) return;
@@ -127,8 +128,8 @@ export default function AppSidebar({ routeName }) {
     'nav.home': () => go('Dashboard'),
     'nav.mywork': () => go('MyWork'),
     'nav.timebox': () => go('Timebox'),
-    'nav.boards': () => go('Boards'),
-    'nav.todos': () => go('Todos'),
+    'nav.boards': () => go('BoardsTab'),
+    'nav.todos': () => go('BoardsTab'),
     'nav.chat': () => go('ChatList'),
     'nav.monitor': () => (user?.can_monitor ? go('TeamMonitor') : false),
     'nav.notifications': () => go('Notifications'),
@@ -156,11 +157,8 @@ export default function AppSidebar({ routeName }) {
     ...(homeAllowed(user) ? [{ id: 'home', node: (
 <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
     ) }] : []),
-    { id: 'todo', node: (
-<Entry p={p} icon="checkbox-outline" activeIcon="checkbox" label="To-do" badge={dueCount} active={section === 'todos'} onPress={() => go('Todos')} />
-    ) },
     { id: 'boards', node: (
-<Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('Boards')} hint={hint('nav.boards')} />
+<Entry p={p} icon="grid-outline" activeIcon="grid" label="Boards" active={section === 'boards'} onPress={() => go('BoardsTab')} hint={hint('nav.boards')} />
     ) },
     { id: 'chat', node: (
 <Entry p={p} icon="chatbubble-outline" activeIcon="chatbubble" label="Chat" badge={totalUnread} active={section === 'chat'} onPress={() => go('ChatList')} />

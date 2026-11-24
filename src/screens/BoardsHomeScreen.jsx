@@ -189,6 +189,9 @@ export function NewBoardDialog({ visible, onClose, tree, isLeader, onCreated, in
 }
 
 /** Every board the person can open, as the group / company / site tree (F-BRD-03), and "New board". */
+// The app opens on Boards, and the first time in a visit it goes straight to the person's own to-do board.
+let openedOwn = false;
+
 export default function BoardsHomeScreen() {
   const colors = useColors();
   const desktop = useIsDesktop();
@@ -202,6 +205,12 @@ export default function BoardsHomeScreen() {
   const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
   const isLeader = !!user?.is_leader;
+  useEffect(() => {
+    if (openedOwn || loading || !desktop || user?.preferences?.startPage === 'home') return;
+    const mine = (boards || []).find((b) => b.kind === 'my_todos');
+    openedOwn = true;
+    if (mine) navigation.navigate('Board', { id: mine.id });
+  }, [boards, loading, desktop]); // eslint-disable-line react-hooks/exhaustive-deps
   const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards)).catch(() => setArchived([]));
   const restore = async (b) => {
     try {
