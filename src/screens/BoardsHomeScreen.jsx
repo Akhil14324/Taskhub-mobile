@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import api from '../api/client';
 import { useColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -197,6 +197,7 @@ export default function BoardsHomeScreen() {
   const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const focused = useIsFocused();
   const { user } = useAuth();
   const { boards, loading } = useBoards();
   const [tree, setTree] = useState(null);
@@ -206,11 +207,11 @@ export default function BoardsHomeScreen() {
   const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
   const isLeader = !!user?.is_leader;
   useEffect(() => {
-    if (openedOwn || loading || !desktop || user?.preferences?.startPage === 'home') return;
+    if (openedOwn || !focused || loading || !desktop || user?.preferences?.startPage === 'home') return;
     const mine = (boards || []).find((b) => b.kind === 'my_todos');
     openedOwn = true;
     if (mine) navigation.navigate('Board', { id: mine.id });
-  }, [boards, loading, desktop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boards, loading, desktop, focused]); // eslint-disable-line react-hooks/exhaustive-deps
   const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards)).catch(() => setArchived([]));
   const restore = async (b) => {
     try {
