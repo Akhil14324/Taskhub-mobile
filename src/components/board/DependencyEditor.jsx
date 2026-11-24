@@ -20,6 +20,7 @@ export default function DependencyEditor({ item, candidates, tasks, onChanged, p
   const [mode, setMode] = useState('person');
   const [q, setQ] = useState('');
   const [personId, setPersonId] = useState(null);
+  const [outsider, setOutsider] = useState(''); // someone who is not on TaskHub (yet): just a name
   const [taskId, setTaskId] = useState(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,16 +47,17 @@ export default function DependencyEditor({ item, candidates, tasks, onChanged, p
   }, [q, tasks, item.id]);
 
   const add = async () => {
-    if (mode === 'person' ? !personId : !taskId) return;
+    if (mode === 'person' ? !personId && !outsider : !taskId) return;
     setSaving(true);
     try {
       await api.post(`/todos/${item.id}/blockers`, {
         kind: 'dependency',
-        blocked_by_user_id: mode === 'person' ? personId : undefined,
+        blocked_by_user_id: mode === 'person' ? personId || undefined : undefined,
+        blocked_by_name: mode === 'person' && !personId ? outsider : undefined,
         blocked_by_todo_id: mode === 'task' ? taskId : undefined,
         note: note.trim() || undefined,
       });
-      setPersonId(null); setTaskId(null); setNote(''); setQ('');
+      setPersonId(null); setOutsider(''); setTaskId(null); setNote(''); setQ('');
       await load();
       onChanged?.();
     } catch (err) {
@@ -78,7 +80,9 @@ export default function DependencyEditor({ item, candidates, tasks, onChanged, p
     }
   };
 
-  const ready = mode === 'person' ? !!personId : !!taskId;
+  const ready = mode === 'person' ? !!personId || !!outsider : !!taskId;
+  const typed = q.trim();
+  const exact = people.some((p) => p.name?.toLowerCase() === typed.toLowerCase());
 
   return (
     <View style={{ gap: 8 }}>
@@ -112,17 +116,21 @@ export default function DependencyEditor({ item, candidates, tasks, onChanged, p
           </Pressable>
         ))}
       </View>
-      <SearchBox value={q} onChange={setQ} placeholder={mode === 'person' ? 'Search names' : 'Find a task'} />
+      <SearchBox value={q} onChange={setQ} placeholder={mode === 'person' ? 'Search names, or type anyone\'s name' : 'Find a task'} />
       <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
+        {mode === 'person' && !!typed && !exact && (
+          <Row active={!personId && outsider === typed} onPress={() => { setPersonId(null); setOutsider(outsider === typed ? '' : typed); }} label={`Add "${typed}" (not on TaskHub yet)`}
+            icon={<Ionicons name="person-add-outline" size={16} color={BRAND} />} />
+        )}
         {mode === 'person' ? people.map((p) => (
-          <Row key={p.id} active={personId === p.id} onPress={() => setPersonId(personId === p.id ? null : p.id)} label={p.name}
+          <Row key={p.id} active={personId === p.id} onPress={() => { setOutsider(''); setPersonId(personId === p.id ? null : p.id); }} label={p.name}
             icon={<Avatar name={p.name} uri={p.profile_picture} size={22} />}
             right={<Text style={{ fontSize: 12, color: colors.gray[500] }}>@{p.username}</Text>} />
         )) : taskList.map((t) => (
           <Row key={t.id} active={taskId === t.id} onPress={() => setTaskId(taskId === t.id ? null : t.id)} label={t.title}
             icon={<Ionicons name="ellipse-outline" size={14} color={colors.gray[400]} />} />
         ))}
-        {mode === 'person' ? !people.length && <Text style={{ padding: spacing.sm, color: colors.gray[500] }}>Nobody matches.</Text>
+        {mode === 'person' ? !people.length && !typed && <Text style={{ padding: spacing.sm, color: colors.gray[500] }}>Type a name. Anyone can be added, even if they are not on TaskHub yet.</Text>
           : !taskList.length && <Text style={{ padding: spacing.sm, color: colors.gray[500] }}>No open task matches.</Text>}
       </ScrollView>
       <TextInput
