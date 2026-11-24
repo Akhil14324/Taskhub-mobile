@@ -91,7 +91,7 @@ export function Select({ value, options, onChange, placeholder = 'Choose', width
   );
 }
 
-function PanelHead({ title, hint, right }) {
+export function PanelHead({ title, hint, right }) {
   const colors = useColors();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, paddingBottom: 6 }}>
@@ -103,7 +103,7 @@ function PanelHead({ title, hint, right }) {
   );
 }
 
-function SmallBtn({ label, onPress, primary, disabled }) {
+export function SmallBtn({ label, onPress, primary, disabled }) {
   const colors = useColors();
   return (
     <Pressable disabled={disabled} onPress={onPress} style={({ hovered }) => ({ paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm, borderWidth: primary ? 0 : 1, borderColor: colors.gray[300], opacity: disabled ? 0.45 : 1, backgroundColor: primary ? BRAND : hovered ? colors.gray[100] : 'transparent' })}>
@@ -113,7 +113,7 @@ function SmallBtn({ label, onPress, primary, disabled }) {
 }
 
 /** One column of the Excel-style filter: its title and a checkable list of every value in use, with counts. */
-function FilterColumn({ title, options, picked, onToggle, onAll }) {
+export function FilterColumn({ title, options, picked, onToggle, onAll }) {
   const colors = useColors();
   const [q, setQ] = useState('');
   const shown = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()));

@@ -3,7 +3,7 @@
 
 import { PALETTE } from '../../theme/theme';
 import { isDarkMode } from '../kit';
-import { todayYmd, addDays, parseYmd } from '../../utils/dates';
+import { todayYmd, addDays, parseYmd, toYmd } from '../../utils/dates';
 
 export const STATUS_KEYS = ['todo', 'in_progress', 'blocked', 'in_review', 'on_hold', 'done'];
 
@@ -24,6 +24,7 @@ export const SYSTEM_FIELDS = {
   item_id: 'id',
   created: 'created_at',
   updated: 'updated_at',
+  entered: 'created_at',
 };
 
 /** Built-in columns people can edit straight in the cell (the rest show, and change in the item window). */
@@ -85,6 +86,8 @@ export function statusLabelOf(item, column, values) {
   return v ? labels.find((l) => l.id === v.label_id) || null : null;
 }
 
+const PRIORITY_NAMES = { 1: 'Critical', 2: 'High', 3: 'Medium', 4: 'Low' };
+
 const STATUS_FALLBACK = {
   todo: 'Not started', in_progress: 'Working on it', blocked: 'Stuck', in_review: 'In review', on_hold: 'On hold', done: 'Done',
 };
@@ -97,6 +100,17 @@ export function cellValue(item, column, values) {
     return item[field] ?? null;
   }
   return values?.[item.id]?.[column.id] ?? null;
+}
+
+/** The day (YYYY-MM-DD, the viewer's own calendar) a task was entered, from its created_at. It never changes. */
+export const enteredDay = (item) => (item?.created_at ? toYmd(new Date(item.created_at)) : null);
+
+/** "Mon 24 Nov" (with the year when it is not this year): an absolute day, so a record never reads "Yesterday". */
+export function enteredLabel(ymd) {
+  const d = parseYmd(ymd);
+  if (!d) return '';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
 /** Plain text of a cell, for search, sorting and the phone cards. */
@@ -117,6 +131,7 @@ export function cellText(item, column, values, people = []) {
     case 'location': return v.address || '';
     case 'checkbox': return v ? 'Yes' : '';
     case 'priority': return v ? `P${v}` : '';
+    case 'entered_date': return enteredDay(item) || '';
     case 'dependency': return (v || []).map((d) => d.title).join(', ');
     default: return typeof v === 'object' ? JSON.stringify(v) : String(v);
   }
@@ -226,6 +241,27 @@ function dateKeys(item, column, values) {
   return keys;
 }
 
+/** Quick buckets for the day a task was entered, then the day itself (the Entered date filter list). */
+export const ENTERED_BUCKETS = [['today', 'Today'], ['yesterday', 'Yesterday'], ['this_week', 'This week'], ['last_week', 'Last week'], ['this_month', 'This month']];
+
+function enteredKeys(item) {
+  const d = enteredDay(item);
+  if (!d) return [{ key: 'none', label: 'Blank' }];
+  const today = todayYmd();
+  const weekStart = addDays(today, -((parseYmd(today).getDay() + 6) % 7)); // Monday
+  const hit = {
+    today: d === today,
+    yesterday: d === addDays(today, -1),
+    this_week: d >= weekStart && d <= today,
+    last_week: d >= addDays(weekStart, -7) && d < weekStart,
+    this_month: d.slice(0, 7) === today.slice(0, 7),
+  };
+  return [
+    ...ENTERED_BUCKETS.filter(([k]) => hit[k]).map(([k, label]) => ({ key: `e:${k}`, label })),
+    { key: `e:${d}`, label: enteredLabel(d) },
+  ];
+}
+
 /** [{ key, label }] an item has on a column (the name column is `name`). */
 export function valueKeysOf(item, column, values, people = []) {
   if (column === NAME_COL) return [{ key: `t:${item.title}`, label: item.title }];
@@ -242,6 +278,8 @@ export function valueKeysOf(item, column, values, people = []) {
       return ids.map((id) => ({ key: `p:${id}`, label: people.find((p) => p.id === id)?.name || (id === item.assignee_id ? item.assignee_name : '') || `User ${id}`, person: id }));
     }
     case 'date': case 'timeline': return dateKeys(item, column, values).map((k) => ({ key: `d:${k}`, label: (DATE_BUCKETS.find((b) => b[0] === k) || [k, k])[1] }));
+    case 'entered_date': return enteredKeys(item);
+    case 'priority': return v ? [{ key: `pr:${v}`, label: PRIORITY_NAMES[v] || `P${v}` }] : blank;
     case 'dependency': return (v || []).length ? v.map((d) => ({ key: `t:${d.title}`, label: d.title })) : blank;
     case 'files': return values?.[item.id]?.[column.id]?.length || (v && v.length) ? [{ key: 'has', label: 'Has files' }] : [{ key: 'none', label: 'No files' }];
     case 'checkbox': return [{ key: v ? 'yes' : 'no', label: v ? 'Checked' : 'Unchecked' }];
@@ -267,6 +305,12 @@ export function filterOptions(items, column, values, people = []) {
   if (column !== NAME_COL && (column.kind === 'date' || column.kind === 'timeline')) {
     const order = DATE_BUCKETS.map((b) => `d:${b[0]}`);
     out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  } else if (column !== NAME_COL && column.kind === 'entered_date') {
+    const buckets = ENTERED_BUCKETS.map((b) => `e:${b[0]}`);
+    const rank = (k) => (buckets.includes(k) ? buckets.indexOf(k) : k === 'none' ? 1e6 : 1000);
+    out.sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) === 1000 ? b.key.localeCompare(a.key) : 0));
+  } else if (column !== NAME_COL && column.kind === 'priority') {
+    out.sort((a, b) => (a.key === 'none') - (b.key === 'none') || a.key.localeCompare(b.key));
   } else if (column !== NAME_COL && column.kind === 'status') {
     const order = (column.labels || []).map((l) => `l:${l.id || l.maps_to}`);
     out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));

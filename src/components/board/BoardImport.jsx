@@ -16,7 +16,7 @@ const NEW_KINDS = [
   ['status', 'Status (coloured labels)'], ['dropdown', 'Dropdown'], ['person', 'Person'], ['checkbox', 'Checkbox'],
   ['email', 'Email'], ['phone', 'Phone'], ['link', 'Link'], ['tags', 'Tags'], ['progress', 'Progress %'], ['rating', 'Rating'], ['hour', 'Hour'],
 ];
-const NOT_FILLABLE = new Set(['files', 'board_relation', 'vote', 'formula', 'mirror', 'button', 'auto_number', 'creation_log', 'last_updated', 'dependency', 'sprint', 'item_type', 'approval', 'time_tracking']);
+const NOT_FILLABLE = new Set(['files', 'board_relation', 'vote', 'formula', 'mirror', 'button', 'auto_number', 'creation_log', 'last_updated', 'entered_date', 'dependency', 'sprint', 'item_type', 'approval', 'time_tracking']);
 
 const keyOf = (m) => (m.to === 'column' ? `c:${m.column_id}` : m.to);
 
@@ -32,7 +32,7 @@ export default function BoardImport({ visible, board, onClose, onDone, initialTe
   const colors = useColors();
   const desktop = useIsDesktop();
   const canManage = !!board.access?.manage;
-  const columns = useMemo(() => board.columns.filter((c) => !NOT_FILLABLE.has(c.kind) && !['item_id', 'created', 'updated', 'points'].includes(c.system_key)), [board]);
+  const columns = useMemo(() => board.columns.filter((c) => !NOT_FILLABLE.has(c.kind) && !['item_id', 'created', 'updated', 'entered', 'points'].includes(c.system_key)), [board]);
 
   const [source, setSource] = useState(null); // { name, sheets: [{ name, rows }] }
   const [sheetAt, setSheetAt] = useState(0);

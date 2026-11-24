@@ -249,7 +249,7 @@ export function autoMap(headers, body, columns, { canManage }) {
   const take = (i, m) => { out[i] = m; if (m.column_id) used.add(m.column_id); };
   const H = headers.map(norm);
   const sample = (i) => body.map((r) => r[i]);
-  const usable = columns.filter((c) => !['files', 'board_relation', 'vote', 'formula', 'mirror', 'button', 'auto_number', 'creation_log', 'last_updated', 'dependency', 'sprint', 'item_type', 'approval', 'time_tracking'].includes(c.kind) && !['item_id', 'created', 'updated', 'points'].includes(c.system_key));
+  const usable = columns.filter((c) => !['files', 'board_relation', 'vote', 'formula', 'mirror', 'button', 'auto_number', 'creation_log', 'last_updated', 'entered_date', 'dependency', 'sprint', 'item_type', 'approval', 'time_tracking'].includes(c.kind) && !['item_id', 'created', 'updated', 'entered', 'points'].includes(c.system_key));
 
   let nameAt = H.findIndex((h) => WORDS.name.includes(h));
   if (nameAt < 0) nameAt = H.findIndex((h, i) => guessKind(sample(i)) === 'text' || guessKind(sample(i)) === 'long_text');

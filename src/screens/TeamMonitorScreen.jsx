@@ -10,25 +10,23 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import BackTitle from '../components/BackTitle';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { SkeletonList } from '../components/Skeleton';
-import { Avatar, Chip, EmptyHero } from '../components/kit';
+import { Avatar, EmptyHero } from '../components/kit';
 import { healthColor } from '../utils/timeline';
 import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 import AskWhy from '../components/todos/AskWhy';
 import PeriodChips, { periodParams } from '../components/todos/PeriodChips';
 import Modal from '../components/Modal';
+import MonitorFilter, { monitorModel, passesMonitor, activeCols } from '../components/monitor/MonitorFilter';
 import MonitorTodoSheet from '../components/todos/MonitorTodoSheet';
 import { todayYmd, addDays, toYmd, formatDue } from '../utils/dates';
 
 const RANGES = [7, 30, 90];
 /** First name, unless that is just an initial ("V Akhil"). */
 const shortName = (name) => { const parts = String(name || '').split(' ').filter(Boolean); return parts.find((w) => w.length > 1) || parts[0] || ''; };
-const FILTERS = [
-  { key: 'all', label: 'Everyone', icon: 'people' },
-  { key: 'attention', label: 'Needs attention', icon: 'alert-circle' },
-  { key: 'blocked', label: 'Stuck', icon: 'hand-left' },
-  { key: 'overdue', label: 'Overdue', icon: 'time' },
-];
+// One filter for the whole screen, the same Excel-style one a board has (Person, Business, Status, Due date, Entered
+// date, Priority). "Needs attention" judges a person, not a task, so it sits beside it as a quick switch.
+const QUICK = [['attention', 'Needs attention']];
 
 /** Higher = look at this person first. */
 export function attentionScore(stats) {
@@ -77,8 +75,7 @@ export default function TeamMonitorScreen() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [biz, setBiz] = useState(null); // business name, or null for all
+  const [filters, setFilters] = useState({ cols: {} });
   const [tasks, setTasks] = useState(null); // { personId: todos[] } for the current period
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tile, setTile] = useState(null); // the open tile key
@@ -117,28 +114,33 @@ export default function TeamMonitorScreen() {
 
   const range = useMemo(() => rangeOf(days), [days]);
   const today = todayYmd();
-  const businesses = useMemo(() => [...new Set((data?.people || []).flatMap((p) => p.businesses || []))].sort(), [data]);
+  const colActive = activeCols(filters.cols) > 0;
+
+  // Every task of every person, read through the shared filter model.
+  const allRows = useMemo(() => {
+    if (!tasks || !data) return null;
+    return data.people.flatMap((p) => (tasks[p.id] || []).map((t) => ({ ...t, assignee_id: p.id, assignee_name: p.name, _person: p })));
+  }, [tasks, data]);
+  const model = useMemo(() => monitorModel(allRows, { withPerson: true }), [allRows]);
+  const rows = useMemo(() => (allRows ? allRows.filter((t) => passesMonitor(t, model, filters.cols)) : null), [allRows, model, filters.cols]);
+  const personIds = useMemo(() => new Set((rows || []).map((t) => t._person.id)), [rows]);
 
   const people = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
     return data.people
-      .filter((p) => !biz || (p.businesses || []).includes(biz))
       .filter((p) => !q || p.name.toLowerCase().includes(q) || p.username.toLowerCase().includes(q) || (p.display_title || '').toLowerCase().includes(q))
-      .filter((p) => filter === 'all'
-        || (filter === 'attention' && attentionScore(p.stats) > 0)
-        || (filter === 'blocked' && p.stats.blocked > 0)
-        || (filter === 'overdue' && p.stats.overdue > 0))
+      .filter((p) => !filters.attention || attentionScore(p.stats) > 0)
+      .filter((p) => !colActive || !rows || personIds.has(p.id))
       .sort((a, b) => attentionScore(b.stats) - attentionScore(a.stats) || a.name.localeCompare(b.name));
-  }, [data, query, filter, biz]);
+  }, [data, query, filters.attention, colActive, rows, personIds]);
 
-  // Tasks of the people on screen, narrowed to the business when one is chosen.
+  // The tasks that pass the filter, of the people on screen.
   const scoped = useMemo(() => {
-    if (!tasks) return null;
-    const rows = [];
-    people.forEach((p) => (tasks[p.id] || []).forEach((t) => { if (!biz || t.business_name === biz) rows.push({ ...t, _person: p }); }));
-    return rows;
-  }, [tasks, people, biz]);
+    if (!rows) return null;
+    const ids = new Set(people.map((p) => p.id));
+    return rows.filter((t) => ids.has(t._person.id));
+  }, [rows, people]);
 
   const counts = useMemo(() => {
     if (!scoped) return null;
@@ -147,11 +149,19 @@ export default function TeamMonitorScreen() {
     return c;
   }, [scoped, range, today]);
 
+  // A person's numbers: the server's, or counted from the tasks that pass the filter once one is set.
+  const statsOf = (p) => {
+    if (!colActive || !scoped) return p.stats;
+    const mine = scoped.filter((t) => t._person.id === p.id);
+    const n = (key) => mine.filter((t) => TILES.find((x) => x.key === key).test(t, range, today)).length;
+    return { ...p.stats, open: n('open'), overdue: n('overdue'), blocked: n('stuck'), completed: n('done'), on_time_rate: null };
+  };
+
   const team = data?.team;
-  // Server numbers while everyone is shown (they match the person cards); counted from the tasks for "Entered" and
-  // whenever a business is chosen.
+  // Server numbers while no column is filtered (they match the person cards); counted from the tasks for "Entered"
+  // and whenever a filter is set.
   const value = (key) => {
-    if (key === 'entered' || biz) return counts ? counts[key] : null;
+    if (key === 'entered' || colActive) return counts ? counts[key] : null;
     if (!team) return '–';
     return { open: team.open, overdue: team.overdue, stuck: team.blocked, done: team.completed }[key];
   };
@@ -163,7 +173,7 @@ export default function TeamMonitorScreen() {
 
   const attention = (
     <Panel title="Needs attention">
-      {(data?.stalled || []).filter((p) => !biz || (tasks && (tasks[p.assignee_id] || []).some((t) => t.id === p.id && t.business_name === biz))).slice(0, 5).map((p) => (
+      {(data?.stalled || []).filter((p) => !colActive || (scoped && scoped.some((t) => t.id === p.id))).slice(0, 5).map((p) => (
         <View key={p.id} style={{ paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.gray[200], gap: 4 }}>
           <AnimatedPressable onPress={() => setOpenId(p.id)} style={{ gap: 2 }}>
             <Text numberOfLines={1} style={{ fontSize: fontSize.base, fontWeight: '600', color: colors.gray[900] }}>{p.title}</Text>
@@ -175,30 +185,30 @@ export default function TeamMonitorScreen() {
           <AskWhy todoId={p.id} suggestion={`Nothing has been finished on "${p.title}" for ${p.idle_days} days. What is holding it up?`} />
         </View>
       ))}
-      {data && people.filter((x) => x.stats.overdue || x.stats.blocked).slice(0, 6).map((x) => (
+      {data && people.filter((x) => statsOf(x).overdue || statsOf(x).blocked).slice(0, 6).map((x) => (
         <AnimatedPressable key={`p${x.id}`} onPress={() => openPerson(x)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 }}>
           <Avatar name={x.name} uri={x.profile_picture} size={26} />
           <Text numberOfLines={1} style={{ flex: 1, fontSize: fontSize.sm, color: colors.gray[800] }}>{x.name}</Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.gray[600] }}>{[x.stats.overdue ? `${x.stats.overdue} overdue` : null, x.stats.blocked ? `${x.stats.blocked} stuck` : null].filter(Boolean).join(' · ')}</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.gray[600] }}>{[statsOf(x).overdue ? `${statsOf(x).overdue} overdue` : null, statsOf(x).blocked ? `${statsOf(x).blocked} stuck` : null].filter(Boolean).join(' · ')}</Text>
         </AnimatedPressable>
       ))}
-      {data && !people.some((x) => x.stats.overdue || x.stats.blocked) && <Text style={{ color: colors.gray[500], fontSize: fontSize.sm }}>Nothing needs attention.</Text>}
+      {data && !people.some((x) => statsOf(x).overdue || statsOf(x).blocked) && <Text style={{ color: colors.gray[500], fontSize: fontSize.sm }}>Nothing needs attention.</Text>}
     </Panel>
   );
 
   const workload = data ? (
     <Panel title="Workload">
       {(() => {
-        const rows = [...people].filter((x) => x.stats.open).sort((a, b) => b.stats.open - a.stats.open).slice(0, 10);
-        const max = Math.max(1, ...rows.map((x) => x.stats.open));
-        if (!rows.length) return <Text style={{ color: colors.gray[500], fontSize: fontSize.sm }}>Nobody has open tasks.</Text>;
-        return rows.map((x) => (
+        const ranked = [...people].filter((x) => statsOf(x).open).sort((a, b) => statsOf(b).open - statsOf(a).open).slice(0, 10);
+        const max = Math.max(1, ...ranked.map((x) => statsOf(x).open));
+        if (!ranked.length) return <Text style={{ color: colors.gray[500], fontSize: fontSize.sm }}>Nobody has open tasks.</Text>;
+        return ranked.map((x) => (
           <AnimatedPressable key={x.id} onPress={() => openPerson(x)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
             <Text numberOfLines={1} style={{ width: 96, fontSize: fontSize.sm, color: colors.gray[700] }}>{shortName(x.name)}</Text>
             <View style={{ flex: 1, height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: colors.gray[100] }}>
-              <View style={{ width: `${(x.stats.open / max) * 100}%`, height: 8, backgroundColor: colors.gray[700] }} />
+              <View style={{ width: `${(statsOf(x).open / max) * 100}%`, height: 8, backgroundColor: colors.gray[700] }} />
             </View>
-            <Text style={{ width: 28, textAlign: 'right', fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[900] }}>{x.stats.open}</Text>
+            <Text style={{ width: 28, textAlign: 'right', fontSize: fontSize.sm, fontWeight: '600', color: colors.gray[900] }}>{statsOf(x).open}</Text>
           </AnimatedPressable>
         ));
       })()}
@@ -212,14 +222,15 @@ export default function TeamMonitorScreen() {
           <Ionicons name="search" size={16} color={colors.gray[400]} />
           <TextInput value={query} onChangeText={setQuery} placeholder="Search people" placeholderTextColor={colors.gray[400]} style={styles.searchInput} />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filters, desktop && { paddingHorizontal: 0, paddingVertical: 0 }]} style={{ flexGrow: 0 }}>
-          {FILTERS.map((f) => <Chip key={f.key} label={f.label} active={filter === f.key} onPress={() => setFilter(f.key)} />)}
-        </ScrollView>
+        <View style={[styles.filters, { flexDirection: 'row', alignItems: 'center' }, desktop && { paddingHorizontal: 0, paddingVertical: 0 }]}>
+          <MonitorFilter rows={allRows} model={model} filters={filters} onChange={setFilters} quick={QUICK} shown={scoped ? scoped.length : undefined} total={allRows ? allRows.length : undefined} />
+          {!!colActive && !allRows && <Text style={{ fontSize: fontSize.xs, color: colors.gray[500] }}>Loading tasks…</Text>}
+        </View>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: desktop ? -6 : 0, marginTop: desktop ? spacing.md : 0 }}>
         {people.map((p) => (
           <View key={p.id} style={{ width: `${100 / cols}%` }}>
-            <PersonRow person={p} grid={desktop} onPress={() => openPerson(p)} />
+            <PersonRow person={p} stats={statsOf(p)} grid={desktop} onPress={() => openPerson(p)} />
           </View>
         ))}
       </View>
@@ -250,13 +261,6 @@ export default function TeamMonitorScreen() {
           )}
         </View>
 
-        {businesses.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filters, desktop && { paddingHorizontal: 0 }]} style={{ flexGrow: 0 }}>
-            <Chip label="All businesses" active={!biz} onPress={() => setBiz(null)} />
-            {businesses.map((b) => <Chip key={b} label={b} active={biz === b} onPress={() => setBiz(biz === b ? null : b)} />)}
-          </ScrollView>
-        )}
-
         {!data && !error && <SkeletonList count={5} type="notification" />}
         {!!error && <EmptyHero icon="lock-closed" title="Not available" message={error} />}
 
@@ -286,7 +290,7 @@ export default function TeamMonitorScreen() {
         )}
       </ScrollView>
 
-      <Modal open={!!tile} onClose={() => setTile(null)} title={`${tileDef?.label || ''}${scoped ? ` · ${tileRows.length}` : ''}${biz ? ` · ${biz}` : ''}`} width={680}>
+      <Modal open={!!tile} onClose={() => setTile(null)} title={`${tileDef?.label || ''}${scoped ? ` · ${tileRows.length}` : ''}${colActive ? ' · filtered' : ''}`} width={680}>
         {!scoped && <SkeletonList count={4} type="notification" />}
         {scoped && !tileRows.length && <Text style={{ color: colors.gray[500], paddingVertical: spacing.lg }}>Nothing here for this period.</Text>}
         {scoped && Object.values(tileRows.reduce((g, t) => { (g[t._person.id] = g[t._person.id] || { p: t._person, rows: [] }).rows.push(t); return g; }, {})).map(({ p, rows }) => (
@@ -336,9 +340,9 @@ function Panel({ title, children }) {
   );
 }
 
-function PersonRow({ person, onPress, grid }) {
+function PersonRow({ person, stats, onPress, grid }) {
   const colors = useColors();
-  const s = person.stats;
+  const s = stats || person.stats;
   return (
     <AnimatedPressable onPress={onPress} haptic="light" style={{
       marginHorizontal: grid ? 6 : spacing.lg, marginTop: grid ? 0 : spacing.sm, marginBottom: grid ? 12 : 0, padding: spacing.md, borderRadius: radius.xl, backgroundColor: colors.white,

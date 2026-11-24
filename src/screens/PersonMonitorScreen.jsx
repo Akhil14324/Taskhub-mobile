@@ -11,7 +11,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import BackTitle from '../components/BackTitle';
 import { BrandedRefresh } from '../components/BrandedRefreshControl';
 import { SkeletonList } from '../components/Skeleton';
-import { Avatar, Chip, DueChip, EmptyHero, SectionHeader } from '../components/kit';
+import { Avatar, DueChip, EmptyHero, SectionHeader } from '../components/kit';
 import ProcessProgress from '../components/ProcessProgress';
 import AskWhy from '../components/todos/AskWhy';
 import { progressMapOf } from '../utils/progress';
@@ -22,15 +22,13 @@ import { WEEKDAYS_SHORT, parseYmd, addDays, formatDayHeader, toYmd, timeAgo } fr
 import { describeEntry, formatSeconds, formatRatio, healthColor, todoHealth, todoMetrics, formatSecondsShort, STATUS } from '../utils/timeline';
 import { glass } from '../theme/glass';
 import PeriodChips, { periodParams } from '../components/todos/PeriodChips';
+import MonitorFilter, { monitorModel, passesMonitor } from '../components/monitor/MonitorFilter';
 
 const RANGES = [7, 30, 90];
-const VIEWS = [
-  { key: 'open', label: 'Open' },
-  { key: 'blocked', label: 'Stuck' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'done', label: 'Done' },
-  { key: 'all', label: 'All' },
-];
+// The same Excel-style filter as the Team monitor and the boards. Open work is the default; a picked day shows what was finished.
+const OPEN_ONLY = { cols: {}, hide_done: true };
+const DONE_ONLY = { cols: { status: ['l:done'] } };
+const QUICK = [['hide_done', 'Hide done']];
 
 export default function PersonMonitorScreen() {
   const colors = useColors();
@@ -45,7 +43,7 @@ export default function PersonMonitorScreen() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState('todos'); // todos | activity
-  const [view, setView] = useState('open');
+  const [filters, setFilters] = useState(OPEN_ONLY);
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
 
@@ -65,19 +63,13 @@ export default function PersonMonitorScreen() {
   const stats = data?.stats;
   const today = data?.today;
 
+  const model = useMemo(() => monitorModel(data?.todos), [data]);
   const todos = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
     const list = data.todos
       .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.labels || []).some((l) => l.includes(q.replace(/^\+/, ''))));
-    const filtered = list.filter((t) => {
-      if (view === 'all') return true;
-      if (view === 'done') return t.is_done;
-      if (t.is_done) return false;
-      if (view === 'blocked') return t.status === 'blocked';
-      if (view === 'overdue') return t.due_at && new Date(t.due_at).getTime() < now;
-      return true;
-    });
+    const filtered = list.filter((t) => !(filters.hide_done && t.is_done) && passesMonitor(t, model, filters.cols));
     // Worst first for open work, newest first for finished.
     const rank = { red: 0, orange: 1, green: 2, none: 3 };
     // A sub-task sits under its parent when the parent is shown; otherwise (searching, or a filter hid the parent) it stands alone.
@@ -89,7 +81,7 @@ export default function PersonMonitorScreen() {
       return rank[todoHealth(a, now).level] - rank[todoHealth(b, now).level];
     });
     return roots;
-  }, [data, query, view, now]);
+  }, [data, query, filters, model, now]);
 
   // Every sub-task of a row, whatever the filter (the parent's steps are part of it), in tree order.
   // How far each task has got, counted from its sub-tasks (events), so the people above see the real progress.
@@ -136,7 +128,7 @@ export default function PersonMonitorScreen() {
       >
         <View style={styles.ranges}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-            <PeriodChips value={days} ranges={RANGES} onChange={(v) => { setDays(v); load(v); if (typeof v === 'string') setView('done'); }} />
+            <PeriodChips value={days} ranges={RANGES} onChange={(v) => { setDays(v); load(v); if (typeof v === 'string') setFilters(DONE_ONLY); }} />
           </ScrollView>
         </View>
 
@@ -185,9 +177,9 @@ export default function PersonMonitorScreen() {
                   <Ionicons name="search" size={16} color={colors.gray[400]} />
                   <TextInput value={query} onChangeText={setQuery} placeholder={`Search ${person?.name?.split(' ')[0] || 'their'} to-dos`} placeholderTextColor={colors.gray[400]} style={styles.searchInput} />
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-                  {VIEWS.map((v) => <Chip key={v.key} label={v.label} active={view === v.key} onPress={() => setView(v.key)} />)}
-                </ScrollView>
+                <View style={[styles.filters, { flexDirection: 'row', alignItems: 'center' }]}>
+                  <MonitorFilter rows={data.todos} model={model} filters={filters} onChange={setFilters} quick={QUICK} shown={todos.length} total={data.todos.length} />
+                </View>
                 {todos.map((t) => (
                   <TodoBranch key={t.id} todo={t} depth={0} childrenOf={childrenOf} progress={progressMap} personId={person?.id} now={now} onOpen={setOpenId} />
                 ))}
