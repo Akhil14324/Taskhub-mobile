@@ -113,7 +113,7 @@ export default function TeamMonitorScreen() {
     setTasks(out);
     setLoadingTasks(false);
   }, [data, tasks, loadingTasks, days]);
-  useEffect(() => { if (biz || tile) ensureTasks(); }, [biz, tile, ensureTasks]);
+  useEffect(() => { if (data) ensureTasks(); }, [data, ensureTasks]);
 
   const range = useMemo(() => rangeOf(days), [days]);
   const today = todayYmd();
@@ -148,10 +148,12 @@ export default function TeamMonitorScreen() {
   }, [scoped, range, today]);
 
   const team = data?.team;
+  // Server numbers while everyone is shown (they match the person cards); counted from the tasks for "Entered" and
+  // whenever a business is chosen.
   const value = (key) => {
-    if (counts) return counts[key];
+    if (key === 'entered' || biz) return counts ? counts[key] : null;
     if (!team) return '–';
-    return { open: team.open, overdue: team.overdue, stuck: team.blocked, done: team.completed, entered: null }[key] ?? null;
+    return { open: team.open, overdue: team.overdue, stuck: team.blocked, done: team.completed }[key];
   };
   const cols = desktop ? (win.width > 1750 ? 3 : win.width > 1350 ? 2 : 1) : 1;
   const railed = desktop && win.width > 1250;
@@ -256,7 +258,7 @@ export default function TeamMonitorScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: desktop ? 0 : spacing.lg, marginTop: desktop ? spacing.sm : 0 }}>
             {TILES.map((tl) => {
               const v = value(tl.key);
-              return <Kpi key={tl.key} label={tl.label} value={v === null ? (loadingTasks ? '…' : 'View') : v} alert={tl.alert && v > 0} onPress={() => setTile(tl.key)} small={!desktop} />;
+              return <Kpi key={tl.key} label={tl.label} value={v === null || v === undefined ? '…' : v} alert={tl.alert && v > 0} onPress={() => setTile(tl.key)} small={!desktop} />;
             })}
             <Kpi label="On time" value={team.on_time_rate === null ? '–' : `${team.on_time_rate}%`} small={!desktop} />
           </View>
