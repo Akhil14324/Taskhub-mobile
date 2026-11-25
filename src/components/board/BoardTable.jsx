@@ -695,8 +695,8 @@ export default function BoardTable({
               </View>
               {!isCollapsed && (
                 <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[200], overflow: 'clip', backgroundColor: colors.white }}>
-                  {/* Compact: the header row stays at the top of the table while its group scrolls under it. */}
-                  <View style={[{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200] }, compact && { position: 'sticky', top: 0, zIndex: 6, backgroundColor: colors.white }]}>
+                  {/* The header row stays at the top of the table while its group scrolls under it (every width). */}
+                  <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.gray[200], position: 'sticky', top: 0, zIndex: 6, backgroundColor: colors.white }}>
                     <View style={[{ flexDirection: 'row', backgroundColor: colors.white }, stickyName]}>
                       <View style={{ width: 6, backgroundColor: paletteHex(b.group.color) }} />
                       <View style={{ width: nameW - 6 + UPD_W, height: headH, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderColor: colors.gray[200] }}>
