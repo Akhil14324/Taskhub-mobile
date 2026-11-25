@@ -757,7 +757,9 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
       for (const b of changed) {
         synced.current.sig.set(b.todo_id, sigOf(b)); // one try per change; a refusal is not retried in a loop
         try {
-          await updateTodo(b.todo_id, { due_date: date, due_time: b.start, duration_minutes: toMin(b.end) - toMin(b.start) });
+          const t = todos.find((x) => x.id === b.todo_id);
+          const timeline = t && t.start_date && t.due_date && t.start_date < t.due_date; // keep the timeline's dates
+          await updateTodo(b.todo_id, { ...(timeline ? {} : { due_date: date }), due_time: b.start, duration_minutes: toMin(b.end) - toMin(b.start) });
           ok += 1;
         } catch {
           failed.push(b.text || 'a task');
@@ -783,6 +785,8 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
     const minutes = Math.max(STEP, Math.ceil(((startRaw - start) + (t.duration_minutes || STEP)) / STEP) * STEP);
     return { start, end: start + minutes };
   };
+  // A task on a timeline of several days shows on the first day, at its daily time; a one-day task on its date.
+  const dayOfTodo = (t) => (t.start_date && t.due_date && t.start_date < t.due_date ? t.start_date : t.due_date);
   const mineOf = useCallback((t) => (t.assignee_id ? t.assignee_id === me?.id : t.created_by === me?.id || (t.members || []).some((m) => m.id === me?.id)), [me?.id]);
   useEffect(() => {
     if (!data?.mine || !data.can_edit || data.date !== date) return undefined;
@@ -794,7 +798,7 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
       if (cancelled) return;
       const have = new Set(boxRef.current.blocks.map((b) => b.todo_id).filter(Boolean));
       const cands = todos
-        .filter((t) => t.due_time && t.due_date === date && mineOf(t) && t.review_state !== 'rejected' && !have.has(t.id) && !skip.includes(t.id) && typeof t.id === 'number')
+        .filter((t) => t.due_time && dayOfTodo(t) === date && mineOf(t) && t.review_state !== 'rejected' && !have.has(t.id) && !skip.includes(t.id) && typeof t.id === 'number')
         .sort((a, b) => (a.due_time < b.due_time ? -1 : 1));
       if (!cands.length) return;
       let blocks = boxRef.current.blocks;
@@ -839,7 +843,7 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
       }
       const sig = `${date}|${b.start}|${b.end}`;
       if (synced.current.date === date && synced.current.sig.get(b.todo_id) === sig) {
-        if (t.due_date && t.due_date !== date) { synced.current.sig.delete(b.todo_id); changed = true; continue; } // moved to another day
+        if (dayOfTodo(t) && dayOfTodo(t) !== date) { synced.current.sig.delete(b.todo_id); changed = true; continue; } // moved to another day
         if (t.due_time) {
           const r = rectOf(t);
           if (toHM(r.start) !== b.start || toHM(r.end) !== b.end) {

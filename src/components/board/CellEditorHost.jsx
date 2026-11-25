@@ -16,6 +16,8 @@ import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
 
 /** Who may change which part of an item (server flags; see todo.permissions). */
+import TimeSlotFields from './TimeSlotFields';
+
 export function mayEdit(item, column) {
   if (item.pending) return false; // still being saved
   const p = item.permissions || {};
@@ -349,6 +351,12 @@ export default function CellEditorHost({ editing, onClose, board, people, action
       <View style={{ gap: 6 }}>
         <Line label="Start" value={start} onPress={() => openDate({ date: start }, (p) => save(p.date, end && p.date && end < p.date ? p.date : end))} />
         <Line label="End" value={end} onPress={() => openDate({ date: end }, (p) => save(start && p.date && p.date < start ? p.date : start, p.date))} />
+        {column.system_key && (
+          <View style={{ gap: 4, paddingTop: 4 }}>
+            <Text style={{ fontSize: 12, color: colors.gray[600] }}>Time each day (shows in the Timebox)</Text>
+            <TimeSlotFields item={item} actions={actions} />
+          </View>
+        )}
       </View>
     );
   } else if (column.kind === 'dependency') {

@@ -6,7 +6,7 @@ import { formatDuration } from '../../utils/todoMeta';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize, PALETTE, PALETTE_NAMES, BRAND } from '../../theme/theme';
 import { Avatar, PRIORITY } from '../kit';
-import { formatDue, daysFromToday, timeAgo } from '../../utils/dates';
+import { formatDue, formatTime, daysFromToday, timeAgo } from '../../utils/dates';
 import useLoad, { loadText } from '../../hooks/useLoad';
 import {
   cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime,
@@ -238,9 +238,15 @@ export const CellView = memo(function CellView({ item, column, values, people, c
   if (column.kind === 'timeline') {
     const [start, end] = key ? v : v ? [v.start, v.end] : [null, null];
     if (!start && !end) return <Empty />;
+    // The clock times of a built-in timeline ("5:00 PM - 6:00 PM", each day of it) follow the dates.
+    const from = key && item.due_time ? String(item.due_time).slice(0, 5) : null;
+    const mins = from && item.duration_minutes ? Number(from.slice(0, 2)) * 60 + Number(from.slice(3, 5)) + item.duration_minutes : null;
+    const to = mins !== null ? `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}` : null;
+    const clock = from ? `  ${formatTime(from)}${to ? ` - ${formatTime(to)}` : ''}` : '';
+    const dates = start && end && start === end ? formatDue(start) : `${start ? formatDue(start) : '…'} – ${end ? formatDue(end) : '…'}`;
     return (
       <View style={{ backgroundColor: BRAND, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-        <Text numberOfLines={1} style={{ color: '#fff', fontSize: 12 }}>{start ? formatDue(start) : '…'} – {end ? formatDue(end) : '…'}</Text>
+        <Text numberOfLines={1} style={{ color: '#fff', fontSize: 12 }}>{dates}{clock}</Text>
       </View>
     );
   }
