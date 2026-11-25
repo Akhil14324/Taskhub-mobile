@@ -46,33 +46,35 @@ export function parseClipboard(text) {
   return rows;
 }
 
-// Column names are kept in the first row of the saved rows, marked by an invisible prefix, so they survive
-// without any change to what the server stores.
-const HEAD = '​H';
+// Column widths and row heights are kept in two marker rows at the top of the saved rows (an invisible prefix plus
+// the sizes), so they survive without any change to what the server stores. Older column-name rows are dropped.
+const HEAD = '\u200bH';
+const WIDTHS = '\u200bW';
+const HEIGHTS = '\u200bR';
+const markOf = (row, mark) => Array.isArray(row) && typeof row[0] === 'string' && row[0].startsWith(mark);
+const sizes = (row, mark) => { const l = row.map((x, i) => (i === 0 ? String(x).slice(mark.length) : String(x))); return l.map((x) => { const n = Number(x); return Number.isFinite(n) && n > 0 ? n : 0; }); };
 function unpack(raw) {
   const rows = Array.isArray(raw) ? raw.map((r) => [...r]) : [];
-  if (rows[0] && typeof rows[0][0] === 'string' && rows[0][0].startsWith(HEAD)) {
-    const h = rows.shift();
-    h[0] = h[0].slice(HEAD.length);
-    return { headers: h, rows };
+  let widths = []; let heights = [];
+  while (rows[0] && (markOf(rows[0], HEAD) || markOf(rows[0], WIDTHS) || markOf(rows[0], HEIGHTS))) {
+    const r = rows.shift();
+    if (markOf(r, WIDTHS)) widths = sizes(r, WIDTHS); else if (markOf(r, HEIGHTS)) heights = sizes(r, HEIGHTS);
   }
-  return { headers: [], rows };
+  return { widths, heights, rows };
 }
-function pack(headers, rows) {
-  if (!headers.some((x) => x)) return rows;
-  const width = Math.max(headers.length, 1);
-  const h = Array.from({ length: width }, (_, i) => headers[i] || '');
-  h[0] = HEAD + h[0];
-  return [h, ...rows];
+function pack(widths, heights, rows) {
+  const out = [];
+  if (widths.some((x) => x)) { const w = widths.map(String); w[0] = WIDTHS + w[0]; out.push(w); }
+  if (heights.some((x) => x)) { const h = heights.map(String); h[0] = HEIGHTS + h[0]; out.push(h); }
+  return [...out, ...rows];
 }
-/** What is saved to a file for one sheet: the used part of the grid, formulas worked out, column names on top when set. */
+/** What is saved to a file for one sheet: the used part of the grid, formulas worked out. */
 function usedRows(packed) {
-  const { headers, rows: src } = unpack(packed);
+  const { rows: src } = unpack(packed);
   const data = src.map((row, r) => row.map((_, c) => displayValue(src, r, c)));
   while (data.length && data[data.length - 1].every((x) => !x)) data.pop();
-  const width = Math.max(1, headers.filter(Boolean).length ? headers.length : 1, ...data.map((row) => { let n = row.length; while (n && !row[n - 1]) n -= 1; return n; }));
-  const body = data.map((row) => Array.from({ length: width }, (_, i) => row[i] ?? ''));
-  return headers.some((x) => x) ? [Array.from({ length: width }, (_, i) => headers[i] || columnName(i)), ...body] : body;
+  const width = Math.max(1, ...data.map((row) => { let n = row.length; while (n && !row[n - 1]) n -= 1; return n; }));
+  return data.map((row) => Array.from({ length: width }, (_, i) => row[i] ?? ''));
 }
 
 const CHECKED = '☑';
@@ -89,24 +91,26 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
   const colors = useColors();
   const first = useMemo(() => unpack(initialRows), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [rows, setRows] = useState(first.rows);
-  const [headers, setHeaders] = useState(first.headers);
+  const [widths, setWidths] = useState(first.widths);
+  const [heights, setHeights] = useState(first.heights);
   const [at, setAt] = useState({ r: 0, c: 0 });
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({}); // column -> text
   const [showFilters, setShowFilters] = useState(false);
-  const [renamingCol, setRenamingCol] = useState(null);
   const table = useRef(null);
   const navRef = useRef(false); // focus arrived by keyboard: the cell is selected, not being edited
   const modeRef = useRef('edit'); // 'select': arrows move between cells; 'edit': arrows move the text cursor
   const [menu, setMenu] = useState(null); // right-click menu: { x, y, items }
   const rowsRef = useRef(rows); rowsRef.current = rows;
-  const headRef = useRef(headers); headRef.current = headers;
+  const wRef = useRef(widths); wRef.current = widths;
+  const hRef = useRef(heights); hRef.current = heights;
   const { cols, count } = useMemo(() => shape(rows), [rows]);
 
-  const commit = useCallback((nextRows, nextHeaders) => {
-    const h = nextHeaders || headRef.current;
-    setRows(nextRows); if (nextHeaders) setHeaders(nextHeaders);
-    onChange?.(pack(h, nextRows));
+  const commit = useCallback((nextRows, meta = {}) => {
+    const w = meta.widths || wRef.current;
+    const h = meta.heights || hRef.current;
+    setRows(nextRows); if (meta.widths) setWidths(meta.widths); if (meta.heights) setHeights(meta.heights);
+    onChange?.(pack(w, h, nextRows));
   }, [onChange]);
 
   const focusCell = (r, c) => {
@@ -133,12 +137,6 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
     next[r][c] = value;
     commit(next);
   };
-  const setHeader = (c, value) => {
-    const h = [...headRef.current]; while (h.length <= c) h.push('');
-    h[c] = value;
-    commit(rowsRef.current, h);
-  };
-
   // Rows that pass the filters (all of them when no filter is set).
   const active = Object.entries(filters).filter(([, v]) => v);
   const visible = useMemo(() => {
@@ -199,28 +197,31 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
     const next = copyRows(); const i = p.r + (below ? 1 : 0);
     while (next.length < i) next.push([]);
     next.splice(i, 0, []);
-    commit(next.slice(0, MAX_ROWS));
+    const h = [...hRef.current]; while (h.length < i) h.push(0); h.splice(i, 0, 0);
+    commit(next.slice(0, MAX_ROWS), { heights: h });
     setAt({ r: i, c: p.c });
   };
-  const deleteRow = (p = at) => { if (p.r < rowsRef.current.length) commit(rowsRef.current.filter((_, i) => i !== p.r).map((row) => [...row])); };
+  const deleteRow = (p = at) => { if (p.r < rowsRef.current.length) commit(rowsRef.current.filter((_, i) => i !== p.r).map((row) => [...row]), { heights: hRef.current.filter((_, i) => i !== p.r) }); };
   const moveRow = (d, p = at) => {
     const j = p.r + d; if (j < 0 || j >= MAX_ROWS) return;
     const next = copyRows(); while (next.length <= Math.max(p.r, j)) next.push([]);
     [next[p.r], next[j]] = [next[j], next[p.r]];
-    commit(next); setAt({ r: j, c: p.c });
+    const h = [...hRef.current]; while (h.length <= Math.max(p.r, j)) h.push(0); [h[p.r], h[j]] = [h[j], h[p.r]];
+    commit(next, { heights: h }); setAt({ r: j, c: p.c });
     setTimeout(() => focusCell(j, p.c), 0);
   };
   const addCol = (after, p = at) => {
     const i = p.c + (after ? 1 : 0);
     const next = rowsRef.current.map((row) => { const n = [...row]; while (n.length < i) n.push(''); n.splice(i, 0, ''); return n.slice(0, MAX_COLS); });
-    const h = [...headRef.current]; while (h.length < i) h.push(''); h.splice(i, 0, '');
-    commit(next, h); setAt({ r: p.r, c: i });
+    const w = [...wRef.current]; while (w.length < i) w.push(0); w.splice(i, 0, 0);
+    commit(next, { widths: w }); setAt({ r: p.r, c: i });
   };
-  const deleteCol = (p = at) => commit(rowsRef.current.map((row) => row.filter((_, i) => i !== p.c)), headRef.current.filter((_, i) => i !== p.c));
+  const deleteCol = (p = at) => commit(rowsRef.current.map((row) => row.filter((_, i) => i !== p.c)), { widths: wRef.current.filter((_, i) => i !== p.c) });
   const moveCol = (d, p = at) => {
     const j = p.c + d; if (j < 0 || j >= MAX_COLS) return;
     const swap = (row) => { const n = [...row]; while (n.length <= Math.max(p.c, j)) n.push(''); [n[p.c], n[j]] = [n[j], n[p.c]]; return n; };
-    commit(rowsRef.current.map(swap), swap(headRef.current));
+    const w = [...wRef.current]; while (w.length <= Math.max(p.c, j)) w.push(0); [w[p.c], w[j]] = [w[j], w[p.c]];
+    commit(rowsRef.current.map(swap), { widths: w });
     setAt({ r: p.r, c: j });
     setTimeout(() => focusCell(p.r, j), 0);
   };
@@ -238,7 +239,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
       const cmp = na !== null && nb !== null ? na - nb : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
       return dir * cmp;
     });
-    commit(data);
+    commit(data, { heights: [] }); // rows changed places, so their heights go back to normal
   };
   const tickBox = (p = at) => setCell(p.r, p.c, isTick(rowsRef.current[p.r]?.[p.c]) ? '' : UNCHECKED);
   const clearCell = (p = at) => setCell(p.r, p.c, '');
@@ -254,6 +255,34 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
     </AnimatedPressable>
   );
   const sep = (k) => <View key={k} style={{ width: 1, height: 20, backgroundColor: colors.gray[200], marginHorizontal: 2 }} />;
+  // Drag the right edge of a column name or the bottom edge of a row number to resize it; double click resets it.
+  const colW = (c) => widths[c] || COL_W;
+  const rowH = (r) => heights[r] || ROW_H;
+  const startResize = (e, kind, idx) => {
+    e.preventDefault(); e.stopPropagation();
+    const col = kind === 'col';
+    const from = col ? e.clientX : e.clientY;
+    const base = col ? (wRef.current[idx] || COL_W) : (hRef.current[idx] || ROW_H);
+    const arr = () => { const a = [...(col ? wRef.current : hRef.current)]; while (a.length <= idx) a.push(0); return a; };
+    let size = base;
+    const move = (ev) => {
+      size = Math.round(Math.min(col ? 600 : 300, Math.max(col ? 50 : 22, base + (col ? ev.clientX : ev.clientY) - from)));
+      const a = arr(); a[idx] = size;
+      if (col) setWidths(a); else setHeights(a);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      if (size === base) return;
+      const a = arr(); a[idx] = size;
+      commit(rowsRef.current, col ? { widths: a } : { heights: a });
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+  const resetSize = (kind, idx) => {
+    const col = kind === 'col';
+    const a = [...(col ? wRef.current : hRef.current)]; if (!a[idx]) return;
+    a[idx] = 0; commit(rowsRef.current, col ? { widths: a } : { heights: a });
+  };
   // Right click on a cell, a column name or a row number: the toolbar's actions for that spot.
   const openMenu = (e, kind, r, c) => {
     e.preventDefault(); e.stopPropagation();
@@ -270,7 +299,6 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
       { label: 'Delete row', icon: 'remove-circle-outline', run: () => deleteRow(p), danger: true },
     ];
     const colItems = [
-      { label: 'Rename column', icon: 'create-outline', run: () => setRenamingCol(p.c) },
       { label: 'Insert column left', icon: 'arrow-back', run: () => addCol(false, p) },
       { label: 'Insert column right', icon: 'arrow-forward', run: () => addCol(true, p) },
       { label: 'Move column left', icon: 'chevron-back', run: () => moveCol(-1, p) },
@@ -313,32 +341,22 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
       </View>
       <View style={{ flex: 1, borderWidth: 1, borderColor: colors.gray[200], borderRadius: radius.lg, overflow: 'hidden' }}>
         {createElement('div', { style: { overflow: 'auto', width: '100%', height: '100%', maxHeight: 'none' } },
-          createElement('table', { ref: table, style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: NUM_W + cols * COL_W } },
+          createElement('table', { ref: table, style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: NUM_W + Array.from({ length: cols }, (_, c) => colW(c)).reduce((x, y) => x + y, 0) } },
             createElement('thead', null,
               createElement('tr', null,
                 createElement('th', { style: { ...headStyle, width: NUM_W, position: 'sticky', top: 0, left: 0, zIndex: 3 } }, ''),
                 Array.from({ length: cols }, (_, c) => createElement('th', {
-                  key: c, title: 'Click for column options. Double click to rename.', 'data-colhead': c,
-                  onClick: (e) => { if (renamingCol === null) openMenu(e, 'col', at.r, c); },
+                  key: c, title: 'Click for column options. Drag the right edge to resize.', 'data-colhead': c,
+                  onClick: (e) => openMenu(e, 'col', at.r, c),
                   onContextMenu: (e) => openMenu(e, 'col', at.r, c),
-                  onDoubleClick: (e) => { e.stopPropagation(); setMenu(null); setRenamingCol(c); },
-                  style: { ...headStyle, width: COL_W, position: 'sticky', top: 0, zIndex: 2, padding: 0, cursor: 'pointer', background: c === at.c ? colors.brand[50] : colors.gray[50] },
+                  style: { ...headStyle, width: colW(c), position: 'sticky', top: 0, zIndex: 2, padding: 0, cursor: 'pointer', background: c === at.c ? colors.brand[50] : colors.gray[50] },
                 },
-                  renamingCol === c
-                    ? createElement('input', {
-                      autoFocus: true, 'aria-label': `Name of column ${columnName(c)}`, defaultValue: headers[c] || '', placeholder: columnName(c),
-                      onClick: (e) => e.stopPropagation(),
-                      onBlur: (e) => { setHeader(c, e.target.value); setRenamingCol(null); },
-                      onKeyDown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); focusCell(0, c); } else if (e.key === 'Escape') { e.preventDefault(); e.target.value = headers[c] || ''; setRenamingCol(null); } },
-                      style: { width: '100%', height: ROW_H - 1, border: `2px solid ${colors.brand[600]}`, background: colors.white, textAlign: 'center', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', color: colors.gray[900], boxSizing: 'border-box', padding: '0 6px', outline: 'none' },
-                    })
-                    : createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: ROW_H - 1, padding: '0 6px', fontSize: 12.5, fontWeight: 700, color: c === at.c ? colors.brand[700] : colors.gray[700], overflow: 'hidden', whiteSpace: 'nowrap' } },
-                      createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, headers[c] || columnName(c)),
-                      headers[c] ? createElement('span', { style: { fontWeight: 500, fontSize: 10.5, color: colors.gray[400] } }, columnName(c)) : null,
-                      createElement('span', { style: { fontSize: 9, color: colors.gray[400] } }, '\u25BE'))))),
+                  createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: ROW_H - 1, padding: '0 6px', fontSize: 12.5, fontWeight: 700, color: c === at.c ? colors.brand[700] : colors.gray[700], overflow: 'hidden', whiteSpace: 'nowrap' } },
+                    columnName(c), createElement('span', { style: { fontSize: 9, color: colors.gray[400] } }, '\u25BE')),
+                  createElement('div', { 'data-resize': 'col', onClick: (e) => e.stopPropagation(), onDoubleClick: (e) => { e.stopPropagation(); resetSize('col', c); }, onPointerDown: (e) => startResize(e, 'col', c), title: 'Drag to resize. Double click to reset.', style: { position: 'absolute', top: 0, right: -3, width: 7, height: '100%', cursor: 'col-resize', zIndex: 4, touchAction: 'none' } })))),
               showFilters && createElement('tr', { key: 'filters' },
                 createElement('th', { style: { ...headStyle, width: NUM_W, position: 'sticky', top: ROW_H, left: 0, zIndex: 3 } }, ''),
-                Array.from({ length: cols }, (_, c) => createElement('th', { key: c, style: { ...headStyle, position: 'sticky', top: ROW_H, zIndex: 2, padding: 0 } },
+                Array.from({ length: cols }, (_, c) => createElement('th', { key: c, style: { ...headStyle, width: colW(c), position: 'sticky', top: ROW_H, zIndex: 2, padding: 0 } },
                   createElement('input', {
                     'aria-label': `Filter column ${columnName(c)}`,
                     list: `th-vals-${c}`,
@@ -350,13 +368,14 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
                   }),
                   createElement('datalist', { id: `th-vals-${c}` }, distinct(c).map((v) => createElement('option', { key: v, value: v }))))))),
             createElement('tbody', null,
-              visible.map((r) => createElement('tr', { key: r },
-                createElement('td', { onContextMenu: (e) => openMenu(e, 'row', r, at.c), onClick: (e) => openMenu(e, 'row', r, at.c), title: 'Click for row options', style: { ...headStyle, width: NUM_W, position: 'sticky', left: 0, zIndex: 1, cursor: 'pointer', color: r === at.r ? colors.brand[700] : colors.gray[600] } }, r + 1),
+              visible.map((r) => createElement('tr', { key: r, style: { height: rowH(r) } },
+                createElement('td', { onContextMenu: (e) => openMenu(e, 'row', r, at.c), onClick: (e) => openMenu(e, 'row', r, at.c), title: 'Click for row options', style: { ...headStyle, height: rowH(r), width: NUM_W, position: 'sticky', left: 0, zIndex: 1, cursor: 'pointer', color: r === at.r ? colors.brand[700] : colors.gray[600] } }, r + 1,
+                  createElement('div', { 'data-resize': 'row', onClick: (e) => e.stopPropagation(), onDoubleClick: (e) => { e.stopPropagation(); resetSize('row', r); }, onPointerDown: (e) => startResize(e, 'row', r), title: 'Drag to resize. Double click to reset.', style: { position: 'absolute', left: 0, bottom: -3, height: 7, width: '100%', cursor: 'row-resize', zIndex: 4, touchAction: 'none' } })),
                 Array.from({ length: cols }, (_, c) => {
                   const raw = rows[r]?.[c] ?? '';
                   const focused = editing && editing.r === r && editing.c === c;
                   const shown = focused || !isFormula(raw) ? raw : displayValue(rows, r, c);
-                  const cellStyle = { borderRight: line, borderBottom: line, padding: 0, height: ROW_H, background: colors.white };
+                  const cellStyle = { borderRight: line, borderBottom: line, padding: 0, height: rowH(r), background: colors.white };
                   if (isTick(raw)) {
                     return createElement('td', { key: c, style: { ...cellStyle, textAlign: 'center' } },
                       createElement('input', {
@@ -381,7 +400,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetSt
                       onKeyDown: (e) => onKeyDown(e, r, c),
                       onPaste: (e) => onPaste(e, r, c),
                       className: 'th-cell',
-                      style: { width: '100%', height: ROW_H - 1, border: 'none', background: 'transparent', padding: '0 8px', fontSize: 13.5, fontFamily: 'inherit', color: String(shown).startsWith('#') && isFormula(raw) ? colors.brand[700] : colors.gray[900], boxSizing: 'border-box' },
+                      style: { width: '100%', height: rowH(r) - 1, border: 'none', background: 'transparent', padding: '0 8px', fontSize: 13.5, fontFamily: 'inherit', color: String(shown).startsWith('#') && isFormula(raw) ? colors.brand[700] : colors.gray[900], boxSizing: 'border-box' },
                     }));
                 })))))) }
       </View>

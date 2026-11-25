@@ -107,16 +107,18 @@ export default function NotesPad({ desktop }) {
             {(notes || []).filter((n) => show === 'all' || (n.kind || 'text') === show).map((n) => {
               const active = n.id === openId;
               const sheet = n.kind === 'sheet';
-              const line = (n.title || n.body.split('\n')[0] || '').trim();
+              // A sheet's saved text starts with hidden rows (sheet names, sizes); they are not shown.
+              const words = sheet ? n.body.split('\n').filter((l) => !l.startsWith('\u200b')).join('\n') : n.body;
+              const line = sheet ? (n.title || '').trim() : (n.title || n.body.split('\n')[0] || '').trim();
               return (
                 <Pressable key={n.id} onPress={() => setOpenId(n.id)} style={({ hovered }) => ({ flexDirection: 'row', gap: 10, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: active ? BRAND : colors.gray[200], backgroundColor: active ? colors.brand[50] : hovered ? colors.gray[50] : colors.white })}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name={sheet ? 'grid-outline' : 'document-text-outline'} size={13} color={colors.gray[500]} />
                       {n.pinned && <Ionicons name="pin" size={12} color={BRAND} />}
-                      <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, fontWeight: '600', color: line ? colors.gray[900] : colors.gray[400] }}>{line || (sheet ? 'Empty sheet' : 'Empty note')}</Text>
+                      <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, fontWeight: '600', color: line || sheet ? colors.gray[900] : colors.gray[400] }}>{line || (sheet ? 'Untitled' : 'Empty note')}</Text>
                     </View>
-                    <Text numberOfLines={2} style={{ fontSize: 13, color: colors.gray[600] }}>{(n.title ? n.body : n.body.split('\n').slice(1).join(' ')) || (n.images.length ? `${n.images.length} picture${n.images.length > 1 ? 's' : ''}` : '')}</Text>
+                    <Text numberOfLines={2} style={{ fontSize: 13, color: colors.gray[600] }}>{(n.title || sheet ? words : n.body.split('\n').slice(1).join(' ')) || (n.images.length ? `${n.images.length} picture${n.images.length > 1 ? 's' : ''}` : '')}</Text>
                     <Text style={{ fontSize: 11, color: colors.gray[500] }}>{timeAgo(n.updated_at)}</Text>
                   </View>
                   {n.images[0] && <Image source={{ uri: n.images[0].url }} resizeMode="cover" style={{ width: 54, height: 54, borderRadius: radius.sm, backgroundColor: colors.gray[100] }} />}
