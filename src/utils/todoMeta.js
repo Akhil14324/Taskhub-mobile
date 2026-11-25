@@ -239,3 +239,21 @@ export function deadlineState(todo) {
   if (diff <= DEADLINE_SOON_DAYS) return { level: 'soon', label: `Deadline in ${diff} days`, color: '#d83a52', diff };
   return null;
 }
+
+/**
+ * "5", "5 min", "5m" -> 5 minutes; "2h", "2 hr", "1.5 hours" -> hours; "1h 30m", "1h30", "1:30" -> hours and minutes.
+ * A bare number is minutes. Returns whole minutes, or null when empty, and `undefined` when it cannot be read.
+ */
+export function parseDuration(text) {
+  const s = String(text ?? '').trim().toLowerCase();
+  if (!s) return null;
+  let m = /^(\d+(?:\.\d+)?)$/.exec(s);
+  if (m) return Number(m[1]) === 0 ? null : Math.max(1, Math.round(Number(m[1])));
+  m = /^(\d+):(\d{1,2})$/.exec(s);
+  if (m) return Math.max(1, Number(m[1]) * 60 + Number(m[2]));
+  m = /^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)(?:\s*(\d+)\s*(?:m|min|mins|minute|minutes)?)?$/.exec(s);
+  if (m) return Math.max(1, Math.round(Number(m[1]) * 60 + Number(m[2] || 0)));
+  m = /^(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)$/.exec(s);
+  if (m) return Math.max(1, Math.round(Number(m[1])));
+  return undefined;
+}

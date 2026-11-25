@@ -11,6 +11,7 @@ import {
 } from './Cells';
 import { cellValue, itemWordOf } from './model';
 import { formatDue } from '../../utils/dates';
+import { formatDuration, parseDuration } from '../../utils/todoMeta';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius } from '../../theme/theme';
 
@@ -418,7 +419,16 @@ export default function CellEditorHost({ editing, onClose, board, people, action
       </View>
     );
   } else if (column.system_key === 'estimate') {
-    body = <TextEditor initial={v ? String(v) : ''} placeholder="Minutes" keyboardType="numeric" onDone={done((t) => actions.updateFields(item, { duration_minutes: t.trim() ? Number(t) : null }))} />;
+    body = (
+      <TextEditor
+        initial={v ? formatDuration(v) : ''} placeholder="5 min, 2 hr, 1h 30m"
+        onDone={done((t) => {
+          const minutes = parseDuration(t);
+          if (minutes === undefined) { showToast({ message: 'Type it like 5 min, 2 hr or 1h 30m', tone: 'error' }); return; }
+          actions.updateFields(item, { duration_minutes: minutes });
+        })}
+      />
+    );
   } else if (['text', 'long_text', 'numbers', 'link', 'email', 'phone', 'hour', 'country', 'location', 'progress'].includes(column.kind)) {
     const initial = column.kind === 'link' ? (v?.url || '') : column.kind === 'location' ? (v?.address || '') : (v ?? '');
     const parse = (t) => {

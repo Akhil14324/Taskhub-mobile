@@ -1,6 +1,7 @@
 import { createContext, memo, useContext, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { formatDuration } from '../../utils/todoMeta';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize, PALETTE, PALETTE_NAMES, BRAND } from '../../theme/theme';
 import { Avatar, PRIORITY } from '../kit';
@@ -138,7 +139,7 @@ function MirrorValue({ values, look, compact }) {
     const nums = values.map(Number).filter((n) => Number.isFinite(n));
     if (nums.length === values.length) {
       const sum = nums.reduce((a, b) => a + b, 0);
-      return <Text numberOfLines={1} style={[text, { textAlign: 'right', alignSelf: 'stretch' }]}>{formatNumber(sum, { unit: look.unit })}{kind === 'progress' ? '%' : ''}</Text>;
+      return <Text numberOfLines={1} style={[text, { textAlign: 'right', alignSelf: 'stretch' }]}>{look.unit === 'min' && sum >= 1 ? formatDuration(sum) : formatNumber(sum, { unit: look.unit })}{kind === 'progress' ? '%' : ''}</Text>;
     }
   }
   return <Chips chips={values.slice(0, 3).map((x, i) => ({ key: `${i}`, label: String(x) }))} />;
