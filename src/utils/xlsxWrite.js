@@ -29,8 +29,7 @@ export function isNumberCell(text) {
   return !(digits.length > 1 && digits[0] === '0' && digits[1] !== '.');
 }
 
-/** rows: [[text]] -> the bytes of an .xlsx file (Uint8Array). `widths` are pixels per column, optional. */
-export function toXlsx(rows, { widths = [], sheetName = 'Sheet1' } = {}) {
+function sheetXml(rows, widths = []) {
   const body = rows.map((row, r) => {
     const cells = row.map((value, c) => {
       const text = value === null || value === undefined ? '' : String(value);
@@ -45,15 +44,39 @@ export function toXlsx(rows, { widths = [], sheetName = 'Sheet1' } = {}) {
   const cols = widths.length
     ? `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.max(6, Math.round((Number(w) || 120) / 7))}" customWidth="1"/>`).join('')}</cols>`
     : '';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+
+/** Sheet tab names: at most 31 characters, none of : \\ / ? * [ ], and no two alike. */
+function tabNames(names) {
+  const seen = new Set();
+  return names.map((n, i) => {
+    let base = String(n || '').replace(/[:\\/?*[\]]/g, ' ').trim().slice(0, 31) || `Sheet${i + 1}`;
+    let name = base; let k = 2;
+    while (seen.has(name.toLowerCase())) { name = `${base.slice(0, 28)} ${k}`; k += 1; }
+    seen.add(name.toLowerCase());
+    return name;
+  });
+}
+
+/** sheets: [{ name, rows: [[text]], widths? }] -> the bytes of an .xlsx workbook with one tab per sheet. */
+export function toXlsxBook(sheets) {
+  const list = sheets.length ? sheets : [{ name: 'Sheet1', rows: [] }];
+  const names = tabNames(list.map((x) => x.name));
   const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   const files = {
-    '[Content_Types].xml': `${head}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`,
+    '[Content_Types].xml': `${head}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${list.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
     '_rels/.rels': `${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    'xl/workbook.xml': `${head}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${esc(sheetName).slice(0, 31) || 'Sheet1'}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    'xl/_rels/workbook.xml.rels': `${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
-    'xl/worksheets/sheet1.xml': `${head}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`,
+    'xl/workbook.xml': `${head}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${list.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`,
   };
+  list.forEach((x, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(x.rows, x.widths); });
   return zipSync(Object.fromEntries(Object.entries(files).map(([name, xml]) => [name, strToU8(xml)])));
+}
+
+/** rows: [[text]] -> the bytes of a one-sheet .xlsx file (Uint8Array). `widths` are pixels per column, optional. */
+export function toXlsx(rows, { widths = [], sheetName = 'Sheet1' } = {}) {
+  return toXlsxBook([{ name: sheetName, rows, widths }]);
 }
 
 /** Save bytes as a file in the browser. */
