@@ -75,6 +75,45 @@ function Field({ onPress, children, tall, stretch }) {
   );
 }
 
+/** One sub-task line. In edit mode its name is typed in place and it can be deleted; otherwise it opens. */
+function SubRow({ t, depth, editing, actions, onOpen, onDeleted }) {
+  const colors = useColors();
+  const [title, setTitle] = useState(t.title);
+  useEffect(() => { setTitle(t.title); }, [t.title]);
+  const canEditIt = mayEdit(t);
+  const save = () => {
+    const v = title.trim();
+    if (v && v !== t.title && canEditIt) actions.updateFields(t, { title: v });
+    else setTitle(t.title);
+  };
+  const remove = async () => {
+    try { await api.delete(`/todos/${t.id}`, { __skipOops: true }); showToast({ message: 'Sub-task deleted', icon: 'trash' }); onDeleted?.(); }
+    catch (err) { showToast({ message: err.response?.data?.error || 'Could not delete it', tone: 'error' }); }
+  };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingLeft: depth * 18, borderRadius: radius.sm }}>
+      <Pressable onPress={() => canEditIt && actions.setStatus(t, t.is_done ? 'todo' : 'done')} hitSlop={8} accessibilityLabel={t.is_done ? `Reopen ${t.title}` : `Finish ${t.title}`}>
+        <Ionicons name={t.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={t.is_done ? colors.green[600] : colors.gray[400]} />
+      </Pressable>
+      {editing && canEditIt ? (
+        <TextInput
+          value={title} onChangeText={setTitle} onBlur={save} onSubmitEditing={save} accessibilityLabel="Sub-task name"
+          style={{ flex: 1, minHeight: 36, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+        />
+      ) : (
+        <Pressable onPress={onOpen} style={{ flex: 1, minHeight: 38, justifyContent: 'center' }}>
+          <Text numberOfLines={2} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
+        </Pressable>
+      )}
+      {editing && !!t.permissions?.can_delete && (
+        <Pressable onPress={remove} hitSlop={8} accessibilityLabel={`Delete ${t.title}`}><Ionicons name="trash-outline" size={18} color={colors.red[600]} /></Pressable>
+      )}
+      {!editing && !!t.assignee_name && <Avatar name={t.assignee_name} size={20} />}
+      {!editing && !(t.is_done && !!t.done_at) && !!t.due_date && <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.due_date.slice(5)}</Text>}
+    </View>
+  );
+}
+
 /**
  * One task opened from a board: its columns on the left (group, name, owner, status, date, dependent on, notes,
  * files ...) and, on the right, Updates (the conversation), Files and the Activity Log. Every value is the
@@ -93,6 +132,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const [groupAnchor, setGroupAnchor] = useState(null);
   const [name, setName] = useState(item?.title || '');
   const [newStep, setNewStep] = useState('');
+  const [editing, setEditing] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -100,7 +140,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const word = itemWordOf(board);
   const id = item?.id;
 
-  useEffect(() => { setName(item?.title || ''); setNewStep(''); setTab(initialTab || 'updates'); setFiles(null); setLog(null); }, [id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setName(item?.title || ''); setNewStep(''); setTab(initialTab || 'updates'); setFiles(null); setLog(null); setEditing(false); }, [id, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFiles = useCallback(async () => {
     if (!id) return;
@@ -233,16 +273,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
         Sub-tasks{steps.length ? ` · ${steps.filter((x) => x.t.is_done).length} of ${steps.length} done` : ''}
       </Text>
       {steps.map(({ t, depth }) => (
-        <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingLeft: depth * 18, borderRadius: radius.sm }}>
-          <Pressable onPress={() => mayEdit(t) && actions.setStatus(t, t.is_done ? 'todo' : 'done')} hitSlop={8} accessibilityLabel={t.is_done ? `Reopen ${t.title}` : `Finish ${t.title}`}>
-            <Ionicons name={t.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={t.is_done ? colors.green[600] : colors.gray[400]} />
-          </Pressable>
-          <Pressable onPress={() => (onOpenItem ? onOpenItem(t.id) : onOpenFull(t.id))} style={{ flex: 1, minHeight: 38, justifyContent: 'center' }}>
-            <Text numberOfLines={2} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
-          </Pressable>
-          {!!t.assignee_name && <Avatar name={t.assignee_name} size={20} />}
-          {t.is_done && !!t.done_at ? null : !!t.due_date && <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.due_date.slice(5)}</Text>}
-        </View>
+        <SubRow key={t.id} t={t} depth={depth} editing={editing} actions={actions} onDeleted={actions.reload} onOpen={() => (onOpenItem ? onOpenItem(t.id) : onOpenFull(t.id))} />
       ))}
       {board.access.add && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm }}>
@@ -302,7 +333,14 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
         >
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.sm, gap: spacing.md }}>
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={2} style={{ fontSize: 24, fontWeight: '700', color: colors.gray[900] }}>{item.title}</Text>
+              {editing && canEdit ? (
+                <TextInput
+                  value={name} onChangeText={setName} onBlur={saveName} onSubmitEditing={saveName} accessibilityLabel="Task name" autoFocus
+                  style={{ fontSize: 24, fontWeight: '700', color: colors.gray[900], minHeight: 44, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm, outlineStyle: 'none' }}
+                />
+              ) : (
+                <Text numberOfLines={2} style={{ fontSize: 24, fontWeight: '700', color: colors.gray[900] }}>{item.title}</Text>
+              )}
               <Text style={{ fontSize: 13, color: colors.gray[600], marginTop: 2 }}>in <Ionicons name="arrow-forward" size={11} /> {board.board.name}</Text>
               {!!prog && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -311,6 +349,17 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
                 </View>
               )}
             </View>
+            {canEdit ? (
+              <Pressable
+                onPress={() => { if (editing) saveName(); setEditing((v) => !v); }} accessibilityLabel={editing ? 'Finish editing' : 'Edit task'}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: editing ? BRAND : colors.gray[100] }}
+              >
+                <Ionicons name={editing ? 'checkmark' : 'create-outline'} size={16} color={editing ? '#fff' : colors.gray[800]} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: editing ? '#fff' : colors.gray[800] }}>{editing ? 'Done' : 'Edit'}</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ fontSize: 12, color: colors.gray[500], maxWidth: 160, textAlign: 'right', paddingTop: 8 }}>View only. Only its creator can edit it.</Text>
+            )}
             <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="close" size={22} color={colors.gray[700]} />
             </Pressable>
