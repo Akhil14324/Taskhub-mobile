@@ -85,7 +85,7 @@ const isTick = (v) => v === CHECKED || v === UNCHECKED;
  * tick boxes, and simple formulas (=A1+B1, =SUM(A1:A5), AVERAGE, MIN, MAX, COUNT). Saves as Excel or CSV.
  * `onChange(rows)` reports every edit (rows include the column-name row when there is one).
  */
-function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onToggleFull, onSheetStep }) {
+function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, onSheetStep }) {
   const colors = useColors();
   const first = useMemo(() => unpack(initialRows), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [rows, setRows] = useState(first.rows);
@@ -94,6 +94,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({}); // column -> text
   const [showFilters, setShowFilters] = useState(false);
+  const [renamingCol, setRenamingCol] = useState(null);
   const table = useRef(null);
   const navRef = useRef(false); // focus arrived by keyboard: the cell is selected, not being edited
   const modeRef = useRef('edit'); // 'select': arrows move between cells; 'edit': arrows move the text cursor
@@ -258,6 +259,9 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
     e.preventDefault(); e.stopPropagation();
     const p = { r, c };
     setAt(p);
+    // A plain click on a column name or row number opens the menu under it; a right click opens it at the pointer.
+    const rect = e.type === 'click' ? e.currentTarget?.getBoundingClientRect?.() : null;
+    const at0 = rect ? (kind === 'row' ? { x: rect.right, y: rect.top } : { x: rect.left, y: rect.bottom }) : { x: e.clientX, y: e.clientY };
     const rowItems = [
       { label: 'Insert row above', icon: 'arrow-up', run: () => addRow(false, p) },
       { label: 'Insert row below', icon: 'arrow-down', run: () => addRow(true, p) },
@@ -266,6 +270,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
       { label: 'Delete row', icon: 'remove-circle-outline', run: () => deleteRow(p), danger: true },
     ];
     const colItems = [
+      { label: 'Rename column', icon: 'create-outline', run: () => setRenamingCol(p.c) },
       { label: 'Insert column left', icon: 'arrow-back', run: () => addCol(false, p) },
       { label: 'Insert column right', icon: 'arrow-forward', run: () => addCol(true, p) },
       { label: 'Move column left', icon: 'chevron-back', run: () => moveCol(-1, p) },
@@ -284,7 +289,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
     const items = kind === 'row' ? rowItems
       : kind === 'col' ? [...colItems, 'sep', ...dataItems]
       : [...cellItems, 'sep', ...rowItems, 'sep', ...colItems, 'sep', ...dataItems];
-    setMenu({ x: e.clientX, y: e.clientY, items });
+    setMenu({ x: at0.x, y: at0.y, items });
   };
   useEffect(() => {
     if (!menu || typeof window === 'undefined') return undefined;
@@ -298,47 +303,39 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
     <View style={{ flex: 1, gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
-        {tool('arrow-up', 'Row above', () => addRow(false))}
-        {tool('arrow-down', 'Row below', () => addRow(true))}
-        {tool('arrow-back', 'Column left', () => addCol(false))}
-        {tool('arrow-forward', 'Column right', () => addCol(true))}
-        {sep('a')}
-        {tool('chevron-up', 'Move row up', () => moveRow(-1))}
-        {tool('chevron-down', 'Move row down', () => moveRow(1))}
-        {tool('chevron-back', 'Move column left', () => moveCol(-1))}
-        {tool('chevron-forward', 'Move column right', () => moveCol(1))}
-        {sep('b')}
-        {tool('remove-circle-outline', 'Delete row', deleteRow)}
-        {tool('remove-circle-outline', 'Delete column', deleteCol)}
-        {sep('c')}
         {tool('arrow-up-circle-outline', 'Sort A-Z', () => sortBy(1))}
         {tool('arrow-down-circle-outline', 'Sort Z-A', () => sortBy(-1))}
         {tool('filter-outline', 'Filter', () => { setShowFilters((v) => !v); if (showFilters) setFilters({}); }, false, showFilters)}
-        {tool('checkbox-outline', 'Tick box', tickBox)}
         <Text style={{ fontSize: 12, color: colors.gray[500], marginHorizontal: 6 }}>{columnName(at.c)}{at.r + 1}</Text>
         {tool('download-outline', 'Excel', onExportXlsx, true)}
         {tool('document-outline', 'CSV', onExportCsv)}
       </ScrollView>
-      {tool(full ? 'contract-outline' : 'expand-outline', full ? 'Exit full screen' : 'Full screen', onToggleFull, false, full)}
       </View>
       <View style={{ flex: 1, borderWidth: 1, borderColor: colors.gray[200], borderRadius: radius.lg, overflow: 'hidden' }}>
-        {createElement('div', { style: { overflow: 'auto', width: '100%', height: '100%', maxHeight: full ? 'none' : '70vh' } },
+        {createElement('div', { style: { overflow: 'auto', width: '100%', height: '100%', maxHeight: 'none' } },
           createElement('table', { ref: table, style: { borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: NUM_W + cols * COL_W } },
             createElement('thead', null,
               createElement('tr', null,
                 createElement('th', { style: { ...headStyle, width: NUM_W, position: 'sticky', top: 0, left: 0, zIndex: 3 } }, ''),
-                Array.from({ length: cols }, (_, c) => createElement('th', { key: c, style: { ...headStyle, width: COL_W, position: 'sticky', top: 0, zIndex: 2, padding: 0 } },
-                  createElement('input', {
-                    'aria-label': `Name of column ${columnName(c)}`,
-                    value: headers[c] || '',
-                    placeholder: columnName(c),
-                    onFocus: () => setAt((a) => ({ ...a, c })),
-                    onContextMenu: (e) => openMenu(e, 'col', at.r, c),
-                    onChange: (e) => setHeader(c, e.target.value),
-                    onKeyDown: (e) => { if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusCell(0, c); } },
-                    className: 'th-cell',
-                    style: { width: '100%', height: ROW_H - 1, border: 'none', background: 'transparent', textAlign: 'center', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', color: c === at.c ? colors.brand[700] : colors.gray[700], boxSizing: 'border-box', padding: '0 6px' },
-                  })))),
+                Array.from({ length: cols }, (_, c) => createElement('th', {
+                  key: c, title: 'Click for column options. Double click to rename.', 'data-colhead': c,
+                  onClick: (e) => { if (renamingCol === null) openMenu(e, 'col', at.r, c); },
+                  onContextMenu: (e) => openMenu(e, 'col', at.r, c),
+                  onDoubleClick: (e) => { e.stopPropagation(); setMenu(null); setRenamingCol(c); },
+                  style: { ...headStyle, width: COL_W, position: 'sticky', top: 0, zIndex: 2, padding: 0, cursor: 'pointer', background: c === at.c ? colors.brand[50] : colors.gray[50] },
+                },
+                  renamingCol === c
+                    ? createElement('input', {
+                      autoFocus: true, 'aria-label': `Name of column ${columnName(c)}`, defaultValue: headers[c] || '', placeholder: columnName(c),
+                      onClick: (e) => e.stopPropagation(),
+                      onBlur: (e) => { setHeader(c, e.target.value); setRenamingCol(null); },
+                      onKeyDown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); focusCell(0, c); } else if (e.key === 'Escape') { e.preventDefault(); e.target.value = headers[c] || ''; setRenamingCol(null); } },
+                      style: { width: '100%', height: ROW_H - 1, border: `2px solid ${colors.brand[600]}`, background: colors.white, textAlign: 'center', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', color: colors.gray[900], boxSizing: 'border-box', padding: '0 6px', outline: 'none' },
+                    })
+                    : createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: ROW_H - 1, padding: '0 6px', fontSize: 12.5, fontWeight: 700, color: c === at.c ? colors.brand[700] : colors.gray[700], overflow: 'hidden', whiteSpace: 'nowrap' } },
+                      createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, headers[c] || columnName(c)),
+                      headers[c] ? createElement('span', { style: { fontWeight: 500, fontSize: 10.5, color: colors.gray[400] } }, columnName(c)) : null,
+                      createElement('span', { style: { fontSize: 9, color: colors.gray[400] } }, '\u25BE'))))),
               showFilters && createElement('tr', { key: 'filters' },
                 createElement('th', { style: { ...headStyle, width: NUM_W, position: 'sticky', top: ROW_H, left: 0, zIndex: 3 } }, ''),
                 Array.from({ length: cols }, (_, c) => createElement('th', { key: c, style: { ...headStyle, position: 'sticky', top: ROW_H, zIndex: 2, padding: 0 } },
@@ -354,7 +351,7 @@ function SheetPane({ initialRows, onChange, onExportXlsx, onExportCsv, full, onT
                   createElement('datalist', { id: `th-vals-${c}` }, distinct(c).map((v) => createElement('option', { key: v, value: v }))))))),
             createElement('tbody', null,
               visible.map((r) => createElement('tr', { key: r },
-                createElement('td', { onContextMenu: (e) => openMenu(e, 'row', r, at.c), onClick: () => focusCell(r, at.c), style: { ...headStyle, width: NUM_W, position: 'sticky', left: 0, zIndex: 1, cursor: 'pointer', color: r === at.r ? colors.brand[700] : colors.gray[600] } }, r + 1),
+                createElement('td', { onContextMenu: (e) => openMenu(e, 'row', r, at.c), onClick: (e) => openMenu(e, 'row', r, at.c), title: 'Click for row options', style: { ...headStyle, width: NUM_W, position: 'sticky', left: 0, zIndex: 1, cursor: 'pointer', color: r === at.r ? colors.brand[700] : colors.gray[600] } }, r + 1),
                 Array.from({ length: cols }, (_, c) => {
                   const raw = rows[r]?.[c] ?? '';
                   const focused = editing && editing.r === r && editing.c === c;
@@ -411,13 +408,15 @@ const TAB_H = 34;
  * Page Down) and managed with right click (rename, copy, move, delete). Full screen gives the grid the whole window.
  * `onChange(rows)` reports every edit as the rows to save (the sheets laid one after another, see utils/workbook).
  */
-export default function SheetGrid({ initialRows, title, onChange }) {
+export default function SheetGrid({ initialRows, title, onChange, full: fullProp, onFullChange }) {
   const colors = useColors();
   const first = useMemo(() => unpackBook(initialRows), []); // eslint-disable-line react-hooks/exhaustive-deps
   const book = useRef(first);
   const [tabs, setTabs] = useState(() => first.map(({ id, name }) => ({ id, name })));
   const [activeId, setActiveId] = useState(first[0].id);
-  const [full, setFull] = useState(false);
+  const [fullOwn, setFullOwn] = useState(false);
+  const full = fullProp ?? fullOwn; // the page can own it, so its Full screen button can sit next to Pin
+  const setFull = (v) => { const next = typeof v === 'function' ? v(full) : v; setFullOwn(next); onFullChange?.(next); };
   const [renaming, setRenaming] = useState(null); // { id, text }
   const [tabMenu, setTabMenu] = useState(null); // { x, y, id }
 
@@ -522,6 +521,10 @@ export default function SheetGrid({ initialRows, title, onChange }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <Ionicons name="grid-outline" size={18} color={colors.gray[600]} />
           <Text numberOfLines={1} style={{ flex: 1, fontSize: 18, fontWeight: '700', color: colors.gray[900] }}>{title || 'Sheet'}</Text>
+          <AnimatedPressable onPress={() => setFull(false)} accessibilityLabel="Exit full screen" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md, backgroundColor: colors.gray[100] }}>
+            <Ionicons name="contract-outline" size={16} color={colors.gray[800]} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.gray[800] }}>Exit full screen</Text>
+          </AnimatedPressable>
         </View>
       )}
       <SheetPane
@@ -529,7 +532,7 @@ export default function SheetGrid({ initialRows, title, onChange }) {
         initialRows={active.rows}
         onChange={(rows) => { book.current = book.current.map((x) => (x.id === activeId ? { ...x, rows } : x)); save(); }}
         onExportXlsx={exportXlsx} onExportCsv={exportCsv}
-        full={full} onToggleFull={() => setFull((v) => !v)} onSheetStep={step}
+        onSheetStep={step}
       />
       {createElement('div', { role: 'tablist', 'aria-label': 'Sheets', style: { display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flexShrink: 0, paddingTop: 2 } },
         tabs.map((t) => {

@@ -508,7 +508,7 @@ export function BoardChart({ board, items, people }) {
   }, [top, by, board, people]);
   const max = Math.max(1, ...bars.map((b) => b.count));
   return (
-    <ScrollView contentContainerStyle={{ padding: phone ? spacing.md : spacing.lg, gap: spacing.md, maxWidth: 900 }}>
+    <ScrollView contentContainerStyle={{ padding: phone ? spacing.md : spacing.lg, gap: spacing.md }}>
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         {CHART_BY.map(([k, l]) => (
           <Pressable key={k} onPress={() => setBy(k)} style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, backgroundColor: by === k ? colors.brand[100] : colors.gray[100] }}>

@@ -91,7 +91,7 @@ export default function TimeboxPanel({ date: askedDate, stamp }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <View style={{ paddingHorizontal: pad, paddingTop: spacing.md, gap: spacing.sm, maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
+      <View style={{ paddingHorizontal: pad, paddingTop: spacing.md, gap: spacing.sm  , width: '100%' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           {person ? (
             <Pressable onPress={() => setPerson(null)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -121,7 +121,7 @@ export default function TimeboxPanel({ date: askedDate, stamp }) {
         </View>
         {!showTeam && <DayStrip date={date} userId={person?.id || null} onPick={setDate} />}
       </View>
-      <ScrollView contentContainerStyle={{ padding: pad, gap: spacing.md, paddingBottom: 140, maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
+      <ScrollView contentContainerStyle={{ padding: pad, gap: spacing.md, paddingBottom: 140  , width: '100%' }}>
         {showTeam ? (
           <TeamTimebox date={date} onOpenPerson={(p) => setPerson(p)} />
         ) : tb.error ? (

@@ -74,9 +74,11 @@ function framed(Component, maxWidth = 920) {
   function Framed(props) {
     const desktop = useIsDesktop();
     if (!desktop) return <Component {...props} />;
+    // Forms and chat stay a column; every page that holds lists, tables or boards uses the whole window.
+    const cap = maxWidth > 760 ? undefined : maxWidth;
     return (
       <View style={{ flex: 1, alignItems: 'center' }}>
-        <View style={{ flex: 1, width: '100%', maxWidth }}>
+        <View style={{ flex: 1, width: '100%', maxWidth: cap }}>
           <Component {...props} />
         </View>
       </View>

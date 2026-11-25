@@ -341,7 +341,7 @@ function BrainDump({ box, update, readOnly, onPlace, placing, date }) {
   );
 }
 
-function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus, top, onCommit }) {
+function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, update, onOpenTodo, autoFocus, top, onCommit, onTodoDone }) {
   const colors = useColors();
   // While the bottom edge is being pulled, the block shows the length it would get; it is saved on release.
   const [draftEnd, setDraftEnd] = useState(null);
@@ -398,7 +398,12 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
   });
   // A selected block grows to hold its controls (a 30 minute block is too short for them); it shrinks back when deselected.
   const showTools = selected && !readOnly;
-  const cycle = () => set({ done: block.done === null || block.done === undefined ? true : block.done === true ? false : null });
+  // A block that is a to-do ticks like one (done / not done, and the to-do follows); a free block also has "not done".
+  const cycle = () => {
+    const next = block.todo_id ? (block.done === true ? null : true) : block.done === null || block.done === undefined ? true : block.done === true ? false : null;
+    set({ done: next });
+    if (block.todo_id) onTodoDone?.(block.todo_id, next === true);
+  };
   return (
     <Pressable
       dataSet={{ tbRow: "1" }}
@@ -465,6 +470,12 @@ function Block({ block, index, blocks, readOnly, canMark, selected, onSelect, up
 
 function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo, markSynced }) {
   const colors = useColors();
+  const { todos, toggleTodo } = useTodos();
+  // Ticking a block ticks its to-do (and un-ticking reopens it).
+  const onTodoDone = (id, done) => {
+    const t = todos.find((x) => x.id === id);
+    if (t && !!t.is_done !== done) toggleTodo(t, { keepSection: false });
+  };
   const { add: addToTodo, retitle } = useAddToTodo(date);
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
@@ -562,7 +573,7 @@ function Schedule({ box, update, readOnly, date, placing, setPlacing, onOpenTodo
   box.blocks.forEach((b, i) => {
     blockEls.push(
       <Block key={`b${i}`} block={b} index={i} blocks={box.blocks} readOnly={readOnly} canMark={canMark} selected={selected === i} onSelect={setSelected} update={update} onOpenTodo={onOpenTodo} autoFocus={fresh === i}
-        top={((toMin(b.start) - from) / STEP) * SLOT_H + 2} onCommit={commitBlock} />
+        top={((toMin(b.start) - from) / STEP) * SLOT_H + 2} onCommit={commitBlock} onTodoDone={onTodoDone} />
     );
   });
 
@@ -759,15 +770,22 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
   }, [box.blocks, date, data, updateTodo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markSynced = useCallback((id, b) => { synced.current.sig.set(id, `${date}|${b.start}|${b.end}`); }, [date]);
-  // Work finished on this day that has a real time (its own date and time, set on the to-do) goes onto the schedule
-  // by itself, as a block marked done: it starts at the to-do's time and lasts as long as its time estimate (half an
-  // hour when there is none, the smallest block), widened to whole half hours. Nothing is guessed: no time, no block.
-  // A clash with something already planned is left alone, and a block the person removes stays removed.
+  // Every task of mine that has this day and a time (from the task window's Time slot, a due time, the quick add)
+  // goes onto the schedule by itself: it starts at its time and lasts as long as its time needed (half an hour when
+  // there is none), widened to whole half hours. A finished one is marked done. Nothing is guessed: no time, no
+  // block. A clash with something already planned is left alone, and a block the person removes stays removed.
   const me = useAuth().user;
   const boxRef = useRef(box);
   boxRef.current = box;
+  const rectOf = (t) => {
+    const startRaw = toMin(String(t.due_time).slice(0, 5));
+    const start = Math.floor(startRaw / STEP) * STEP;
+    const minutes = Math.max(STEP, Math.ceil(((startRaw - start) + (t.duration_minutes || STEP)) / STEP) * STEP);
+    return { start, end: start + minutes };
+  };
+  const mineOf = useCallback((t) => (t.assignee_id ? t.assignee_id === me?.id : t.created_by === me?.id || (t.members || []).some((m) => m.id === me?.id)), [me?.id]);
   useEffect(() => {
-    if (!data?.mine || !data.can_edit || data.date !== date || date > todayYmd()) return undefined;
+    if (!data?.mine || !data.can_edit || data.date !== date) return undefined;
     let cancelled = false;
     (async () => {
       const key = `timebox.skip.${date}`;
@@ -775,10 +793,8 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
       try { skip = JSON.parse((await getItemAsync(key)) || '[]'); } catch { skip = []; }
       if (cancelled) return;
       const have = new Set(boxRef.current.blocks.map((b) => b.todo_id).filter(Boolean));
-      const dayOf = (t) => (t.done_at ? toYmd(new Date(t.done_at)) : null);
-      const mine = (t) => (t.assignee_id ? t.assignee_id === me?.id : t.created_by === me?.id || (t.members || []).some((m) => m.id === me?.id));
       const cands = todos
-        .filter((t) => t.is_done && t.due_time && dayOf(t) === date && t.due_date === date && mine(t) && !have.has(t.id) && !skip.includes(t.id) && typeof t.id === 'number')
+        .filter((t) => t.due_time && t.due_date === date && mineOf(t) && t.review_state !== 'rejected' && !have.has(t.id) && !skip.includes(t.id) && typeof t.id === 'number')
         .sort((a, b) => (a.due_time < b.due_time ? -1 : 1));
       if (!cands.length) return;
       let blocks = boxRef.current.blocks;
@@ -786,25 +802,60 @@ export default function TimeboxDay({ data, box, update, onSend, onMove, onOpenTo
       const clashedIds = [];
       let clashed = 0;
       for (const t of cands) {
-        const startRaw = toMin(t.due_time.slice(0, 5));
-        const start = Math.floor(startRaw / STEP) * STEP;
-        const minutes = Math.max(STEP, Math.ceil(((startRaw - start) + (t.duration_minutes || STEP)) / STEP) * STEP);
-        const next = addBlock(blocks, start, { text: t.title, todo_id: t.id, done: true }, minutes);
+        const r = rectOf(t);
+        const next = addBlock(blocks, r.start, { text: t.title, todo_id: t.id, done: t.is_done ? true : null }, r.end - r.start);
         if (!next) { clashed += 1; clashedIds.push(t.id); continue; } // its time is taken; it can still be added from My work
         blocks = next;
         added.push(t);
       }
-      if (clashed) showToast({ message: `${clashed} finished task${clashed > 1 ? 's' : ''} clash with planned time. Add ${clashed > 1 ? 'them' : 'it'} from My work.`, icon: 'alert-circle-outline' });
+      if (clashed) showToast({ message: `${clashed} task${clashed > 1 ? 's' : ''} with a time clash with planned time and ${clashed > 1 ? 'were' : 'was'} left off the schedule.`, icon: 'alert-circle-outline' });
       if (!added.length && !clashed) return;
       // Remember first (a block that is removed later must not come back), then write the blocks.
       try { await setItemAsync(key, JSON.stringify([...skip, ...clashedIds, ...added.map((t) => t.id)])); } catch { /* storage blocked */ }
       if (!added.length) return;
       added.forEach((t) => markSynced(t.id, blocks.find((x) => x.todo_id === t.id)));
       update((b) => ({ ...b, blocks }));
-      showToast({ message: added.length === 1 ? '1 finished task added to your timebox' : `${added.length} finished tasks added to your timebox`, icon: 'checkmark-circle-outline', tone: 'success' });
     })();
     return () => { cancelled = true; };
   }, [data?.date, data?.mine, data?.can_edit, date, todos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The to-do is the same thing as its block: change its time, day or ticked state anywhere (the task window, the
+  // table) and the block follows. A block whose own change has not been written to the to-do yet is left alone.
+  const seenDone = useRef(new Map());
+  useEffect(() => {
+    if (!data?.mine || !data.can_edit || data.date !== date) return;
+    const cur = boxRef.current.blocks;
+    let changed = false;
+    const out = [];
+    for (const b of cur) {
+      const t = b.todo_id ? todos.find((x) => x.id === b.todo_id) : null;
+      if (!t) { out.push(b); continue; }
+      let nb = b;
+      const done = !!t.is_done;
+      const prev = seenDone.current.get(t.id);
+      seenDone.current.set(t.id, done);
+      if (prev === undefined ? done && b.done !== true : prev !== done) {
+        nb = { ...nb, done: done ? true : b.done === true ? null : b.done };
+      }
+      const sig = `${date}|${b.start}|${b.end}`;
+      if (synced.current.date === date && synced.current.sig.get(b.todo_id) === sig) {
+        if (t.due_date && t.due_date !== date) { synced.current.sig.delete(b.todo_id); changed = true; continue; } // moved to another day
+        if (t.due_time) {
+          const r = rectOf(t);
+          if (toHM(r.start) !== b.start || toHM(r.end) !== b.end) {
+            const others = cur.filter((x) => x !== b);
+            if (others.every((x) => toMin(x.end) <= r.start || toMin(x.start) >= r.end)) {
+              nb = { ...nb, start: toHM(r.start), end: toHM(r.end) };
+              synced.current.sig.set(b.todo_id, `${date}|${nb.start}|${nb.end}`);
+            }
+          }
+        }
+      }
+      if (nb !== b) changed = true;
+      out.push(nb);
+    }
+    if (changed) update((bx) => ({ ...bx, blocks: out.sort((a, b2) => toMin(a.start) - toMin(b2.start)) }));
+  }, [todos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Moving a day also moves the dates of the to-dos its blocks are linked to, which the schedule had stamped on them.
   const moveDay = useCallback(async (to) => {

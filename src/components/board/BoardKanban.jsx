@@ -287,12 +287,12 @@ export default function BoardKanban({ board, items, people, onOpenItem, onMove, 
           </View>
         </View>
       )}
-      <ScrollView horizontal contentContainerStyle={{ padding: phone ? spacing.sm : spacing.md, gap: phone ? spacing.sm : spacing.md, alignItems: 'flex-start' }} style={{ flex: 1 }} snapToInterval={phone ? laneW + spacing.sm : undefined} decelerationRate={phone ? 'fast' : undefined}>
+      <ScrollView horizontal contentContainerStyle={{ padding: phone ? spacing.sm : spacing.md, gap: phone ? spacing.sm : spacing.md, alignItems: 'stretch', minHeight: '100%' }} style={{ flex: 1 }} snapToInterval={phone ? laneW + spacing.sm : undefined} decelerationRate={phone ? 'fast' : undefined}>
         {lanes.map(({ label, items: laneItems }) => (
           <View
             key={label.id}
             dataSet={{ boardCol: String(label.id) }}
-            style={{ width: laneW, backgroundColor: colors.gray[100], borderRadius: radius.md, overflow: 'hidden', maxHeight: '100%' }}
+            style={{ width: laneW, backgroundColor: colors.gray[100], borderRadius: radius.md, overflow: 'hidden' }}
           >
             <View
               ref={canManage ? makeDraggable : undefined} dataSet={{ laneHandle: String(label.id) }}
@@ -317,7 +317,7 @@ export default function BoardKanban({ board, items, people, onOpenItem, onMove, 
               )}
               {canAdd && <Pressable onPress={() => setAdding(label.id)} hitSlop={6} accessibilityLabel={`Add a task to ${label.label}`}><Ionicons name="add" size={18} color={paletteInk(label.color)} /></Pressable>}
             </View>
-            <ScrollView style={{ maxHeight: phone ? 520 : 640 }} nestedScrollEnabled contentContainerStyle={{ gap: spacing.sm, padding: spacing.sm, minHeight: 80 }}>
+            <ScrollView style={{ flex: 1, minHeight: 0 }} nestedScrollEnabled contentContainerStyle={{ gap: spacing.sm, padding: spacing.sm, minHeight: 80 }}>
               {laneItems.map((t) => (
                 <View key={t.id} ref={mayEdit(t, statusCol) ? makeDraggable : undefined} dataSet={{ boardCard: String(t.id) }}>
                   <KanbanCard

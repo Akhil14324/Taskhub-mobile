@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Modal, ActivityIndicator, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -23,7 +23,8 @@ import { AttachmentList, pickFile, uploadAttachment } from '../todos/collab';
 import DueDatePicker from '../DueDatePicker';
 import ShareToChatSheet from '../ShareToChatSheet';
 import { PickerSheet } from '../todos/Pickers';
-import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
+import { formatDue, formatTime, todayYmd, RECURRENCE_LABELS } from '../../utils/dates';
+import { parseTimeText } from '../DueDatePicker';
 
 // Task fields that are not columns on every board. They are always in the window; the first time one is set
 // the board gets that column too (see BoardScreen `editActions`).
@@ -53,6 +54,59 @@ function Row({ icon, label, hint, children }) {
       </View>
       <View style={{ flex: 1 }}>{children}</View>
     </View>
+  );
+}
+
+const addMinutes = (hm, min) => { const t = Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5)) + min; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+const minutesBetween = (a, b) => (Number(b.slice(0, 2)) * 60 + Number(b.slice(3, 5))) - (Number(a.slice(0, 2)) * 60 + Number(a.slice(3, 5)));
+
+/**
+ * "5 pm to 6 pm": when the task is worked on. Start is the task's time and the length is its time needed, so the
+ * Timebox (the board's day planner) shows the task in that slot without any other step.
+ */
+function TimeSlotRow({ item, canEdit, actions }) {
+  const colors = useColors();
+  const start = item.due_time ? String(item.due_time).slice(0, 5) : '';
+  const end = start && item.duration_minutes ? addMinutes(start, item.duration_minutes) : '';
+  const [from, setFrom] = useState(start ? formatTime(start) : '');
+  const [to, setTo] = useState(end ? formatTime(end) : '');
+  // The text follows the task, but never while the person is typing in either box, and the slot is saved once, when
+  // focus leaves the pair (moving From -> To is not leaving it).
+  const inside = useRef(false);
+  const latest = useRef({ from, to });
+  latest.current = { from, to };
+  const leave = useRef(null);
+  useEffect(() => { if (!inside.current) { setFrom(start ? formatTime(start) : ''); setTo(end ? formatTime(end) : ''); } }, [start, end]);
+  const onFocus = () => { inside.current = true; clearTimeout(leave.current); };
+  const onBlur = () => { clearTimeout(leave.current); leave.current = setTimeout(() => { inside.current = false; apply(latest.current.from, latest.current.to); }, 150); };
+  const apply = (nextFrom, nextTo) => {
+    const f = nextFrom.trim() ? parseTimeText(nextFrom) : null;
+    const t = nextTo.trim() ? parseTimeText(nextTo) : null;
+    if ((nextFrom.trim() && !f) || (nextTo.trim() && !t)) { showToast({ message: 'Type a time like 5pm or 17:30', icon: 'alert-circle-outline' }); return; }
+    if (!f) {
+      if (t) showToast({ message: 'Set the start time first', icon: 'information-circle' });
+      if (start) actions.updateFields(item, { due_time: null });
+      return;
+    }
+    const patch = { due_time: f };
+    if (!item.due_date) patch.due_date = todayYmd();
+    if (t) {
+      const len = minutesBetween(f, t);
+      if (len <= 0) { showToast({ message: 'The end must be after the start', icon: 'alert-circle-outline' }); return; }
+      patch.duration_minutes = len;
+    } else if (!item.duration_minutes) patch.duration_minutes = 60;
+    if (f !== start || (patch.duration_minutes && patch.duration_minutes !== item.duration_minutes) || patch.due_date) actions.updateFields(item, patch);
+  };
+  const box = { flex: 1, minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.md, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' };
+  return (
+    <Row icon="time-outline" label="Time slot" hint="When you will work on it, for example 5pm to 6pm. It appears in the Timebox tab on that day, and ticking it there ticks it here.">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TextInput value={from} onChangeText={setFrom} onFocus={onFocus} onBlur={onBlur} onSubmitEditing={() => apply(from, to)} editable={canEdit} placeholder="From, 5pm" placeholderTextColor={colors.gray[400]} style={box} />
+        <Text style={{ color: colors.gray[500] }}>to</Text>
+        <TextInput value={to} onChangeText={setTo} onFocus={onFocus} onBlur={onBlur} onSubmitEditing={() => apply(from, to)} editable={canEdit} placeholder="To, 6pm" placeholderTextColor={colors.gray[400]} style={box} />
+        {canEdit && !!start && <Pressable onPress={() => actions.updateFields(item, { due_time: null })} accessibilityLabel="Clear the time slot" hitSlop={6}><Ionicons name="close-circle" size={18} color={colors.gray[400]} /></Pressable>}
+      </View>
+    </Row>
   );
 }
 
@@ -186,6 +240,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           </Row>
         );
       })}
+      <TimeSlotRow item={item} canEdit={canEdit} actions={actions} />
       {(board.backlinks?.[item.id] || []).length > 0 && (
         <View style={{ marginTop: spacing.lg, gap: 4 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[600] }}>Linked from other tasks</Text>

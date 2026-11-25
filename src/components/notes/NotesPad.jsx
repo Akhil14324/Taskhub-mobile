@@ -196,6 +196,7 @@ function NoteEditor({ note, desktop, onBack, onChanged, onDeleted }) {
   const [tick, setTick] = useState(0);
   const [images, setImages] = useState(note.images || []);
   const [state, setState] = useState('saved'); // saved | saving | error
+  const [sheetFull, setSheetFull] = useState(false);
   const [uploading, setUploading] = useState(0);
   const [big, setBig] = useState(null);
   const dirty = useRef(false);
@@ -286,6 +287,12 @@ function NoteEditor({ note, desktop, onBack, onChanged, onDeleted }) {
             <Text style={{ fontSize: 14, color: colors.gray[800] }}>Picture</Text>
           </Pressable>
         )}
+        {sheet && (
+          <Pressable onPress={() => setSheetFull((v) => !v)} accessibilityLabel="Full screen" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[200] : colors.gray[100] })}>
+            <Ionicons name="expand-outline" size={18} color={colors.gray[800]} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>Full screen</Text>
+          </Pressable>
+        )}
         <Pressable onPress={togglePin} accessibilityLabel={note.pinned ? 'Unpin' : 'Pin to the top'} hitSlop={6} style={{ padding: 6 }}>
           <Ionicons name={note.pinned ? 'pin' : 'pin-outline'} size={18} color={note.pinned ? BRAND : colors.gray[600]} />
         </Pressable>
@@ -300,7 +307,7 @@ function NoteEditor({ note, desktop, onBack, onChanged, onDeleted }) {
             placeholderTextColor={colors.gray[400]}
             style={{ fontSize: 22, fontWeight: '700', color: colors.gray[900], outlineStyle: 'none', paddingVertical: 4 }}
           />
-          <SheetGrid initialRows={note.content?.rows} title={title} onChange={(rows) => edited({ content: { rows } })} />
+          <SheetGrid full={sheetFull} onFullChange={setSheetFull} initialRows={note.content?.rows} title={title} onChange={(rows) => edited({ content: { rows } })} />
         </View>
       ) : (
       <ScrollView contentContainerStyle={{ padding: desktop ? spacing.xl : spacing.lg, paddingBottom: 160, gap: spacing.md, maxWidth: 860, width: '100%', alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
