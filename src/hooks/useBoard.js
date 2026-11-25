@@ -127,8 +127,10 @@ export default function useBoard(boardId) {
   /** Move an item to the stage a status label stands for, through the endpoint that owns that stage. */
   const setStatus = useCallback(async (item, target, { note } = {}) => {
     if (!target || target === item.status) return;
-    if (target === 'in_review') {
-      showToast({ message: 'Finish it to send it for review', icon: 'information-circle' });
+    // Business work goes to review when it is finished (the tick, which asks the reviewer); a personal to-do has no
+    // reviewer, so it can be put in review and taken out again by hand.
+    if (target === 'in_review' && item.business_id) {
+      showToast({ message: 'Tick it done to send it to the reviewer', icon: 'information-circle' });
       return;
     }
     const previous = { status: item.status, is_done: item.is_done };
