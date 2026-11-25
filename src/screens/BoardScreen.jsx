@@ -39,6 +39,7 @@ import BoardTabs from '../components/board/BoardTabs';
 import BoardToolbar from '../components/board/BoardToolbar';
 import TodoDetailSheet from '../components/todos/TodoDetailSheet';
 import BoardItemSheet from '../components/board/BoardItemSheet';
+import MonitorTodoSheet from '../components/todos/MonitorTodoSheet';
 import useShortcuts from '../hooks/useShortcuts';
 import { showToast, confirmDialog, openQuickAdd } from '../utils/events';
 import api from '../api/client';
@@ -75,7 +76,7 @@ function applyQuick(items, f, meId) {
  * One board (MONDAY_FEATURE_SPEC.md F-BRD-02, F-VIW-01, F-VIW-02). Desktop draws the main table (or Kanban);
  * a phone draws its own card layout. Cells edit in place; the item window is the existing TodoDetailSheet.
  */
-function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) {
+export function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask, monitor = null }) {
   const colors = useColors();
   const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
@@ -83,7 +84,9 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
   const catalog = useCatalog();
   const { people } = useDirectory();
   const { todos } = useTodos();
-  const board = useBoard(boardId);
+  // `monitor` = { personId, name }: a manager looking at one person's whole list. Read-only: no adding, importing,
+  // automating or deleting; a click on a task opens the manager's window (comment, change dates / reminder / priority).
+  const board = useBoard(boardId, { monitorPersonId: monitor?.personId || null });
   const { data } = board;
   const { user } = useAuth();
 
@@ -100,13 +103,13 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
   const [openTodoId, setOpenTodoId] = useState(null);
   const [automate, setAutomate] = useState(false);
   const [workflows, setWorkflows] = useState(false);
-  useShortcuts({ 'todo.quickAdd': () => openQuickAdd() }, true);
+  useShortcuts({ 'todo.quickAdd': () => openQuickAdd() }, !monitor);
   const [importing, setImporting] = useState(false); // true, or { text, groupId } when cells were pasted on the board
   // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
   // tab when they may change it, otherwise it lasts until they leave.
   const [localVs, setLocalVs] = useState({});
   // The ungrouped bucket ("No group") can be renamed too; the name is kept on this device for this board.
-  const [noGroupName, setNoGroupNameState] = useState(() => getNoGroupName(boardId));
+  const [noGroupName, setNoGroupNameState] = useState(() => (monitor ? 'Personal' : getNoGroupName(boardId)));
   const renameNoGroup = useCallback((name) => { setNoGroupName(boardId, name); setNoGroupNameState(getNoGroupName(boardId)); }, [boardId]);
 
   // Ctrl+Z puts back the last cell change; inside a text box the box keeps its own undo.
@@ -162,8 +165,8 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
   }, [data, importing, openTodoId, editing, focus]);
 
   // Timebox is the same tasks as one day, hour by hour. It needs no stored view, so every board has it, after the others.
-  const views = useMemo(() => [...(data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), { id: '__timebox', kind: 'timebox', name: 'Timebox', synthetic: true }], [data]);
-  const view = views.find((v) => v.id === viewId) || views.find((v) => !v.synthetic) || views[0];
+  const views = useMemo(() => [...(data?.views || []).filter((v) => DRAWN_VIEWS.has(v.kind)), ...(monitor ? [] : [{ id: '__timebox', kind: 'timebox', name: 'Timebox', synthetic: true }])], [data, monitor]);
+  const view = views.find((v) => v.id === viewId) || views.find((v) => !v.synthetic) || views[0] || { id: 0, kind: 'table', name: 'Main table', settings: {}, synthetic: true }; // a person's board has no Timebox tab, so before it loads there may be none
   const word = itemWordOf(data);
   const canSaveView = !!view.id && !!(view.owner_id || data?.access?.manage);
 
@@ -340,7 +343,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
       },
     };
   }, [board, data, editing]);
-  const canAddView = true;
+  const canAddView = !monitor;
   const saveAsView = useCallback(async () => {
     const made = await board.addView({ kind: view.kind, name: `${view.name} copy`, personal: !data?.access.manage, settings: { ...(view.settings || {}), ...(localVs[view.id] || {}) } });
     if (made?.view) { setViewId(made.view.id); showToast({ message: 'Saved as a new view', tone: 'success', icon: 'checkmark-circle' }); }
@@ -378,7 +381,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
       {/* Header */}
       <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <PanelToggle onPress={onTogglePanel} open={panelOpen} />
+          {!monitor && <PanelToggle onPress={onTogglePanel} open={panelOpen} />}
           {!isTab && navigation.canGoBack() && (
             <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Back" hitSlop={8}>
               <Ionicons name="chevron-back" size={22} color={colors.gray[700]} />
@@ -400,22 +403,28 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
               {desktop && <Text style={{ fontSize: 13, color: BRAND, fontWeight: '500' }}>{board.busy[board.busy.length - 1]}</Text>}
             </View>
           )}
-          <DayReportLauncher desktop={desktop} />
-          {desktop && (
+          {monitor && (
+            <Pressable onPress={() => navigation.navigate('PersonMonitor', { personId: monitor.personId, name: monitor.name })} accessibilityLabel="Numbers and activity" style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+              <Ionicons name="stats-chart-outline" size={16} color={colors.gray[700]} />
+              {desktop && <Text style={{ fontSize: 14, color: colors.gray[800] }}>Numbers and activity</Text>}
+            </Pressable>
+          )}
+          {!monitor && <DayReportLauncher desktop={desktop} />}
+          {desktop && !monitor && (
             <Pressable onPress={() => setWorkflows(true)} accessibilityLabel="Workflows. Work that starts itself on a schedule." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="repeat-outline" size={16} color={colors.gray[700]} />
               <Text style={{ fontSize: 14, color: colors.gray[800] }}>Workflows</Text>
             </Pressable>
           )}
-          {desktop && (
+          {desktop && !monitor && (
             <Pressable onPress={() => setAutomate(true)} accessibilityLabel="Automate. Rules that act for you, like notifying someone when a task is late." style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
               <Ionicons name="flash-outline" size={16} color={colors.gray[700]} />
               <Text style={{ fontSize: 14, color: colors.gray[800] }}>Automate</Text>
             </Pressable>
           )}
-          <Pressable onPress={(e) => setMenu({ type: 'more', anchor: anchorOf(e) })} accessibilityLabel="More board actions" hitSlop={6} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+          {!monitor && <Pressable onPress={(e) => setMenu({ type: 'more', anchor: anchorOf(e) })} accessibilityLabel="More board actions" hitSlop={6} style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
             <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray[700]} />
-          </Pressable>
+          </Pressable>}
         </View>
         {!!b.description && <Text numberOfLines={2} style={{ fontSize: 13, color: colors.gray[600] }}>{b.description}</Text>}
         <BoardTabs
@@ -440,7 +449,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
             items={items} canManage={data.access.manage}
             shownCount={items.filter((t) => !t.parent_id).length} totalCount={data.items.filter((t) => !t.parent_id).length}
             onSaveAsView={canAddView ? saveAsView : null}
-            onImport={() => setImporting(true)}
+            onImport={monitor ? undefined : () => setImporting(true)}
           />
         </View>
       )}
@@ -498,7 +507,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
             onSetDone={(item) => board.setStatus(item, item.is_done ? 'todo' : 'done')}
             onResizeColumn={(column, width) => board.updateColumn(column, { width })}
             onRenameColumn={(column, title) => board.updateColumn(column, { title })}
-            onBulkDelete={async (rows) => {
+            onBulkDelete={monitor ? undefined : async (rows) => {
               let n = 0;
               for (const t of rows) { if (!t.permissions?.can_delete) continue; try { await api.delete(`/todos/${t.id}`, { __skipOops: true }); n += 1; } catch { /* skipped */ } }
               board.reload();
@@ -506,13 +515,13 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
             }}
             onBulkCopy={rowsAsCells}
             moveGroups={vs.group_by ? null : data.groups}
-            onBulkMove={async (rows, group) => {
+            onBulkMove={monitor ? undefined : async (rows, group) => {
               const mine = data.board.kind === 'my_todos';
               const todo = rows.filter((t) => t.business_section_id !== group.id && t.permissions?.can_edit !== false);
               for (const t of todo) await board.updateFields(t, mine ? { list_id: group.id } : { business_section_id: group.id });
               showToast({ message: todo.length ? `Moved ${todo.length} to ${group.name}` : 'Nothing to move', tone: todo.length ? 'success' : undefined, icon: 'arrow-forward-circle' });
             }}
-            onBulkDuplicate={async (rows) => {
+            onBulkDuplicate={monitor ? undefined : async (rows) => {
               for (const t of rows) await board.addItem(`${t.title} (copy)`, { groupId: t.business_section_id ?? undefined });
               showToast({ message: `Duplicated ${rows.length}`, tone: 'success', icon: 'copy' });
             }}
@@ -632,11 +641,15 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
         </Popover>
       )}
 
-      <BoardItemSheet
-        item={sheetId ? data.items.find((t) => t.id === sheetId) : null}
-        board={data} people={people} actions={board}
-        onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull} onOpenItem={openItem} initialTab={sheetTab}
-      />
+      {monitor ? (
+        <MonitorTodoSheet todoId={sheetId} onClose={() => setSheetId(null)} onChanged={() => board.reload({ force: true })} />
+      ) : (
+        <BoardItemSheet
+          item={sheetId ? data.items.find((t) => t.id === sheetId) : null}
+          board={data} people={people} actions={board}
+          onClose={() => setSheetId(null)} onOpenCell={openCell} onOpenFull={openFull} onOpenItem={openItem} initialTab={sheetTab}
+        />
+      )}
       <TodoDetailSheet todoId={openTodoId} onClose={() => { setOpenTodoId(null); board.reload(); }} />
     </View>
     </View>

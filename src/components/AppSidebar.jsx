@@ -36,6 +36,7 @@ const SECTION_OF = {
   Reports: 'reports',
   Assistant: 'assistant',
   PersonMonitor: 'monitor',
+  PersonBoard: 'monitor',
   Leaderboard: 'leaderboard',
   Automations: 'automations',
   Boards: 'boards',

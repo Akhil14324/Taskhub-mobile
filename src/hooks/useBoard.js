@@ -11,7 +11,7 @@ import { refreshBoards } from './useBoards';
  *   custom columns   -> PUT /boards/:id/items/:todoId/values/:columnId
  * A refused change puts the old value back and says why.
  */
-export default function useBoard(boardId) {
+export default function useBoard(boardId, { monitorPersonId = null } = {}) {
   const { subscribe } = useChat();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -32,7 +32,8 @@ export default function useBoard(boardId) {
     const force = opts?.force === true;
     const startedAt = version.current;
     try {
-      const res = await api.get(`/boards/${boardId}`, { __skipOops: true });
+      // A manager looking at someone's whole list (Team monitor): a read-only board the server builds for them.
+      const res = await api.get(monitorPersonId ? `/monitor/people/${monitorPersonId}/board` : `/boards/${boardId}`, { __skipOops: true });
       if (!force && (inflight.current > 0 || version.current !== startedAt)) {
         clearTimeout(reloadTimer.current);
         reloadTimer.current = setTimeout(() => loadRef.current?.(), 300);
@@ -43,7 +44,7 @@ export default function useBoard(boardId) {
     } catch (err) {
       setError(err.response?.status === 404 ? 'This board is not there, or it is not shared with you.' : 'Could not load this board.');
     }
-  }, [boardId]);
+  }, [boardId, monitorPersonId]);
   loadRef.current = load;
 
   const reloadSoon = useCallback((ms = 250) => {
@@ -101,10 +102,16 @@ export default function useBoard(boardId) {
     remember(item.title, () => updateFields(item, Object.fromEntries(Object.keys(patch).map((k) => [k, item[k] ?? null]))));
     patchItem(item.id, patch);
     try {
+      if (monitorPersonId) {
+        // A manager may only change the dates, reminder and priority; the person is told. The sheet does that itself.
+        await api.patch(`/monitor/todos/${item.id}`, patch);
+        reloadSoon(0);
+        return;
+      }
       const res = await api.put(`/todos/${item.id}`, patch);
       putItem(res.data.todo);
     } catch (err) { fail(err); }
-  }, [patchItem, putItem, fail, remember]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [patchItem, putItem, fail, remember, monitorPersonId, reloadSoon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Set what an item waits for. The server moves it (and what waits for it) when it would start too early. */
   const setDepends = useCallback(async (item, ids) => {

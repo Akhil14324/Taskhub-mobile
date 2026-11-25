@@ -149,7 +149,7 @@ export function TimelineEntries({ entries, limit = 8, userId, onShowAll, include
           </View>
         );
       })}
-      {limit && rows.length > limit && (
+      {!!limit && rows.length > limit && (
         <Text onPress={onShowAll} style={[styles.showAll, { color: colors.brand[600] }]}>Show all {rows.length} steps</Text>
       )}
     </View>

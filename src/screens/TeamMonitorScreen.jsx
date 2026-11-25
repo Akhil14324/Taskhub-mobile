@@ -167,7 +167,7 @@ export default function TeamMonitorScreen() {
   };
   const cols = desktop ? (win.width > 1750 ? 3 : win.width > 1350 ? 2 : 1) : 1;
   const railed = desktop && win.width > 1250;
-  const openPerson = (p) => navigation.navigate('PersonMonitor', { personId: p.id, name: p.name, days });
+  const openPerson = (p) => navigation.navigate('PersonBoard', { personId: p.id, name: p.name });
   const tileDef = TILES.find((x) => x.key === tile);
   const tileRows = tileDef && scoped ? scoped.filter((t) => tileDef.test(t, range, today)) : [];
 

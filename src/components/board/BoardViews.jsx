@@ -180,7 +180,7 @@ export function BoardTimeline({ board, items, onOpenItem, gantt, onChangeDates, 
   const scrollRef = useRef(null);
   const scrolled = useRef(false);
   useEffect(() => {
-    if (!gantt) return undefined;
+    if (!gantt || !board.board.id) return undefined; // a person's board in the Team monitor has no stored dependencies
     let live = true;
     api.get(`/boards/${board.board.id}/dependencies`, { __skipOops: true }).then((r) => live && setLinks(r.data.links || [])).catch(() => {});
     return () => { live = false; };

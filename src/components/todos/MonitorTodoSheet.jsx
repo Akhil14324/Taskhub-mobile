@@ -8,11 +8,13 @@ import { spacing, radius, fontSize } from '../../theme/theme';
 import AnimatedPressable from '../AnimatedPressable';
 import BottomSheet from '../BottomSheet';
 import { HealthBanner, MetricsGrid, TimelineEntries, useNowTick } from './TimeHealth';
-import { Avatar, DueChip } from '../kit';
+import { Avatar, DueChip, PRIORITY } from '../kit';
 import { STATUS, BLOCKER_KINDS, formatSeconds, healthColor } from '../../utils/timeline';
 import { showToast } from '../../utils/events';
 import { glass } from '../../theme/glass';
 import AskWhy from './AskWhy';
+import DueDatePicker from '../DueDatePicker';
+import { formatDue, formatTime } from '../../utils/dates';
 
 const QUICK_QUESTIONS = [
   'Why is this taking so long?',
@@ -21,11 +23,15 @@ const QUICK_QUESTIONS = [
   'Do you need help from anyone?',
 ];
 
+const PRIORITY_NAMES = { 1: 'Critical', 2: 'High', 3: 'Medium', 4: 'Low' };
+
 /**
- * Read-only view of someone's to-do for a manager: how it is doing, every step it went through,
- * and a box to ask why. The answer arrives as a reply on the to-do's thread.
+ * A manager's view of someone's to-do: how it is doing, every step it went through, a comment box and a box to ask why.
+ * The manager can change its dates, reminder and priority (PATCH /monitor/todos/:id): that is written to the activity,
+ * posts a comment asking the person to check again, and notifies them. The title, owner and status stay the person's.
+ * `onChanged` tells the screen behind (the person's board) to reload.
  */
-export default function MonitorTodoSheet({ todoId, onClose }) {
+export default function MonitorTodoSheet({ todoId, onClose, onChanged }) {
   const colors = useColors();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -35,6 +41,9 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
   const [error, setError] = useState(null);
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
+  const [comment, setComment] = useState('');
+  const [picker, setPicker] = useState(null); // 'due' | 'deadline' | 'remind'
+  const [saving, setSaving] = useState(false);
   const [trail, setTrail] = useState([]); // steps opened from this sheet, so Back returns to the task above
   const currentId = trail.length ? trail[trail.length - 1] : todoId;
 
@@ -53,6 +62,7 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
   useEffect(() => {
     setData(null);
     setQuestion('');
+    setComment('');
     load();
   }, [load]);
 
@@ -69,6 +79,38 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
       showToast({ message: err.response?.data?.error || 'Could not send the question', tone: 'error' });
     } finally {
       setSending(false);
+    }
+  };
+
+  const sendComment = async () => {
+    const message = comment.trim();
+    if (!message || sending) return;
+    setSending(true);
+    try {
+      await api.post(`/monitor/todos/${currentId}/comments`, { message });
+      setComment('');
+      showToast({ message: `Comment sent to ${data?.todo?.assignee_name?.split(' ')[0] || 'them'}`, tone: 'success', icon: 'chatbubble' });
+      load();
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not send the comment', tone: 'error' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** Change one or more of the dates / reminder / priority. The person is told and the activity records it. */
+  const adjust = async (patch) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await api.patch(`/monitor/todos/${currentId}`, patch);
+      if (res.data.changed?.length) showToast({ message: 'Updated. They have been notified.', tone: 'success', icon: 'notifications' });
+      await load();
+      onChanged?.();
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not change that', tone: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,6 +201,25 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
           <Text style={styles.label}>Numbers</Text>
           <MetricsGrid todo={todo} now={now} reschedules={data.metrics?.reschedules || 0} />
 
+          <Text style={styles.label}>Change (they are notified)</Text>
+          <View style={styles.adjust}>
+            <AdjustRow icon="calendar-outline" label="Due date" value={todo.due_date ? `${formatDue(todo.due_date)}${todo.due_time ? `, ${formatTime(todo.due_time)}` : ''}` : 'Not set'} onPress={() => setPicker('due')} styles={styles} colors={colors} disabled={saving} />
+            <AdjustRow icon="alert-circle-outline" label="Deadline" value={todo.deadline_date ? `${formatDue(todo.deadline_date)}${todo.deadline_time ? `, ${formatTime(todo.deadline_time)}` : ''}` : 'Not set'} onPress={() => setPicker('deadline')} styles={styles} colors={colors} disabled={saving} />
+            <AdjustRow icon="alarm-outline" label="Reminder" value={todo.remind_date ? `${formatDue(todo.remind_date)}, ${formatTime(todo.remind_time)}` : 'None'} onPress={() => setPicker('remind')} styles={styles} colors={colors} disabled={saving} />
+            <View style={styles.adjustRow}>
+              <Ionicons name="flag-outline" size={17} color={colors.gray[700]} />
+              <Text style={styles.adjustLabel}>Priority</Text>
+              <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
+                {[1, 2, 3, 4].map((p) => (
+                  <AnimatedPressable key={p} onPress={() => todo.priority !== p && adjust({ priority: p })} disabled={saving} haptic="light" style={[styles.prio, todo.priority === p && { backgroundColor: colors.gray[900] }]}>
+                    <Ionicons name="flag" size={12} color={todo.priority === p ? '#fff' : PRIORITY[p].color} />
+                    <Text style={[styles.prioText, todo.priority === p && { color: '#fff' }]}>{PRIORITY_NAMES[p]}</Text>
+                  </AnimatedPressable>
+                ))}
+              </View>
+            </View>
+          </View>
+
           <Text style={styles.label}>Ask why</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow} keyboardShouldPersistTaps="always">
             {QUICK_QUESTIONS.map((q) => (
@@ -182,12 +243,56 @@ export default function MonitorTodoSheet({ todoId, onClose }) {
             </AnimatedPressable>
           </View>
 
-          <Text style={styles.label}>Full history</Text>
+          <Text style={styles.label}>Comment</Text>
+          <View style={styles.askBox}>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder="Write a comment. They are notified and it shows in the activity"
+              placeholderTextColor={colors.gray[400]}
+              style={styles.askInput}
+              multiline
+              accessibilityLabel="Comment"
+            />
+            <AnimatedPressable onPress={sendComment} disabled={!comment.trim() || sending} haptic="medium" {...glass('accent')} style={[styles.askBtn, { opacity: comment.trim() && !sending ? 1 : 0.4 }]}>
+              <Ionicons name="chatbubble" size={16} color="#fff" />
+              <Text style={styles.askText}>Comment</Text>
+            </AnimatedPressable>
+          </View>
+
+          <Text style={styles.label}>Activity</Text>
           <TimelineEntries entries={data.entries} userId={user?.id} limit={0} includeComments />
           <View style={{ height: spacing.lg }} />
         </ScrollView>
       )}
+      <DueDatePicker
+        visible={picker === 'due'} onClose={() => setPicker(null)}
+        date={todo?.due_date} time={todo?.due_time}
+        onChange={({ date, time }) => adjust({ due_date: date, due_time: time || null })}
+      />
+      <DueDatePicker
+        visible={picker === 'deadline'} onClose={() => setPicker(null)}
+        date={todo?.deadline_date} time={todo?.deadline_time}
+        onChange={({ date, time }) => adjust({ deadline_date: date, deadline_time: time || null })}
+      />
+      <DueDatePicker
+        visible={picker === 'remind'} onClose={() => setPicker(null)}
+        date={todo?.remind_date} time={todo?.remind_time || '09:00'}
+        onChange={({ date, time }) => adjust(date ? { remind_date: date, remind_time: time || todo?.remind_time || '09:00' } : { remind_date: null, remind_time: null, remind_repeat: null })}
+      />
     </BottomSheet>
+  );
+}
+
+/** One line of the Change box: what it is, its value, tap to change. */
+function AdjustRow({ icon, label, value, onPress, styles, colors, disabled }) {
+  return (
+    <AnimatedPressable onPress={onPress} disabled={disabled} haptic="light" style={styles.adjustRow}>
+      <Ionicons name={icon} size={17} color={colors.gray[700]} />
+      <Text style={styles.adjustLabel}>{label}</Text>
+      <Text style={styles.adjustValue} numberOfLines={1}>{value}</Text>
+      <Ionicons name="create-outline" size={15} color={colors.gray[500]} />
+    </AnimatedPressable>
   );
 }
 
@@ -220,5 +325,11 @@ const createStyles = (colors) => StyleSheet.create({
   askBox: { marginHorizontal: spacing.sm, backgroundColor: colors.gray[100], borderRadius: radius.lg, padding: spacing.sm },
   askInput: { minHeight: 46, maxHeight: 110, paddingHorizontal: spacing.sm, paddingVertical: 6, fontSize: fontSize.base, color: colors.gray[900], outlineStyle: 'none' },
   askBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end', paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.brand[600] },
+  adjust: { marginHorizontal: spacing.sm, backgroundColor: colors.gray[100], borderRadius: radius.lg, paddingHorizontal: spacing.sm },
+  adjustRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 46 },
+  adjustLabel: { width: 78, fontSize: fontSize.sm, color: colors.gray[700], fontWeight: '600' },
+  adjustValue: { flex: 1, textAlign: 'right', fontSize: fontSize.sm, color: colors.gray[900] },
+  prio: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.gray[200] },
+  prioText: { fontSize: 12, fontWeight: '700', color: colors.gray[800] },
   askText: { color: '#fff', fontWeight: '800', fontSize: fontSize.sm },
 });

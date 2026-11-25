@@ -49,6 +49,7 @@ import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
+import PersonBoardScreen from '../screens/PersonBoardScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
 import DumpScreen from '../screens/DumpScreen';
@@ -127,6 +128,7 @@ const PushAssistant = T(FramedAssistant);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
 const PushBoard = T(BoardScreen);
+const PushPersonBoard = T(PersonBoardScreen);
 const PushMyWork = T(MyWorkScreen);
 const PushRecycleBin = T(FramedRecycleBin);
 const PushDump = T(FramedDump);
@@ -152,7 +154,8 @@ const linkingFor = (start) => ({
       GroupInfo: 'group-info',
       Organization: 'organization',
       TeamMonitor: 'team-monitor',
-      PersonMonitor: { path: 'team-monitor/:personId', ...num },
+      PersonMonitor: { path: 'team-monitor/:personId/numbers', ...num },
+      PersonBoard: { path: 'team-monitor/:personId', ...num },
       Assistant: 'assistant',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
@@ -619,6 +622,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Access" component={PushAccess} />
             <Stack.Screen name="Everything" component={PushEverything} />
             <Stack.Screen name="PersonMonitor" component={PushPersonMonitor} />
+            <Stack.Screen name="PersonBoard" component={PushPersonBoard} />
             <Stack.Screen name="Notifications" component={PushNotifications} />
             <Stack.Screen name="Profile" component={PushProfile} />
           </>
