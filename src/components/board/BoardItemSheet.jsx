@@ -186,36 +186,6 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           </Row>
         );
       })}
-      <View style={{ marginTop: spacing.md, gap: 4 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray[600] }}>
-          Sub-tasks{steps.length ? ` · ${steps.filter((x) => x.t.is_done).length} of ${steps.length} done` : ''}
-        </Text>
-        {steps.map(({ t, depth }) => (
-          <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingLeft: depth * 18, borderRadius: radius.sm }}>
-            <Pressable onPress={() => mayEdit(t) && actions.setStatus(t, t.is_done ? 'todo' : 'done')} hitSlop={8} accessibilityLabel={t.is_done ? `Reopen ${t.title}` : `Finish ${t.title}`}>
-              <Ionicons name={t.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={t.is_done ? colors.green[600] : colors.gray[400]} />
-            </Pressable>
-            <Pressable onPress={() => (onOpenItem ? onOpenItem(t.id) : onOpenFull(t.id))} style={{ flex: 1, minHeight: 38, justifyContent: 'center' }}>
-              <Text numberOfLines={2} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
-            </Pressable>
-            {!!t.assignee_name && <Avatar name={t.assignee_name} size={20} />}
-            {t.is_done && !!t.done_at ? null : !!t.due_date && <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.due_date.slice(5)}</Text>}
-          </View>
-        ))}
-        {board.access.add && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm }}>
-            <Ionicons name="add" size={18} color={colors.gray[500]} />
-            <TextInput
-              value={newStep} onChangeText={setNewStep} onSubmitEditing={addStep} blurOnSubmit={false}
-              placeholder="Add a sub-task, then Enter" placeholderTextColor={colors.gray[400]} accessibilityLabel="Add a sub-task"
-              style={{ flex: 1, minHeight: 40, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
-            />
-            {!!newStep.trim() && (
-              <Pressable onPress={addStep} hitSlop={8} accessibilityLabel="Add sub-task"><Ionicons name="arrow-up-circle" size={24} color={BRAND} /></Pressable>
-            )}
-          </View>
-        )}
-      </View>
       {(board.backlinks?.[item.id] || []).length > 0 && (
         <View style={{ marginTop: spacing.lg, gap: 4 }}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: colors.gray[600] }}>Linked from other tasks</Text>
@@ -256,19 +226,53 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
     </ScrollView>
   );
 
-  const tabs = [['updates', 'home-outline', 'Updates'], ['files', 'document-outline', 'Files'], ['activity', 'time-outline', 'Activity Log']];
+  const subtasksView = (
+    <View style={{ gap: 4 }}>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray[600] }}>
+        Sub-tasks{steps.length ? ` · ${steps.filter((x) => x.t.is_done).length} of ${steps.length} done` : ''}
+      </Text>
+      {steps.map(({ t, depth }) => (
+        <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 38, paddingLeft: depth * 18, borderRadius: radius.sm }}>
+          <Pressable onPress={() => mayEdit(t) && actions.setStatus(t, t.is_done ? 'todo' : 'done')} hitSlop={8} accessibilityLabel={t.is_done ? `Reopen ${t.title}` : `Finish ${t.title}`}>
+            <Ionicons name={t.is_done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={t.is_done ? colors.green[600] : colors.gray[400]} />
+          </Pressable>
+          <Pressable onPress={() => (onOpenItem ? onOpenItem(t.id) : onOpenFull(t.id))} style={{ flex: 1, minHeight: 38, justifyContent: 'center' }}>
+            <Text numberOfLines={2} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[900], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>{t.title}</Text>
+          </Pressable>
+          {!!t.assignee_name && <Avatar name={t.assignee_name} size={20} />}
+          {t.is_done && !!t.done_at ? null : !!t.due_date && <Text style={{ fontSize: 12, color: colors.gray[500] }}>{t.due_date.slice(5)}</Text>}
+        </View>
+      ))}
+      {board.access.add && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.sm }}>
+          <Ionicons name="add" size={18} color={colors.gray[500]} />
+          <TextInput
+            value={newStep} onChangeText={setNewStep} onSubmitEditing={addStep} blurOnSubmit={false}
+            placeholder="Add a sub-task, then Enter" placeholderTextColor={colors.gray[400]} accessibilityLabel="Add a sub-task"
+            style={{ flex: 1, minHeight: 40, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+          />
+          {!!newStep.trim() && (
+            <Pressable onPress={addStep} hitSlop={8} accessibilityLabel="Add sub-task"><Ionicons name="arrow-up-circle" size={24} color={BRAND} /></Pressable>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  const tabs = [['updates', 'home-outline', 'Updates'], ['subtasks', 'git-network-outline', `Sub-tasks${steps.length ? ` (${steps.length})` : ''}`], ['files', 'document-outline', 'Files'], ['activity', 'time-outline', 'Activity Log']];
   const right = (
     <View style={{ flex: desktop ? 1 : undefined, borderLeftWidth: desktop ? 1 : 0, borderTopWidth: desktop ? 0 : 1, borderColor: colors.gray[200] }}>
-      <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderColor: colors.gray[200] }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, borderBottomWidth: 1, borderColor: colors.gray[200] }} contentContainerStyle={{ gap: 4, paddingHorizontal: spacing.lg }}>
         {tabs.map(([k, icon, label]) => (
           <Pressable key={k} onPress={() => setTab(k)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: spacing.md, borderBottomWidth: 2, borderBottomColor: tab === k ? BRAND : 'transparent' }}>
             <Ionicons name={icon} size={16} color={tab === k ? BRAND : colors.gray[500]} />
             <Text style={{ fontSize: 14, color: tab === k ? colors.gray[900] : colors.gray[600], fontWeight: tab === k ? '600' : '400' }}>{label}</Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
       <ScrollView style={{ flex: desktop ? 1 : undefined }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }} keyboardShouldPersistTaps="handled">
         {tab === 'updates' && <TodoComments todo={item} />}
+        {tab === 'subtasks' && subtasksView}
         {tab === 'files' && (
           <View style={{ gap: spacing.md }}>
             {files === null ? <ActivityIndicator color={BRAND} /> : (
