@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Platform, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Platform, Pressable, Animated } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -26,6 +26,44 @@ import { useLang } from '../../context/LanguageContext';
 import useAi from '../../hooks/useAi';
 import AiTasksSheet from './AiTasksSheet';
 import api from '../../api/client';
+
+// One example at a time, on a single line: the current one slides up and out while the next rises in from below.
+const EXAMPLES = [
+  'e.g. Call supplier tomorrow 4pm p1',
+  'Send the quote friday p1',
+  'Ask ravi to send the invoice friday',
+  'Water the plants every day',
+  'Prepare the deck for monday #Work',
+];
+function RotatingHint({ color, textStyle }) {
+  const [i, setI] = useState(0);
+  const [prev, setPrev] = useState(null);
+  const t = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const id = setInterval(() => {
+      setI((cur) => {
+        setPrev(cur);
+        t.setValue(0);
+        Animated.timing(t, { toValue: 1, duration: 380, useNativeDriver: false }).start(() => setPrev(null));
+        return (cur + 1) % EXAMPLES.length;
+      });
+    }, 3200);
+    return () => clearInterval(id);
+  }, [t]);
+  const line = { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', overflow: 'hidden' };
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, overflow: 'hidden' }}>
+      {prev !== null && (
+        <Animated.View style={[line, { opacity: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) }] }]}>
+          <Text numberOfLines={1} style={[textStyle, { color }]}>{EXAMPLES[prev]}</Text>
+        </Animated.View>
+      )}
+      <Animated.View style={[line, { opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }]}>
+        <Text numberOfLines={1} style={[textStyle, { color }]}>{EXAMPLES[i]}</Text>
+      </Animated.View>
+    </View>
+  );
+}
 
 const RECURRENCE_ORDER = [null, 'daily', 'weekdays', 'weekly', 'monthly'];
 
@@ -331,7 +369,8 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
   const hasBusinesses = businesses.length > 0 && !isSubtask;
   const placeholder = isSubtask
     ? 'Sub-task, e.g. Collect invoices tomorrow'
-    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1, or: @ravi @priya send the quote (add @me to keep it on yours)';
+    : business ? `Task for ${business.name}, e.g. Send the quote friday p1` : 'e.g. Call supplier tomorrow 4pm p1';
+  const rotateHint = !multi && !isSubtask && !business;
 
   return (
     <BottomSheet
@@ -403,7 +442,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             if (!multi && v.length === text.length + 1 && v.endsWith('\n') && virtualKeyboardUp()) { submitNext.current = true; setText(v.replace(/\n+$/, '')); return; }
             setText(v);
           }}
-          placeholder={multi ? 'One to-do per line, e.g.\nCall supplier tomorrow\nSend the quote friday p1' : placeholder}
+          placeholder={multi ? 'One to-do per line, e.g.\nCall supplier tomorrow\nSend the quote friday p1' : rotateHint ? '' : placeholder}
           placeholderTextColor={colors.gray[400]}
           style={[styles.input, styles.inputTop]}
           multiline
@@ -420,6 +459,7 @@ export default function QuickAddSheet({ visible, onClose, defaults = {}, initial
             submit();
           }}
         />
+        {rotateHint && !text && <RotatingHint color={colors.gray[400]} textStyle={[styles.input, { paddingVertical: 0 }]} />}
         </View>
         {(menu === 'steps' || (steps.some((x) => x.trim()) && !multi)) && !multi && (
           <View style={{ gap: 4, paddingVertical: spacing.xs }}>
