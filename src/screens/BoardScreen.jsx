@@ -295,18 +295,17 @@ export default function BoardScreen({ route }) {
       } else if (col.kind === 'long_text' || col.kind === 'text') board.setValue(item, col, String(val));
     }
   }, [vs.defaults, data, board]);
-  // New task: made at once in the first group (or the one that has the focus) and its name is open for typing.
-  const taskLock = useRef(false);
+  // New task: the floating quick-add bar opens (nothing is added to the table until it is sent). It is made in
+  // the first group, or the one asked for, and lands on this board through its business or list.
+  const newTask = useCallback((anchor, groupId, fields) => {
+    if (!data) return;
+    const gid = typeof groupId === 'number' ? groupId : (data.groups[0]?.id ?? null);
+    const defaults = { due_date: fields?.due_date || undefined };
+    if (data.board.kind === 'my_todos') defaults.list_id = typeof gid === 'number' ? gid : null;
+    else { defaults.business_id = data.board.business_id || undefined; defaults.business_section_id = typeof gid === 'number' ? gid : undefined; }
+    openQuickAdd({ defaults });
+  }, [data]);
   const groupLock = useRef(false);
-  const newTask = useCallback(async (anchor, groupId, fields) => {
-    const gid = typeof groupId === 'number' ? groupId : (data?.groups[0]?.id ?? null);
-    if (taskLock.current) return;
-    taskLock.current = true;
-    try {
-      const made = await board.addItem(word, { groupId: gid, fields });
-      if (made) { setNameEditId(made.id); applyDefaults(made); }
-    } finally { taskLock.current = false; }
-  }, [board, data, word, applyDefaults]);
   // One click makes one group: further clicks are ignored until the server has answered.
   const newGroup = useCallback(async () => {
     if (groupLock.current) return;
@@ -319,9 +318,22 @@ export default function BoardScreen({ route }) {
   }, [board, data]);
   const addItem = useCallback(async (title, groupId, fields) => {
     const made = await board.addItem(title, { groupId: typeof groupId === 'number' ? groupId : null, fields });
-    if (made && !fields?.parent_id) applyDefaults(made);
+    if (made && !fields?.parent_id) { applyDefaults(made); setSheetTab('updates'); setSheetId(made.id); } // edit it right away in the task window
     return made;
   }, [board, applyDefaults]);
+  // A field set in the task window that the board has no column for yet (priority, deadline, labels, time needed)
+  // also gives the board that column, for people who manage it.
+  const editActions = useMemo(() => {
+    const col = editing?.column;
+    if (!col?.synthetic) return board;
+    return {
+      ...board,
+      updateFields: (item, patch) => {
+        if (data?.access.manage && !data.columns.some((c) => c.system_key === col.system_key)) board.addColumn({ system_key: col.system_key });
+        return board.updateFields(item, patch);
+      },
+    };
+  }, [board, data, editing]);
   const canAddView = true;
   const saveAsView = useCallback(async () => {
     const made = await board.addView({ kind: view.kind, name: `${view.name} copy`, personal: !data?.access.manage, settings: { ...(view.settings || {}), ...(localVs[view.id] || {}) } });
@@ -501,7 +513,7 @@ export default function BoardScreen({ route }) {
         )}
       </View>
 
-      <CellEditorHost editing={editing} onClose={() => setEditing(null)} board={data} people={people} actions={board} />
+      <CellEditorHost editing={editing} onClose={() => setEditing(null)} board={data} people={people} actions={editActions} />
 
       {menu?.type === 'addColumn' && (
         <AddColumnMenu

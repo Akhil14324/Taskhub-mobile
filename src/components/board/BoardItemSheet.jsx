@@ -15,11 +15,25 @@ import { canEditColumn, itemWordOf, paletteHex } from './model';
 import Popover, { anchorOf } from './Popover';
 import Hint from './Hint';
 import ProgressDot from '../ProgressDot';
-import { Avatar } from '../kit';
+import { Avatar, Chip } from '../kit';
 import { progressOf } from '../../utils/progress';
 import TodoComments from '../todos/TodoComments';
 import { TimelineEntries } from '../todos/TimeHealth';
 import { AttachmentList, pickFile, uploadAttachment } from '../todos/collab';
+import DueDatePicker from '../DueDatePicker';
+import ShareToChatSheet from '../ShareToChatSheet';
+import { PickerSheet } from '../todos/Pickers';
+import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
+
+// Task fields that are not columns on every board. They are always in the window; the first time one is set
+// the board gets that column too (see BoardScreen `editActions`).
+const EXTRA_FIELDS = [
+  { key: 'priority', kind: 'priority', title: 'Priority' },
+  { key: 'deadline', kind: 'date', title: 'Deadline' },
+  { key: 'labels', kind: 'tags', title: 'Labels' },
+  { key: 'estimate', kind: 'numbers', title: 'Time needed', settings: { unit: 'min' } },
+];
+const REMINDER_REPEATS = [{ key: null, label: 'Never' }, { key: 'daily', label: 'Every day' }, { key: 'weekly', label: 'Every week' }, { key: 'monthly', label: 'Every month' }];
 
 const COLUMN_ICONS = {
   status: 'reorder-three-outline', person: 'person-circle-outline', date: 'calendar-outline', timeline: 'calendar-outline',
@@ -78,6 +92,10 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const [groupAnchor, setGroupAnchor] = useState(null);
   const [name, setName] = useState(item?.title || '');
   const [newStep, setNewStep] = useState('');
+  const [remindOpen, setRemindOpen] = useState(false);
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const { shareTodos } = useTodos();
   const word = itemWordOf(board);
   const id = item?.id;
 
@@ -155,7 +173,8 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           style={{ minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.md, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
         />
       </Row>
-      {board.columns.map((c) => {
+      {[...board.columns, ...EXTRA_FIELDS.filter((f) => !board.columns.some((c) => c.system_key === f.key))
+        .map((f) => ({ id: `x-${f.key}`, system_key: f.key, kind: f.kind, title: f.title, settings: f.settings || {}, synthetic: true }))].map((c) => {
         const editable = canEditColumn(c) && mayEdit(item, c);
         const stretch = c.kind === 'status';
         const hint = c.description || (c.kind === 'dependency' ? 'Choose the task your task will be dependent on. If its date moves, this task moves with it.' : undefined);
@@ -209,10 +228,31 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           ))}
         </View>
       )}
-      <Pressable onPress={() => onOpenFull(item.id)} style={({ hovered }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent', marginTop: spacing.sm })}>
-        <Ionicons name="options-outline" size={16} color={colors.brand[600]} />
-        <Text style={{ fontSize: 14, color: colors.brand[600] }}>More options (share, reminder, repeat)</Text>
-      </Pressable>
+      {canEdit && !!item.due_date && (
+        <Row icon="repeat-outline" label="Repeat">
+          <Field onPress={() => setRepeatOpen(true)}><Text style={{ fontSize: 14, color: colors.gray[900] }}>{item.recurrence ? RECURRENCE_LABELS[item.recurrence] : 'Does not repeat'}</Text></Field>
+        </Row>
+      )}
+      <Row icon="alarm-outline" label="Reminder">
+        <View style={{ gap: 8 }}>
+          <Field onPress={canEdit ? () => setRemindOpen(true) : undefined}>
+            <Text style={{ fontSize: 14, color: item.remind_date ? colors.gray[900] : colors.gray[400] }}>
+              {item.remind_date ? `${formatDue(item.remind_date)} at ${formatTime(item.remind_time)}` : 'No reminder'}
+            </Text>
+          </Field>
+          {canEdit && !!item.remind_date && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {REMINDER_REPEATS.map((r) => (
+                <Chip key={String(r.key)} small icon={r.key ? 'repeat' : undefined} label={r.label} active={(item.remind_repeat || null) === r.key} onPress={() => actions.updateFields(item, { remind_repeat: r.key })} />
+              ))}
+              <Chip small icon="close" label="Remove" onPress={() => actions.updateFields(item, { remind_date: null, remind_time: null, remind_repeat: null })} />
+            </View>
+          )}
+        </View>
+      </Row>
+      <Row icon="paper-plane-outline" label="Share">
+        <Field onPress={() => setShareOpen(true)}><Text style={{ fontSize: 14, color: colors.gray[900] }}>Send in chat</Text></Field>
+      </Row>
     </ScrollView>
   );
 
@@ -275,6 +315,21 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
           </View>
         </Pressable>
       </Pressable>
+      <DueDatePicker
+        visible={remindOpen} onClose={() => setRemindOpen(false)} date={item.remind_date} time={item.remind_time || '09:00'}
+        onChange={({ date, time }) => actions.updateFields(item, date
+          ? { remind_date: date, remind_time: time || item.remind_time || '09:00' }
+          : { remind_date: null, remind_time: null, remind_repeat: null })}
+      />
+      <PickerSheet
+        visible={repeatOpen} onClose={() => setRepeatOpen(false)} title="Repeat"
+        options={[{ key: 'none', label: 'Does not repeat', active: !item.recurrence }, ...Object.entries(RECURRENCE_LABELS).map(([key, label]) => ({ key, label, icon: 'repeat', active: item.recurrence === key }))]}
+        onPick={(key) => actions.updateFields(item, { recurrence: key === 'none' ? null : key })}
+      />
+      <ShareToChatSheet
+        visible={shareOpen} onClose={() => setShareOpen(false)} heading="Share task" subheading={item.title}
+        onSend={({ conversationIds, note }) => shareTodos({ conversationIds, todoIds: [item.id], note })}
+      />
       {groupAnchor && (
         <Popover visible anchor={groupAnchor} onClose={() => setGroupAnchor(null)} width={240}>
           {board.groups.map((g) => (
