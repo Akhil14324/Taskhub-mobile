@@ -1,3 +1,4 @@
+import { openTab } from '../../navigation/navigationRef';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -29,7 +30,7 @@ export default function DailyReportCard({ refreshKey = 0 }) {
 
   if (!today || today.weekend) return null;
 
-  const open = () => navigation.navigate('Boards');
+  const open = () => openTab('BoardsTab');
   const posted = today.posted;
 
   if (posted) {

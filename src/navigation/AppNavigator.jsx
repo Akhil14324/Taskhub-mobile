@@ -49,7 +49,6 @@ import useAi from '../hooks/useAi';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
-import BoardsHomeScreen from '../screens/BoardsHomeScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
 import TimeboxScreen from '../screens/TimeboxScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
@@ -117,7 +116,7 @@ const FramedProfile = framed(ProfileScreen, 1300);
 // The native stack does no transition in a browser, so every screen animates itself when it gains focus.
 const TabHome = T(HomeScreen, 'tab', 'Dashboard');
 const TabTodos = T(TodosScreen, 'tab', 'Todos');
-const TabBoards = T(BoardsHomeScreen, 'tab', 'BoardsTab');
+const TabBoards = T(BoardScreen, 'tab', 'BoardsTab');
 const TabChat = T(FramedChatList, 'tab', 'ChatList');
 const PushChatThread = T(FramedChatThread);
 const PushGroupInfo = T(FramedGroupInfo);
@@ -126,8 +125,6 @@ const PushTeamMonitor = T(FramedTeamMonitor);
 const PushAssistant = T(FramedAssistant);
 const PushLeaderboard = T(FramedLeaderboard);
 const PushAutomation = T(FramedAutomation);
-// Boards fill the window (the table is wide); the Boards home centres itself.
-const PushBoards = T(BoardsHomeScreen);
 const PushBoard = T(BoardScreen);
 const PushMyWork = T(MyWorkScreen);
 const PushTimebox = T(TimeboxScreen);
@@ -159,7 +156,6 @@ const linkingFor = (start) => ({
       Assistant: 'assistant',
       Leaderboard: 'leaderboard',
       Automations: 'automations',
-      Boards: 'boards',
       Board: { path: 'boards/:id', ...num },
       MyWork: 'my-work',
       Timebox: 'timebox',
@@ -350,7 +346,6 @@ function MainTabs() {
     ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
     { group: 'Work', label: 'Timebox', icon: 'hourglass-outline', route: 'Timebox' },
-    { group: 'Work', label: 'Boards', icon: 'grid-outline', route: 'Boards' },
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
@@ -618,7 +613,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Assistant" component={PushAssistant} />
             <Stack.Screen name="Leaderboard" component={PushLeaderboard} />
             <Stack.Screen name="Automations" component={PushAutomation} />
-            <Stack.Screen name="Boards" component={PushBoards} />
             <Stack.Screen name="Board" component={PushBoard} />
             <Stack.Screen name="MyWork" component={PushMyWork} />
             <Stack.Screen name="Timebox" component={PushTimebox} />

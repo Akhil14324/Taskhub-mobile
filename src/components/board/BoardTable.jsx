@@ -242,7 +242,7 @@ function SummaryRow({ items, columns, values, colors, nameWidth }) {
 export default function BoardTable({
   compact = false,
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
-  onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, onAddItem, onAddGroup, addingGroup, focus, setFocus,
+  onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, noGroupName, onAddItem, onAddGroup, addingGroup, focus, setFocus,
   pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn,
 }) {
   const colors = useColors();
@@ -383,7 +383,7 @@ export default function BoardTable({
   const limitOf = (gid) => shown.get(gid ?? 'none') || PAGE;
 
   // Groups as shown: the board's groups, plus "No group" when some items have none.
-  const blocks = useMemo(() => groupBlocks(groups, items), [groups, items]);
+  const blocks = useMemo(() => groupBlocks(groups, items, noGroupName), [groups, items, noGroupName]);
 
   // Rows in reading order, for arrow-key moves.
   const rows = useMemo(() => {
@@ -675,7 +675,7 @@ export default function BoardTable({
                     </Pressable>
                   );
                 })()}
-                <Pressable disabled={typeof b.group.id !== 'number' || !canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
+                <Pressable disabled={!canAdd} onPress={(e) => onGroupMenu(anchorOf(e), b.group)}>
                   <Text style={{ fontSize: 17, fontWeight: '600', color: b.group.color === 'grey' ? colors.gray[600] : paletteHex(b.group.color) }}>{b.group.name}</Text>
                 </Pressable>
                 <Text style={{ fontSize: 13, color: colors.gray[500] }}>{b.top.length} {b.top.length === 1 ? word.toLowerCase() : plural(word.toLowerCase())}</Text>

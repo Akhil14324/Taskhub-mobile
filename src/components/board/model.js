@@ -152,13 +152,13 @@ export function itemsInGroup(items, groupId) {
  * The blocks a board shows: one per group, plus "No group" first for items with no group or whose group was
  * archived (an archived group hides itself, never its items).
  */
-export function groupBlocks(groups, items) {
+export function groupBlocks(groups, items, looseName = 'No group') {
   const ids = new Set(groups.map((g) => g.id));
   const homeless = items.map((t) => (!t.parent_id && t.business_section_id && !ids.has(t.business_section_id)
     ? { ...t, business_section_id: null } : t));
   const out = groups.map((g) => ({ group: g, ...itemsInGroup(homeless, g.id) }));
   const loose = itemsInGroup(homeless, null);
-  if (loose.top.length) out.unshift({ group: { id: null, name: 'No group', color: 'grey' }, ...loose });
+  if (loose.top.length) out.unshift({ group: { id: null, name: looseName, color: 'grey' }, ...loose });
   return out;
 }
 

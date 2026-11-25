@@ -1,3 +1,4 @@
+import { openTab } from '../navigation/navigationRef';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -35,7 +36,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user: me } = useAuth();
-  useEffect(() => { if (me && !homeAllowed(me)) navigation.navigate('Boards'); }, [me, navigation]);
+  useEffect(() => { if (me && !homeAllowed(me)) openTab('BoardsTab'); }, [me, navigation]);
   const desktop = useIsDesktop();
   const { user, refreshUser } = useAuth();
   const { todos, fetchTodos, fetchInsights, toggleTodo } = useTodos();

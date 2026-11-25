@@ -9,6 +9,9 @@ import { spacing, radius, BRAND } from '../theme/theme';
 import { glass } from '../theme/glass';
 import useIsDesktop from '../hooks/useBreakpoint';
 import useBoard from '../hooks/useBoard';
+import useBoards from '../hooks/useBoards';
+import BoardsSidebar from '../components/board/BoardsSidebar';
+import { getNoGroupName, setNoGroupName } from '../utils/noGroupName';
 import { useCatalog } from '../hooks/useBoards';
 import useDirectory from '../hooks/useDirectory';
 import { useTodos } from '../context/TodoContext';
@@ -30,7 +33,6 @@ import BoardDashboard from '../components/board/BoardDashboard';
 import BoardAutomate from '../components/board/BoardAutomate';
 import BoardImport from '../components/board/BoardImport';
 import { cellText, itemWordOf, statusLabelOf, valueKeysOf, filterOptions, passesColumnFilters, cellValue } from '../components/board/model';
-import BoardsSidebar from '../components/board/BoardsSidebar';
 import { ruleMatches } from '../components/board/BoardToolbar';
 import { formatDue } from '../utils/dates';
 import BoardTabs from '../components/board/BoardTabs';
@@ -73,8 +75,7 @@ function applyQuick(items, f, meId) {
  * One board (MONDAY_FEATURE_SPEC.md F-BRD-02, F-VIW-01, F-VIW-02). Desktop draws the main table (or Kanban);
  * a phone draws its own card layout. Cells edit in place; the item window is the existing TodoDetailSheet.
  */
-export default function BoardScreen({ route }) {
-  const boardId = route?.params?.id;
+function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen }) {
   const colors = useColors();
   const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
@@ -102,6 +103,9 @@ export default function BoardScreen({ route }) {
   // What the person set on each tab (sort, hidden columns, group by, filters). Shown at once; saved with the
   // tab when they may change it, otherwise it lasts until they leave.
   const [localVs, setLocalVs] = useState({});
+  // The ungrouped bucket ("No group") can be renamed too; the name is kept on this device for this board.
+  const [noGroupName, setNoGroupNameState] = useState(() => getNoGroupName(boardId));
+  const renameNoGroup = useCallback((name) => { setNoGroupName(boardId, name); setNoGroupNameState(getNoGroupName(boardId)); }, [boardId]);
 
   // Ctrl+Z puts back the last cell change; inside a text box the box keeps its own undo.
   useShortcuts({
@@ -354,7 +358,8 @@ export default function BoardScreen({ route }) {
 
   if (!data) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.page, padding: spacing.xl }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.page, padding: spacing.xl, paddingTop: desktop ? spacing.xl : insets.top + spacing.xl }}>
+        <View style={{ position: 'absolute', top: desktop ? spacing.md : insets.top + spacing.sm, left: spacing.md }}><PanelToggle onPress={onTogglePanel} open={panelOpen} /></View>
         {board.error ? <Text style={{ color: colors.gray[600] }}>{board.error}</Text> : <ActivityIndicator color={BRAND} />}
       </View>
     );
@@ -367,12 +372,12 @@ export default function BoardScreen({ route }) {
   return (
     <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, mirrors: data.mirrors || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
-    {desktop && <BoardsSidebar boardId={boardId} />}
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
       {/* Header */}
       <View {...glass('bar')} style={{ backgroundColor: colors.white, paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.md, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          {navigation.canGoBack() && (
+          <PanelToggle onPress={onTogglePanel} open={panelOpen} />
+          {!isTab && navigation.canGoBack() && (
             <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Back" hitSlop={8}>
               <Ionicons name="chevron-back" size={22} color={colors.gray[700]} />
             </Pressable>
@@ -479,7 +484,7 @@ export default function BoardScreen({ route }) {
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}
             onAddColumn={(anchor, groupId) => setMenu({ type: 'addColumn', anchor, groupId })}
-            onGroupMenu={(anchor, group) => setMenu({ type: 'group', anchor, group })}
+            onGroupMenu={(anchor, group) => setMenu({ type: 'group', anchor, group })} noGroupName={noGroupName}
             onAddItem={addItem}
             onAddGroup={newGroup}
             addingGroup={!!board.pending.groups}
@@ -547,9 +552,9 @@ export default function BoardScreen({ route }) {
       )}
       {menu?.type === 'group' && (
         <GroupMenu
-          anchor={menu.anchor} group={menu.group} canManage={data.access.manage && data.board.kind !== 'my_todos'} onClose={() => setMenu(null)}
-          onRename={(name) => board.updateGroup(menu.group, { name })}
-          onColor={(color) => board.updateGroup(menu.group, { color })}
+          anchor={menu.anchor} group={menu.group} canManage={data.access.manage && data.board.kind !== 'my_todos' && typeof menu.group.id === 'number'} onClose={() => setMenu(null)}
+          onRename={(name) => (typeof menu.group.id === 'number' ? board.updateGroup(menu.group, { name }) : renameNoGroup(name))}
+          onColor={typeof menu.group.id === 'number' ? (color) => board.updateGroup(menu.group, { color }) : null}
           onArchive={() => board.updateGroup(menu.group, { archived: true })}
           onDuplicate={data.access.add && data.board.kind !== 'my_todos' ? () => board.duplicateGroup(menu.group) : null}
           onDelete={!menu.group.id || typeof menu.group.id !== 'number' ? null : data.board.kind === 'my_todos' ? async () => {
@@ -574,10 +579,10 @@ export default function BoardScreen({ route }) {
           onClassic={() => openTab('Todos', b.business_id ? { business_id: b.business_id } : undefined)}
           onImport={() => setImporting(true)}
           onExport={exportCsv}
-          onDuplicated={(copy) => navigation.push('Board', { id: copy.id })}
-          onArchive={async () => { await board.updateBoard({ archived: true }); navigation.goBack(); }}
+          onDuplicated={(copy) => onSelect(copy.id)}
+          onArchive={async () => { await board.updateBoard({ archived: true }); onSelect(null); }}
           onDelete={user?.is_owner ? async () => {
-            try { await api.delete(`/boards/${b.id}`); showToast({ message: `Deleted "${b.name}"`, tone: 'success', icon: 'trash' }); navigation.navigate('Boards'); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the board', tone: 'error', icon: 'alert-circle' }); }
+            try { await api.delete(`/boards/${b.id}`); showToast({ message: `Deleted "${b.name}"`, tone: 'success', icon: 'trash' }); onSelect(null); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the board', tone: 'error', icon: 'alert-circle' }); }
           } : null}
         />
       )}
@@ -634,5 +639,83 @@ export default function BoardScreen({ route }) {
     </View>
     </View>
     </BoardMeta.Provider>
+  );
+}
+
+/** The button that shows or hides the boards panel. */
+function PanelToggle({ onPress, open }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress} accessibilityLabel={open ? 'Hide the boards panel' : 'Show the boards panel'} hitSlop={6}
+      style={({ hovered }) => ({ padding: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+    >
+      <Ionicons name={open ? 'chevron-back-circle-outline' : 'menu'} size={22} color={colors.gray[700]} />
+    </Pressable>
+  );
+}
+
+const lastKey = 'boards.last';
+const readLast = () => { try { return Number(localStorage.getItem(lastKey)) || null; } catch { return null; } };
+const readPanel = () => { try { return localStorage.getItem('boards.panel') !== '0'; } catch { return true; } };
+
+/**
+ * The Boards module: one screen. The boards (My to-dos, then each workspace's boards) sit in a side panel: open
+ * beside the board on a desktop (closed with its button, remembered), a drawer on a phone. There is no separate
+ * list page. The board shown is the route's `id`, else the last one opened, else My to-dos.
+ */
+export default function BoardScreen({ route, navigation }) {
+  const desktop = useIsDesktop();
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { boards, loading } = useBoards();
+  const isTab = route?.name === 'BoardsTab';
+  const routeId = Number(route?.params?.id) || null;
+  const [last, setLast] = useState(readLast);
+  const [panelDesktop, setPanelDesktop] = useState(readPanel);
+  const [drawer, setDrawer] = useState(false);
+
+  const id = useMemo(() => {
+    if (routeId) return routeId;
+    if (last && boards.some((b) => b.id === last)) return last;
+    return (boards.find((b) => b.kind === 'my_todos') || boards[0])?.id || null;
+  }, [routeId, last, boards]);
+
+  const select = useCallback((next) => {
+    setDrawer(false);
+    setLast(next || null);
+    try { if (next) localStorage.setItem(lastKey, String(next)); else localStorage.removeItem(lastKey); } catch { /* private mode */ }
+    navigation.setParams({ id: next || undefined });
+  }, [navigation]);
+
+  const toggle = useCallback(() => {
+    if (desktop) {
+      setPanelDesktop((v) => { const n = !v; try { localStorage.setItem('boards.panel', n ? '1' : '0'); } catch { /* private mode */ } return n; });
+    } else setDrawer((v) => !v);
+  }, [desktop]);
+
+  const panel = <BoardsSidebar boardId={id} onSelect={select} onClose={desktop ? toggle : () => setDrawer(false)} />;
+  const showDesktopPanel = desktop && panelDesktop;
+
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
+      {showDesktopPanel && panel}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {id
+          ? <BoardView key={id} boardId={id} isTab={isTab} onSelect={select} onTogglePanel={toggle} panelOpen={desktop ? panelDesktop : drawer} />
+          : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, paddingTop: insets.top + spacing.xl }}>
+              <View style={{ position: 'absolute', top: desktop ? spacing.md : insets.top + spacing.sm, left: spacing.md }}><PanelToggle onPress={toggle} open={panelDesktop && desktop} /></View>
+              {loading ? <ActivityIndicator color={BRAND} /> : <Text style={{ color: colors.gray[600] }}>No boards yet. Open the panel and use + to make one.</Text>}
+            </View>
+          )}
+      </View>
+      {!desktop && drawer && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, flexDirection: 'row' }}>
+          <View style={{ width: Math.min(320, 300), maxWidth: '86%', paddingTop: insets.top, backgroundColor: colors.page }}>{panel}</View>
+          <Pressable onPress={() => setDrawer(false)} accessibilityLabel="Close the boards panel" style={{ flex: 1, backgroundColor: colors.overlay }} />
+        </View>
+      )}
+    </View>
   );
 }

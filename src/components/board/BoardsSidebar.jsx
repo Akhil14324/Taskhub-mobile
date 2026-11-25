@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import useIsDesktop from '../../hooks/useBreakpoint';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
 import useBoards, { refreshBoards } from '../../hooks/useBoards';
@@ -16,9 +16,9 @@ import { showToast } from '../../utils/events';
  * The boards sidebar (desktop): a workspace switcher on top (My boards, Leadership, then one workspace per
  * business) and, under "Content", every board of the chosen workspace. A business is a workspace.
  */
-export default function BoardsSidebar({ boardId }) {
+export default function BoardsSidebar({ boardId, onSelect, onClose }) {
   const colors = useColors();
-  const navigation = useNavigation();
+  const desktop = useIsDesktop();
   const { user } = useAuth();
   const { boards } = useBoards();
   const [picked, setPicked] = useState(null);
@@ -26,6 +26,8 @@ export default function BoardsSidebar({ boardId }) {
   const [creating, setCreating] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
   const [tree, setTree] = useState(null);
+  const [query, setQuery] = useState('');
+  const [archived, setArchived] = useState(null); // boards I run that were archived, loaded when asked for
 
   useEffect(() => { api.get('/org/tree', { __skipOops: true }).then((r) => setTree(r.data)).catch(() => {}); }, []);
 
@@ -41,12 +43,31 @@ export default function BoardsSidebar({ boardId }) {
   const current = boards.find((b) => b.id === boardId);
   const home = current ? spaces.find((s) => s.match(current)) : null;
   const space = spaces.find((s) => s.key === picked) || home || spaces[0];
-  const list = boards.filter((b) => space.match(b));
+  const q = query.trim().toLowerCase();
+  const list = q
+    ? boards.filter((b) => `${b.name} ${b.business_name || ''}`.toLowerCase().includes(q))
+    : boards.filter((b) => space.match(b));
+  const loadArchived = () => api.get('/boards', { params: { archived: 1 }, __skipOops: true }).then((r) => setArchived(r.data.boards || [])).catch(() => setArchived([]));
+  const restore = async (b) => {
+    try {
+      await api.patch(`/boards/${b.id}`, { archived: false });
+      setArchived((l) => (l || []).filter((x) => x.id !== b.id));
+      refreshBoards();
+      showToast({ message: `${b.name} is back`, tone: 'success', icon: 'arrow-undo' });
+    } catch (e) {
+      showToast({ message: e?.response?.data?.error || 'Could not bring it back', tone: 'error' });
+    }
+  };
 
   return (
-    <View style={{ width: 232, borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.page, paddingTop: spacing.md }}>
+    <View style={{ width: '100%', maxWidth: 300, minWidth: 232, flexShrink: 0, ...(desktop ? { width: 232 } : { flex: 1 }), borderRightWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.page, paddingTop: spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm }}>
         <Text style={{ flex: 1, fontSize: 12, color: colors.gray[500], fontWeight: '600', paddingLeft: 4 }}>Workspace</Text>
+        {!!onClose && (
+          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close the boards panel" style={({ hovered }) => ({ padding: 4, borderRadius: radius.sm, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+            <Ionicons name={desktop ? 'chevron-back' : 'close'} size={18} color={colors.gray[600]} />
+          </Pressable>
+        )}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm }}>
         <Pressable
@@ -67,18 +88,21 @@ export default function BoardsSidebar({ boardId }) {
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: 6 }}>
-        <Text style={{ flex: 1, fontSize: 12, color: colors.gray[500], fontWeight: '600' }}>Content</Text>
-        <Pressable onPress={() => navigation.navigate('Boards')} hitSlop={6} accessibilityLabel="All boards">
-          <Ionicons name="grid-outline" size={14} color={colors.gray[500]} />
-        </Pressable>
+      <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
+        <TextInput
+          value={query} onChangeText={setQuery} placeholder="Search boards" placeholderTextColor={colors.gray[400]} accessibilityLabel="Search boards"
+          style={{ height: 34, borderWidth: 1, borderColor: colors.gray[300], borderRadius: radius.md, paddingHorizontal: 10, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+        />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: 6 }}>
+        <Text style={{ flex: 1, fontSize: 12, color: colors.gray[500], fontWeight: '600' }}>{q ? 'Results' : 'Content'}</Text>
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.sm, gap: 2, paddingBottom: spacing.xl }}>
         {list.map((b) => {
           const on = b.id === boardId;
           return (
             <Pressable
-              key={b.id} onPress={() => !on && navigation.navigate('Board', { id: b.id })}
+              key={b.id} onPress={() => !on && onSelect(b.id)}
               style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: on ? BRAND : hovered ? colors.gray[100] : 'transparent' })}
             >
               <Ionicons name={b.icon || 'grid-outline'} size={15} color={on ? '#fff' : colors.gray[600]} />
@@ -86,7 +110,16 @@ export default function BoardsSidebar({ boardId }) {
             </Pressable>
           );
         })}
-        {!list.length && <Text style={{ fontSize: 12, color: colors.gray[500], padding: 8 }}>No boards here yet. Use + to make one.</Text>}
+        {!list.length && <Text style={{ fontSize: 12, color: colors.gray[500], padding: 8 }}>{q ? 'No board matches.' : 'No boards here yet. Use + to make one.'}</Text>}
+        <Pressable onPress={() => (archived ? setArchived(null) : loadArchived())} style={{ paddingHorizontal: 8, paddingVertical: 8, marginTop: spacing.sm }}>
+          <Text style={{ fontSize: 12, color: colors.gray[500] }}>{archived ? 'Hide archived boards' : 'Archived boards'}</Text>
+        </Pressable>
+        {archived && (archived.length ? archived.map((b) => (
+          <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 6 }}>
+            <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: colors.gray[600] }}>{b.name}</Text>
+            <Pressable onPress={() => restore(b)} hitSlop={6}><Text style={{ fontSize: 13, color: BRAND, fontWeight: '600' }}>Bring back</Text></Pressable>
+          </View>
+        )) : <Text style={{ fontSize: 12, color: colors.gray[500], padding: 8 }}>No archived boards.</Text>)}
       </ScrollView>
 
       {!!menu && (
@@ -107,7 +140,7 @@ export default function BoardsSidebar({ boardId }) {
                 setMenu(null);
                 const typed = typeof window !== 'undefined' ? window.prompt(`Delete the workspace "${space.name}" with all its boards and tasks?\nThis cannot be undone from the app. Type its name to confirm.`) : null;
                 if (typed !== space.name) { if (typed !== null) showToast({ message: 'The name did not match. Nothing was deleted.', tone: 'error' }); return; }
-                try { await api.delete(`/org/businesses/${space.key.slice(1)}`, { params: { confirm: space.name } }); setPicked(null); refreshBoards(); showToast({ message: `Deleted ${space.name}`, tone: 'success', icon: 'trash' }); navigation.navigate('Boards'); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the workspace', tone: 'error' }); }
+                try { await api.delete(`/org/businesses/${space.key.slice(1)}`, { params: { confirm: space.name } }); setPicked(null); refreshBoards(); showToast({ message: `Deleted ${space.name}`, tone: 'success', icon: 'trash' }); onSelect(null); } catch (e) { showToast({ message: e?.response?.data?.error || 'Could not delete the workspace', tone: 'error' }); }
               }}
               style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, marginTop: 4, borderTopWidth: 1, borderColor: colors.gray[200], backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
             >
@@ -128,12 +161,12 @@ export default function BoardsSidebar({ boardId }) {
       )}
       <NewWorkspaceDialog
         visible={creatingSpace} onClose={() => setCreatingSpace(false)}
-        onCreated={(biz, board) => { setCreatingSpace(false); setPicked(`b${biz.id}`); if (board) navigation.navigate('Board', { id: board.id }); showToast({ message: `${biz.name} is ready`, tone: 'success' }); }}
+        onCreated={(biz, board) => { setCreatingSpace(false); setPicked(`b${biz.id}`); if (board) onSelect(board.id); showToast({ message: `${biz.name} is ready`, tone: 'success' }); }}
       />
       <NewBoardDialog
         visible={creating} onClose={() => setCreating(false)} tree={tree} isLeader={!!user?.is_leader}
         initialWhere={space.key === 'group' ? { scope: 'group' } : space.key.startsWith('b') ? { scope: 'business', business_id: Number(space.key.slice(1)) } : { scope: 'personal' }}
-        onCreated={(b) => { setCreating(false); refreshBoards(); navigation.navigate('Board', { id: b.id }); }}
+        onCreated={(b) => { setCreating(false); refreshBoards(); onSelect(b.id); }}
       />
     </View>
   );

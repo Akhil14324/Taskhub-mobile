@@ -68,7 +68,7 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'theme', group: 'Actions', icon: theme === 'dark' ? 'sunny-outline' : 'moon-outline', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', run: toggleTheme },
     { id: 'mywork', group: 'Go to', icon: 'briefcase-outline', label: 'My work: overdue, today and waiting on you', run: () => go('MyWork') },
     { id: 'timebox', group: 'Go to', icon: 'hourglass-outline', label: 'Timebox: plan the day in half hours, send it at night', hint: hint('nav.timebox'), run: () => go('Timebox') },
-    { id: 'boards', group: 'Go to', icon: 'grid-outline', label: 'Boards: every board you can open', run: () => go('Boards') },
+    { id: 'boards', group: 'Go to', icon: 'grid-outline', label: 'Boards: every board you can open', run: () => go('BoardsTab') },
     { id: 'dump', group: 'Go to', icon: 'archive-outline', label: 'Dump: everything you sent out of your lists', run: () => go('Dump') },
     { id: 'dump-all', group: 'Actions', icon: 'archive', label: 'Dump everything', run: () => dumpEverything() },
     { id: 'recycle', group: 'Go to', icon: 'trash-outline', label: 'Recycle bin: bring back a deleted to-do', run: () => go('RecycleBin') },
@@ -104,13 +104,13 @@ export default function CommandPalette({ visible, onClose }) {
     const fresh = found.q === query.trim();
     const boards = fresh ? found.boards.map((b) => ({
       id: `board-${b.id}`, group: 'Boards', icon: 'grid-outline', label: b.name, detail: b.business_name || (b.scope === 'personal' ? 'Mine' : ''),
-      run: () => go('Board', { id: b.id }),
+      run: () => go('BoardsTab', { id: b.id }),
     })) : [];
     const shown = new Set(tasks.map((x) => x.id));
     const more = fresh ? found.items.filter((t) => !shown.has(`todo-${t.id}`)).slice(0, 8).map((t) => ({
       id: `todo-${t.id}`, group: 'Found in notes and comments', icon: t.is_done ? 'checkmark-circle' : 'search-outline', label: t.title,
       detail: [t.business_name, t.assignee_name, t.due_date ? `due ${formatDue(t.due_date)}` : null].filter(Boolean).join(' · '),
-      run: () => (t.board_id ? go('Board', { id: t.board_id }) : openNotificationTarget({ todoId: t.id })),
+      run: () => (t.board_id ? go('BoardsTab', { id: t.board_id }) : openNotificationTarget({ todoId: t.id })),
     })) : [];
     const add = [{ id: 'add-typed', group: 'Actions', icon: 'add', label: `Add "${query.trim()}" as a to-do`, run: () => openQuickAdd({ text: query.trim() }) }];
     return [...cmds, ...boards, ...tasks, ...more, ...add];

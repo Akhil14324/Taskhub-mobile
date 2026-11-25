@@ -343,7 +343,7 @@ export function GroupMenu({ anchor, group, canManage, onRename, onColor, onArchi
       {stage === 'menu' && (
         <View>
           <MenuRow icon="create-outline" label="Rename group" onPress={() => setStage('rename')} />
-          <MenuRow icon="color-palette-outline" label="Change colour" onPress={() => setStage('color')} />
+          {onColor && <MenuRow icon="color-palette-outline" label="Change colour" onPress={() => setStage('color')} />}
           {onDuplicate && <MenuRow icon="copy-outline" label="Duplicate group" sub="with its open items" onPress={() => { onClose(); onDuplicate(); }} />}
           {canManage && (
             <MenuRow
