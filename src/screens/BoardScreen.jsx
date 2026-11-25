@@ -372,7 +372,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) 
   const columnsById = data.columns;
 
   return (
-    <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, mirrors: data.mirrors || {}, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
+    <BoardMeta.Provider value={{ linked: data.linked || {}, attachments: data.attachments || {}, mirrors: data.mirrors || {}, items: data.items, meId: user?.id, aiEnabled: !!data.ai_enabled }}>
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.page }}>
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
       {/* Header */}

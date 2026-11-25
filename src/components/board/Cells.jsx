@@ -1,6 +1,7 @@
 import { createContext, memo, useContext, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { progressOf } from '../../utils/progress';
 import { formatDuration } from '../../utils/todoMeta';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, fontSize, PALETTE, PALETTE_NAMES, BRAND } from '../../theme/theme';
@@ -252,6 +253,26 @@ export const CellView = memo(function CellView({ item, column, values, people, c
         <Text style={{ fontSize: 13, color: colors.gray[800] }}>{['', 'Urgent', 'High', 'Normal'][v]}</Text>
       </View>
     );
+  }
+  if (column.kind === 'progress') {
+    // The number typed in the cell, else how many of the task's sub-tasks are done.
+    const typed = v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
+    const subs = typed === null ? progressOf(item, meta.items || []) : null;
+    const pct = typed !== null ? typed : subs ? subs.pct : null;
+    if (pct !== null) {
+      const clamped = Math.max(0, Math.min(100, pct));
+      const full = clamped >= 100;
+      return (
+        <View
+          accessibilityLabel={`${Math.round(clamped)}% done${subs ? `, ${subs.done} of ${subs.total} sub-tasks` : ''}`}
+          dataSet={subs ? { tip: `${subs.done} of ${subs.total} sub-tasks done` } : undefined}
+          style={{ flex: 1, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center', backgroundColor: colors.gray[100], overflow: 'hidden' }}
+        >
+          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${clamped}%`, backgroundColor: full ? colors.green[200] : colors.brand[200] }} />
+          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: colors.gray[900] }}>{Math.round(clamped)}%</Text>
+        </View>
+      );
+    }
   }
   if (v === null || v === undefined || v === '') {
     if (column.kind === 'checkbox') return <CheckBox checked={false} onPress={onToggle && (() => onToggle(true))} />;

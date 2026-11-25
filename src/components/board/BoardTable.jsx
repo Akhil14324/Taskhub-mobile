@@ -46,7 +46,7 @@ const Cell = memo(function Cell({ item, column, values, people, focused, onOpen,
   const colors = useColors();
   const { rowH } = useContext(Metrics);
   const editable = canEditColumn(column) && mayEdit(item, column);
-  const isStatus = column.kind === 'status';
+  const isStatus = column.kind === 'status' || column.kind === 'progress'; // these fill the whole box
   const inline = !column.system_key && INLINE_KINDS.has(column.kind) && editable;
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState('');

@@ -176,7 +176,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
       {[...board.columns, ...EXTRA_FIELDS.filter((f) => !board.columns.some((c) => c.system_key === f.key))
         .map((f) => ({ id: `x-${f.key}`, system_key: f.key, kind: f.kind, title: f.title, settings: f.settings || {}, synthetic: true }))].map((c) => {
         const editable = canEditColumn(c) && mayEdit(item, c);
-        const stretch = c.kind === 'status';
+        const stretch = c.kind === 'status' || c.kind === 'progress';
         const hint = c.description || (c.kind === 'dependency' ? 'Choose the task your task will be dependent on. If its date moves, this task moves with it.' : undefined);
         return (
           <Row key={c.id} icon={COLUMN_ICONS[c.kind] || 'ellipse-outline'} label={c.title} hint={hint}>
