@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
-import api from '../api/client';
-import { useColors } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
-import { useChat } from '../context/ChatContext';
-import { spacing, radius, BRAND } from '../theme/theme';
-import useIsDesktop from '../hooks/useBreakpoint';
-import useTimebox from '../hooks/useTimebox';
-import BackTitle from '../components/BackTitle';
-import TodoDetailSheet from '../components/todos/TodoDetailSheet';
-import TimeboxDay from '../components/timebox/TimeboxDay';
-import TeamTimebox from '../components/timebox/TeamTimebox';
-import { STATUS_LOOK } from '../components/timebox/model';
-import { paletteHex } from '../components/board/model';
-import { addDays, formatDayHeader, parseYmd, todayYmd, WEEKDAYS_SHORT } from '../utils/dates';
-import { showToast } from '../utils/events';
+import api from '../../api/client';
+import { useColors } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
+import { spacing, radius, BRAND } from '../../theme/theme';
+import useIsDesktop from '../../hooks/useBreakpoint';
+import useTimebox from '../../hooks/useTimebox';
+import TodoDetailSheet from '../todos/TodoDetailSheet';
+import TimeboxDay from './TimeboxDay';
+import TeamTimebox from './TeamTimebox';
+import { STATUS_LOOK } from './model';
+import { paletteHex } from '../board/model';
+import { addDays, formatDayHeader, parseYmd, todayYmd, WEEKDAYS_SHORT } from '../../utils/dates';
+import { showToast } from '../../utils/events';
 
 /** The last two weeks and tomorrow, each with a dot for its status. */
 function DayStrip({ date, userId, onPick }) {
@@ -61,22 +58,21 @@ function Tab({ label, active, onPress }) {
 }
 
 /**
- * Timebox planner (route Timebox, params { date?, userId?, tab? }). Mine: today's box first thing in the morning,
- * filled in and sent at night. Team: the people below me, and a sent box of any of them, read-only.
+ * Timebox planner, the Timebox tab of a board. Mine: today's box first thing in the morning, filled in and sent at
+ * night. Team: the people below me, and a sent box of any of them, read-only. `date` / `stamp` ask it to jump to a
+ * day (a notification, "Plan my day").
  */
-export default function TimeboxScreen() {
+export default function TimeboxPanel({ date: askedDate, stamp }) {
   const colors = useColors();
   const desktop = useIsDesktop();
-  const insets = useSafeAreaInsets();
-  const route = useRoute();
   const { user } = useAuth();
-  const [date, setDate] = useState(route.params?.date || todayYmd());
-  const [tab, setTab] = useState(route.params?.tab || 'mine');
+  const [date, setDate] = useState(askedDate || todayYmd());
+  const [tab, setTab] = useState('mine');
   const [person, setPerson] = useState(null); // someone below me, opened from Team
   const [openId, setOpenId] = useState(null);
   const tb = useTimebox(date, person?.id || null);
 
-  useEffect(() => { if (route.params?.date) setDate(route.params.date); }, [route.params?.date]);
+  useEffect(() => { if (askedDate) setDate(askedDate); }, [askedDate, stamp]);
 
   const send = useCallback(async () => {
     const ok = await tb.send();
@@ -94,7 +90,7 @@ export default function TimeboxScreen() {
   const title = person ? person.name : 'Timebox';
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: desktop ? 0 : insets.top }}>
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
       <View style={{ paddingHorizontal: pad, paddingTop: spacing.md, gap: spacing.sm, maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           {person ? (
@@ -103,7 +99,7 @@ export default function TimeboxScreen() {
               <Text style={{ fontSize: desktop ? 24 : 20, fontWeight: '700', color: colors.gray[900] }}>{title}</Text>
             </Pressable>
           ) : (
-            <BackTitle title={title} style={{ fontSize: desktop ? 26 : 22, fontWeight: '700', color: colors.gray[900] }} />
+            <Text style={{ fontSize: desktop ? 22 : 20, fontWeight: '700', color: colors.gray[900] }}>{title}</Text>
           )}
           <View style={{ flex: 1 }} />
           {tb.saving && <Text style={{ fontSize: 12, color: colors.gray[500] }}>Saving…</Text>}

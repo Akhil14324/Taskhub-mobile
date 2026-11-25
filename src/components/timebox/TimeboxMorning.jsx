@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import api from '../../api/client';
-import { getCurrentRouteName, navigateWhenReady } from '../../navigation/navigationRef';
+import { getCurrentRouteName, openTimebox } from '../../navigation/navigationRef';
 import { todayYmd } from '../../utils/dates';
 
 // The start screens: only when the app opened on one of these does the timebox take over (not after a
@@ -25,7 +25,7 @@ export default function TimeboxMorning({ userId }) {
         const res = await api.get('/timebox/day/today', { __skipOops: true });
         if (cancelled) return;
         try { window.localStorage.setItem(key, today); } catch { /* ignore */ }
-        if (res.data.status !== 'sent' && START_ROUTES.includes(getCurrentRouteName())) navigateWhenReady('Timebox');
+        if (res.data.status !== 'sent' && START_ROUTES.includes(getCurrentRouteName())) openTimebox();
       } catch { /* offline: try again next time the app opens */ }
     }, 900);
     return () => { cancelled = true; clearTimeout(t); };

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { openTimebox } from '../../navigation/navigationRef';
 import { View, Text, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
@@ -103,7 +104,7 @@ function Hero({ my, wide, go, openAdd }) {
             <Ionicons name="add" size={16} color="#fff" />
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Add task</Text>
           </AnimatedPressable>
-          <AnimatedPressable onPress={() => go('Timebox')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
+          <AnimatedPressable onPress={() => openTimebox()} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300] }}>
             <Ionicons name="time-outline" size={15} color={colors.gray[700]} />
             <Text style={{ color: colors.gray[800], fontWeight: '600', fontSize: 13 }}>Plan my day</Text>
           </AnimatedPressable>
@@ -201,7 +202,7 @@ function WeekLoad({ my, go }) {
   const max = Math.max(1, ...days.map((d) => d.list.length));
   return (
     <Card>
-      <CardHead icon="calendar-outline" title="This week" action="Plan" onAction={() => go('Timebox')} />
+      <CardHead icon="calendar-outline" title="This week" action="Plan" onAction={() => openTimebox()} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 120 }}>
         {days.map(({ day, list }, i) => {
           const d = parseYmd(day);

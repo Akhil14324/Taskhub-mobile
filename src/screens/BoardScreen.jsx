@@ -19,7 +19,7 @@ import BoardTable, { anchorOf } from '../components/board/BoardTable';
 import BoardKanban from '../components/board/BoardKanban';
 import { BoardCalendar, BoardTimeline, BoardWorkload, BoardSummary } from '../components/board/BoardViews';
 import BoardProcess from '../components/board/BoardProcess';
-import BoardTimebox from '../components/board/BoardTimebox';
+import TimeboxPanel from '../components/timebox/TimeboxPanel';
 import DayReportLauncher from '../components/timebox/DayReportLauncher';
 import Modal from '../components/Modal';
 import WorkflowsScreen from './WorkflowsScreen';
@@ -75,7 +75,7 @@ function applyQuick(items, f, meId) {
  * One board (MONDAY_FEATURE_SPEC.md F-BRD-02, F-VIW-01, F-VIW-02). Desktop draws the main table (or Kanban);
  * a phone draws its own card layout. Cells edit in place; the item window is the existing TodoDetailSheet.
  */
-function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen }) {
+function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, ask }) {
   const colors = useColors();
   const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
@@ -87,7 +87,9 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen }) {
   const { data } = board;
   const { user } = useAuth();
 
-  const [viewId, setViewId] = useState(null);
+  const [viewId, setViewId] = useState(ask?.view === 'timebox' ? '__timebox' : null);
+  // Asked to show the Timebox tab (a notification, "Plan my day", the shortcut).
+  useEffect(() => { if (ask?.view === 'timebox') setViewId('__timebox'); }, [ask?.view, ask?.ts]);
   const [search, setSearch] = useState('');
   const [searchCols, setSearchCols] = useState(null); // null = every column
   const [nameEditId, setNameEditId] = useState(null); // the task whose name is open for typing
@@ -426,7 +428,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen }) {
           canClose={(v) => !!v.owner_id || views.filter((x) => !x.owner_id && !x.synthetic).length > 1}
         />
       </View>
-      {view.kind !== 'activity' && view.kind !== 'dashboard' && view.kind !== 'chart' && (
+      {view.kind !== 'activity' && view.kind !== 'dashboard' && view.kind !== 'chart' && view.kind !== 'timebox' && (
         <View style={{ paddingHorizontal: desktop ? spacing.xl : spacing.md, paddingTop: spacing.sm, borderBottomWidth: 1, borderColor: colors.gray[200], backgroundColor: colors.white }}>
           <BoardToolbar
             data={data} vs={vs} onChange={changeVs} people={people} search={search} onSearch={setSearch} word={word} desktop={desktop}
@@ -473,7 +475,7 @@ function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen }) {
             onSave={(widgets) => board.updateView(view, { settings: { widgets } })}
           />
         ) : view.kind === 'timebox' ? (
-          <BoardTimebox items={items} onOpenItem={openItem} onToggle={(t) => board.setStatus(t, t.is_done ? 'todo' : 'done')} onAddAt={data.access.add ? (day, time) => newTask(null, undefined, { due_date: day, due_time: time }) : null} />
+          <TimeboxPanel date={ask?.date} stamp={ask?.ts} />
         ) : view.kind === 'activity' ? (
           <BoardProcess board={data} items={data.items} onOpenItem={openItem} />
         ) : (
@@ -685,7 +687,7 @@ export default function BoardScreen({ route, navigation }) {
     setDrawer(false);
     setLast(next || null);
     try { if (next) localStorage.setItem(lastKey, String(next)); else localStorage.removeItem(lastKey); } catch { /* private mode */ }
-    navigation.setParams({ id: next || undefined });
+    navigation.setParams({ id: next || undefined, view: undefined, date: undefined });
   }, [navigation]);
 
   const toggle = useCallback(() => {
@@ -702,7 +704,7 @@ export default function BoardScreen({ route, navigation }) {
       {showDesktopPanel && panel}
       <View style={{ flex: 1, minWidth: 0 }}>
         {id
-          ? <BoardView key={id} boardId={id} isTab={isTab} onSelect={select} onTogglePanel={toggle} panelOpen={desktop ? panelDesktop : drawer} />
+          ? <BoardView key={id} boardId={id} ask={route?.params?.view ? route.params : null} isTab={isTab} onSelect={select} onTogglePanel={toggle} panelOpen={desktop ? panelDesktop : drawer} />
           : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, paddingTop: insets.top + spacing.xl }}>
               <View style={{ position: 'absolute', top: desktop ? spacing.md : insets.top + spacing.sm, left: spacing.md }}><PanelToggle onPress={toggle} open={panelDesktop && desktop} /></View>

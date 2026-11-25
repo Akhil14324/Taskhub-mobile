@@ -8,7 +8,7 @@ import { homeAllowed } from '../utils/access';
 import { useTodos } from '../context/TodoContext';
 import { spacing, radius, fontSize } from '../theme/theme';
 import { glass } from '../theme/glass';
-import { navigationRef, openNotificationTarget, openTab } from '../navigation/navigationRef';
+import { navigationRef, openNotificationTarget, openTab, openTimebox } from '../navigation/navigationRef';
 import { openQuickAdd, openTemplates, openShortcuts } from '../utils/events';
 import { formatDue } from '../utils/dates';
 import useBackClose from '../hooks/useBackClose';
@@ -67,7 +67,7 @@ export default function CommandPalette({ visible, onClose }) {
     { id: 'template', group: 'Actions', icon: 'copy-outline', label: 'New from template', run: () => openTemplates() },
     { id: 'theme', group: 'Actions', icon: theme === 'dark' ? 'sunny-outline' : 'moon-outline', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', run: toggleTheme },
     { id: 'mywork', group: 'Go to', icon: 'briefcase-outline', label: 'My work: overdue, today and waiting on you', run: () => go('MyWork') },
-    { id: 'timebox', group: 'Go to', icon: 'hourglass-outline', label: 'Timebox: plan the day in half hours, send it at night', hint: hint('nav.timebox'), run: () => go('Timebox') },
+    { id: 'timebox', group: 'Go to', icon: 'hourglass-outline', label: 'Timebox: plan the day in half hours, send it at night', hint: hint('nav.timebox'), run: () => openTimebox() },
     { id: 'boards', group: 'Go to', icon: 'grid-outline', label: 'Boards: every board you can open', run: () => go('BoardsTab') },
     { id: 'dump', group: 'Go to', icon: 'archive-outline', label: 'Dump: everything you sent out of your lists', run: () => go('Dump') },
     { id: 'dump-all', group: 'Actions', icon: 'archive', label: 'Dump everything', run: () => dumpEverything() },

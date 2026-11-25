@@ -31,6 +31,11 @@ export function openTab(name, params) {
   } else go();
 }
 
+/** The Timebox: the tab of the person's board (last opened, else My to-dos), on `date` when given. */
+export function openTimebox(date) {
+  whenReady(() => openTab('BoardsTab', { view: 'timebox', date: date || undefined, ts: Date.now() }));
+}
+
 /** Run `fn` once the container is mounted. */
 export function whenReady(fn, attempts = 40) {
   if (navigationRef.isReady()) { fn(); return; }
@@ -64,7 +69,7 @@ export function openNotificationTarget(data = {}) {
   }
   // A batch of tasks from a meeting ("Akhil gave you 34 tasks") opens My work, not one task.
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
-  if (data.screen === 'Timebox' || data.type === 'timebox') return navigateWhenReady('Timebox', data.date ? { date: data.date } : undefined);
+  if (data.screen === 'Timebox' || data.type === 'timebox') return openTimebox(data.date);
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
   if (todoId) return whenReady(() => openTab('Todos', { highlightId: todoId }));
   if (data.type === 'user_joined') return navigateWhenReady('Organization');

@@ -18,7 +18,7 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { usePanel } from './Panel';
 import { SlideGroup, SlideItem } from './SlideGroup';
 import { openPalette, openQuickAdd, on } from '../utils/events';
-import { navigationRef, openTab } from '../navigation/navigationRef';
+import { navigationRef, openTab, openTimebox } from '../navigation/navigationRef';
 import useShortcuts from '../hooks/useShortcuts';
 import { useHint } from '../utils/shortcutRegistry';
 import { homeAllowed } from '../utils/access';
@@ -41,7 +41,6 @@ const SECTION_OF = {
   Boards: 'boards',
   BoardsTab: 'boards',
   MyWork: 'mywork',
-  Timebox: 'timebox',
   RecycleBin: 'recycle',
   Dump: 'dump',
   Board: 'boards',
@@ -127,7 +126,7 @@ export default function AppSidebar({ routeName }) {
   useShortcuts({
     'nav.home': () => go('Dashboard'),
     'nav.mywork': () => go('MyWork'),
-    'nav.timebox': () => go('Timebox'),
+    'nav.timebox': () => openTimebox(),
     'nav.boards': () => go('BoardsTab'),
     'nav.todos': () => go('BoardsTab'),
     'nav.chat': () => go('ChatList'),
@@ -153,9 +152,6 @@ export default function AppSidebar({ routeName }) {
     ) },
     { id: 'mywork', node: (
 <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
-    ) },
-    { id: 'timebox', node: (
-<Entry p={p} icon="hourglass-outline" activeIcon="hourglass" label="Timebox" active={section === 'timebox'} onPress={() => go('Timebox')} hint={hint('nav.timebox')} />
     ) },
     ...(homeAllowed(user) ? [{ id: 'home', node: (
 <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
