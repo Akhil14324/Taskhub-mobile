@@ -13,7 +13,7 @@ import { mayEdit } from './CellEditorHost';
 import Hint from './Hint';
 import ProgressDot from '../ProgressDot';
 import { progressMapOf } from '../../utils/progress';
-import { anchorOf } from './Popover';
+import Popover, { anchorOf } from './Popover';
 import { formatDue } from '../../utils/dates';
 import { glass } from '../../theme/glass';
 import { confirmDialog, showToast } from '../../utils/events';
@@ -292,6 +292,10 @@ export default function BoardTable({
   // Drag a task by its name onto another group to move it there (desktop; the same move as "Move to").
   const tableRef = useRef(null);
   const dragMove = useRef(null);
+  // Right click on a row: its menu (open, sub-task, done, duplicate, move, delete).
+  const [ctx, setCtx] = useState(null); // { x, y, id, stage }
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   dragMove.current = onBulkMove && (moveGroups || []).length > 0 ? { onBulkMove, moveGroups, items } : null;
   useEffect(() => {
     const root = tableRef.current;
@@ -337,7 +341,16 @@ export default function BoardTable({
     root.addEventListener('dragover', overGroup);
     root.addEventListener('drop', drop);
     root.addEventListener('dragend', end);
+    const context = (e) => {
+      const cell = e.target.closest?.('[data-cell]');
+      const id = cell ? Number(String(cell.dataset.cell).split(':')[0]) : NaN;
+      if (!Number.isFinite(id) || id < 0 || !itemsRef.current.some((t) => t.id === id)) return;
+      e.preventDefault();
+      setCtx({ x: e.clientX, y: e.clientY, id, stage: 'menu' });
+    };
+    root.addEventListener('contextmenu', context);
     return () => {
+      root.removeEventListener('contextmenu', context);
       root.removeEventListener('pointerdown', down);
       root.removeEventListener('dragstart', start);
       root.removeEventListener('dragover', overGroup);
@@ -433,7 +446,7 @@ export default function BoardTable({
         const el = document.querySelector(`[data-cell="${item.id}:${colIdx}"]`);
         const rect = el?.getBoundingClientRect();
         const anchor = rect ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : null;
-        if (colIdx === -1) onOpenName(anchor, item);
+        if (colIdx === -1) onOpenItem(item.id);
         else if (canEditColumn(columns[colIdx]) && mayEdit(item, columns[colIdx])) onOpenCell(anchor, item, columns[colIdx]);
       } else if (e.key === 'o' || e.key === 'O') {
         const item = r[rowIdx];
@@ -493,7 +506,7 @@ export default function BoardTable({
                   style={{ flex: 1, height: subH - 8, paddingHorizontal: 6, fontSize: 13, color: colors.gray[900], backgroundColor: colors.white, borderWidth: 2, borderColor: BRAND, borderRadius: 2, outlineStyle: 'none' }}
                 />
               ) : (
-                <Pressable onPress={() => (mayEdit(k) ? setNameEdit(k.id) : onOpenItem(k.id))} style={{ flex: 1, height: subH, justifyContent: 'center', cursor: 'text' }}>
+                <Pressable onPress={() => onOpenItem(k.id)} accessibilityLabel={`Open ${k.title}`} style={{ flex: 1, height: subH, justifyContent: 'center', cursor: 'pointer' }}>
                   <Text numberOfLines={1} style={{ fontSize: 12, color: k.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: k.is_done ? 'line-through' : 'none' }}><Tr>{k.title}</Tr></Text>
                 </Pressable>
               )}
@@ -594,9 +607,9 @@ export default function BoardTable({
               />
             ) : (
               <Pressable
-                onPress={() => { setFocus({ itemId: t.id, col: -1 }); if (mayEdit(t)) setNameEdit(t.id); else onOpenItem(t.id); }}
-                accessibilityLabel={`Edit the name of ${t.title}`}
-                style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'text' }}
+                onPress={() => { setFocus({ itemId: t.id, col: -1 }); onOpenItem(t.id); }}
+                accessibilityLabel={`Open ${t.title}`}
+                style={{ flex: 1, height: rowH, justifyContent: 'center', cursor: 'pointer' }}
               >
                 <Text numberOfLines={rowH > 40 ? 2 : 1} style={{ fontSize: 14, color: t.is_done ? colors.gray[400] : colors.gray[800], textDecorationLine: t.is_done ? 'line-through' : 'none' }}>
                   {t.title}
@@ -784,6 +797,47 @@ export default function BoardTable({
         <Pressable onPress={() => setSel(new Set())} accessibilityLabel="Clear selection" hitSlop={6}><Ionicons name="close" size={18} color={colors.gray[500]} /></Pressable>
       </View>
     )}
+    {ctx && (() => {
+      const t = items.find((x) => x.id === ctx.id);
+      if (!t) return null;
+      const close = () => setCtx(null);
+      const Row = ({ icon, label, onPress, danger }) => (
+        <Pressable onPress={onPress} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 8, borderRadius: radius.md, backgroundColor: hovered ? (danger ? colors.red[50] : colors.gray[100]) : 'transparent' })}>
+          <Ionicons name={icon} size={16} color={danger ? colors.red[600] : colors.gray[700]} />
+          <Text style={{ fontSize: 14, color: danger ? colors.red[600] : colors.gray[900] }}>{label}</Text>
+        </Pressable>
+      );
+      return (
+        <Popover visible anchor={{ x: ctx.x, y: ctx.y, width: 0, height: 0 }} onClose={close} width={230}>
+          {ctx.stage === 'move' ? (
+            <ScrollView style={{ maxHeight: 300 }}>
+              {(moveGroups || []).map((g) => (
+                <Pressable key={g.id} onPress={() => { close(); onBulkMove([t], g); }} style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 9, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: paletteHex(g.color) }} />
+                  <Text numberOfLines={1} style={{ fontSize: 14, color: colors.gray[900], flexShrink: 1 }}>{g.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <View>
+              <Row icon="expand-outline" label={`Open ${word.toLowerCase()}`} onPress={() => { close(); onOpenItem(t.id); }} />
+              <Row icon="chatbubble-ellipses-outline" label="Updates" onPress={() => { close(); onOpenItem(t.id, 'updates'); }} />
+              {canAdd && <Row icon="git-network-outline" label="Add a sub-task" onPress={() => { close(); onOpenItem(t.id, 'subtasks'); }} />}
+              {mayEdit(t) && <Row icon={t.is_done ? 'ellipse-outline' : 'checkmark-circle-outline'} label={t.is_done ? 'Mark not done' : 'Mark done'} onPress={() => { close(); onSetDone?.(t); }} />}
+              {canAdd && !!onBulkDuplicate && !t.parent_id && <Row icon="copy-outline" label="Duplicate" onPress={() => { close(); onBulkDuplicate([t]); }} />}
+              {!!onBulkMove && !t.parent_id && (moveGroups || []).length > 0 && <Row icon="arrow-forward-circle-outline" label="Move to" onPress={() => setCtx({ ...ctx, stage: 'move' })} />}
+              {!!onBulkDelete && !!t.permissions?.can_delete && (
+                <Row icon="trash-outline" label="Delete" danger onPress={async () => {
+                  close();
+                  const ok = await confirmDialog({ title: `Delete "${t.title}"?`, message: 'It goes to the recycle bin for 90 days.', confirmLabel: 'Delete', destructive: true });
+                  if (ok) onBulkDelete([t]);
+                }} />
+              )}
+            </View>
+          )}
+        </Popover>
+      );
+    })()}
     </Metrics.Provider>
   );
 }
