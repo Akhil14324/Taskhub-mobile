@@ -4,6 +4,7 @@
 import { PALETTE } from '../../theme/theme';
 import { isDarkMode } from '../kit';
 import { todayYmd, addDays, parseYmd, toYmd } from '../../utils/dates';
+import { isSharedTodo } from '../../utils/todoMeta';
 
 export const STATUS_KEYS = ['todo', 'in_progress', 'blocked', 'in_review', 'on_hold', 'done'];
 
@@ -128,6 +129,13 @@ export function enteredLabel(ymd) {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
+/** Who the Owner column shows: everyone on a shared to-do (several people, nobody singled out), else the one accountable. */
+export function ownerIdsOf(item) {
+  if (isSharedTodo(item)) return (item.members || []).map((m) => m.id);
+  return item?.assignee_id ? [item.assignee_id] : [];
+}
+const personName = (id, item, people) => people.find((p) => p.id === id)?.name || (item.members || []).find((m) => m.id === id)?.name || (id === item.assignee_id ? item.assignee_name : '');
+
 /** Plain text of a cell, for search, sorting and the phone cards. */
 export function cellText(item, column, values, people = []) {
   const v = cellValue(item, column, values);
@@ -135,8 +143,8 @@ export function cellText(item, column, values, people = []) {
   switch (column.kind) {
     case 'status': return statusLabelOf(item, column, values)?.label || '';
     case 'person': {
-      const ids = column.system_key ? [v] : v;
-      return (ids || []).map((id) => people.find((p) => p.id === id)?.name || (id === item.assignee_id ? item.assignee_name : '')).filter(Boolean).join(', ');
+      const ids = column.system_key ? ownerIdsOf(item) : v;
+      return (ids || []).map((id) => personName(id, item, people)).filter(Boolean).join(', ');
     }
     case 'date': return column.system_key ? v : v.date + (v.time ? ` ${v.time}` : '');
     case 'timeline': return column.system_key ? (v[0] || v[1] ? `${v[0] || '?'} – ${v[1] || '?'}` : '') : `${v.start} – ${v.end}`;
@@ -325,9 +333,9 @@ export function valueKeysOf(item, column, values, people = []) {
       return l ? [{ key: `l:${l.id || l.maps_to}`, label: l.label, color: l.color }] : blank;
     }
     case 'person': {
-      const ids = column.system_key ? (v ? [v] : []) : (v || []);
+      const ids = column.system_key ? ownerIdsOf(item) : (v || []);
       if (!ids.length) return [{ key: 'none', label: 'Unassigned' }];
-      return ids.map((id) => ({ key: `p:${id}`, label: people.find((p) => p.id === id)?.name || (id === item.assignee_id ? item.assignee_name : '') || `User ${id}`, person: id }));
+      return ids.map((id) => ({ key: `p:${id}`, label: personName(id, item, people) || `User ${id}`, person: id }));
     }
     case 'date': case 'timeline': return dateKeys(item, column, values).map((k) => ({ key: `d:${k}`, label: (DATE_BUCKETS.find((b) => b[0] === k) || [k, k])[1] }));
     case 'entered_date': return enteredKeys(item);

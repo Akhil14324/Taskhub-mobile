@@ -9,7 +9,7 @@ import { Avatar, PRIORITY } from '../kit';
 import { formatDue, formatTime, daysFromToday, timeAgo } from '../../utils/dates';
 import useLoad, { loadText } from '../../hooks/useLoad';
 import {
-  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime, finishedDay, finishedTime,
+  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime, finishedDay, finishedTime, ownerIdsOf,
 } from './model';
 
 /**
@@ -47,12 +47,13 @@ function StatusPill({ label, compact }) {
 }
 
 function People({ ids, item, people, size = 26 }) {
-  const list = (ids || []).map((id) => people.find((p) => p.id === id) || (id === item.assignee_id ? { id, name: item.assignee_name, profile_picture: item.assignee_picture } : null)).filter(Boolean);
+  const colors = useColors();
+  const list = (ids || []).map((id) => people.find((p) => p.id === id) || (item.members || []).find((m) => m.id === id) || (id === item.assignee_id ? { id, name: item.assignee_name, profile_picture: item.assignee_picture } : null)).filter(Boolean);
   if (!list.length) return <Ionicons name="person-circle-outline" size={size} color="#c3c6d4" />;
   return (
     <View style={{ flexDirection: 'row' }}>
       {list.slice(0, 3).map((p, i) => (
-        <View key={p.id} style={{ marginLeft: i ? -8 : 0 }}><Avatar name={p.name} uri={p.profile_picture} size={size} /></View>
+        <View key={p.id} accessibilityLabel={p.name} dataSet={{ tip: p.name }} style={{ marginLeft: i ? -7 : 0, borderRadius: size, borderWidth: list.length > 1 ? 2 : 0, borderColor: colors.white }}><Avatar name={p.name} uri={p.profile_picture} size={size} /></View>
       ))}
       {list.length > 3 && <Text style={{ marginLeft: 4, fontSize: 12, alignSelf: 'center' }}>+{list.length - 3}</Text>}
     </View>
@@ -230,7 +231,7 @@ export const CellView = memo(function CellView({ item, column, values, people, c
   }
 
   if (column.kind === 'status') return <StatusPill compact={compact} label={statusLabelOf(item, column, values)} />;
-  if (column.kind === 'person') return <People ids={key ? (v ? [v] : []) : v} item={item} people={people} size={compact ? 22 : 26} />;
+  if (column.kind === 'person') return <People ids={key ? ownerIdsOf(item) : v} item={item} people={people} size={compact ? 22 : 26} />;
   if (column.kind === 'date') {
     if (key) return <DateText ymd={v} time={key === 'date' ? item.due_time : null} done={item.is_done} />;
     return v ? <DateText ymd={v.date} time={v.time} /> : <Empty />;
