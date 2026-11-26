@@ -66,7 +66,8 @@ function applyQuick(items, f, meId) {
   const others = (t) => (t.members || []).some((m) => m.id !== meId);
   // Assigned to me: someone else gave it to me. Assigned by me: I gave it to someone else (or to several people).
   const assignOk = (t) => !f.assign
-    || (f.assign === 'to_me' ? t.assignee_id === meId && t.assigned_by_id !== meId
+    || (f.assign === 'declined' ? !!t.declined_at && t.declined_giver === meId
+      : f.assign === 'to_me' ? t.assignee_id === meId && t.assigned_by_id !== meId
       : t.assigned_by_id === meId && (t.assignee_id ? t.assignee_id !== meId : others(t)));
   const keep = (t) => (!f.mine || t.assignee_id === meId || (t.members || []).some((m) => m.id === meId))
     && (!f.people?.length || f.people.includes(t.assignee_id) || (t.members || []).some((m) => f.people.includes(m.id)))
@@ -218,7 +219,7 @@ export function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, 
   const items = useMemo(() => {
     if (!data) return [];
     // The work I handed to someone else (kept apart by the server) only joins in under "Assigned by me".
-    let base = applyQuick(filters.assign === 'by_me' && data.handed?.length ? [...data.items, ...data.handed] : data.items, filters, user?.id);
+    let base = applyQuick((filters.assign === 'by_me' || filters.assign === 'declined') && data.handed?.length ? [...data.items, ...data.handed] : data.items, filters, user?.id);
     if (Object.values(filters.cols || {}).some((a) => a?.length)) {
       const ok = new Set(base.filter((t) => !t.parent_id && passesColumnFilters(t, data.columns, data.values, people, filters.cols)).map((t) => t.id));
       base = base.filter((t) => ok.has(t.id) || (t.parent_id && ok.has(t.parent_id)));

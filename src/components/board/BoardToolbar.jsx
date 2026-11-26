@@ -164,8 +164,8 @@ export default function BoardToolbar({
   // On a phone the toolbar scrolls sideways, so "Finished" sits right after Search where it is seen at once.
   const assignedTool = (
     <Tool
-      icon="swap-horizontal-outline" label={filters.assign ? (filters.assign === 'by_me' ? 'Assigned by me' : 'Assigned to me') : 'Assigned'} caret active={!!filters.assign}
-      onPress={open('assigned')} hint="Tasks given to you by others, or tasks you gave to others."
+      icon="swap-horizontal-outline" label={filters.assign ? (filters.assign === 'by_me' ? 'Assigned by me' : filters.assign === 'declined' ? 'Declined' : 'Assigned to me') : 'Assigned'} caret active={!!filters.assign}
+      onPress={open('assigned')} hint="Tasks given to you by others, tasks you gave to others, and tasks that were declined or handed on."
     />
   );
   const finishedTool = (
@@ -282,11 +282,11 @@ export default function BoardToolbar({
       {pop?.type === 'assigned' && (
         <Popover visible anchor={pop.anchor} onClose={close} width={300}>
           <PanelHead
-            title="Assigned" hint="To me: tasks someone else gave you. By me: tasks you gave to other people, including ones you only follow. Sub-tasks are included."
+            title="Assigned" hint="To me: tasks someone else gave you. By me: tasks you gave to other people, including ones you only follow. Declined: tasks you gave that the person declined or handed on. Sub-tasks are included."
             right={!!filters.assign && <SmallBtn label="Clear" onPress={() => { onChange({ filters: { ...filters, assign: undefined } }); close(); }} />}
           />
           <View style={{ padding: 8, paddingTop: 2, gap: 2 }}>
-            {[['to_me', 'Assigned to me', 'arrow-down-circle-outline'], ['by_me', 'Assigned by me', 'arrow-up-circle-outline']].map(([k, l, icon]) => {
+            {[['to_me', 'Assigned to me', 'arrow-down-circle-outline'], ['by_me', 'Assigned by me', 'arrow-up-circle-outline'], ['declined', 'Declined', 'arrow-undo-outline']].map(([k, l, icon]) => {
               const on = filters.assign === k;
               return (
                 <Pressable key={k} onPress={() => { onChange({ filters: { ...filters, assign: on ? undefined : k } }); close(); }} accessibilityLabel={l}

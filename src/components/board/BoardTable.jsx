@@ -5,7 +5,7 @@ import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useColors } from '../../context/ThemeContext';
 import { spacing, radius, BRAND } from '../../theme/theme';
-import { CellView } from './Cells';
+import { CellView, BoardMeta } from './Cells';
 import {
   groupBlocks, statusBreakdown, numberSummary, formatNumber, paletteHex, canEditColumn, IN_CELL_KINDS, dateRange, itemWordOf,
 } from './model';
@@ -246,6 +246,7 @@ export default function BoardTable({
   pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn, expandKey = '',
 }) {
   const colors = useColors();
+  const meta = useContext(BoardMeta);
   const { columns: savedColumns, groups, values, access } = board;
   // Column widths: dragged live here, saved on the board's column for people who manage it (everyone's table follows).
   const [liveW, setLiveW] = useState({});
@@ -619,6 +620,12 @@ export default function BoardTable({
                   {t.title}
                 </Text>
               </Pressable>
+            )}
+            {!!t.declined_at && t.declined_giver === meta.meId && (
+              <View accessibilityLabel={`${t.declined_kind === 'transferred' ? 'Handed on' : 'Declined'} by ${t.declined_by_name}: ${t.declined_reason}`} dataSet={{ tip: `${t.declined_kind === 'transferred' ? 'Handed on' : 'Declined'} by ${t.declined_by_name}: ${t.declined_reason}` }} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.red[50] }}>
+                <Ionicons name="arrow-undo" size={12} color={colors.red[600]} />
+                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: colors.red[700] }}>{t.declined_kind === 'transferred' ? 'Handed on' : 'Declined'}</Text>
+              </View>
             )}
             {linkedFrom > 0 && (
               <View accessibilityLabel={`Linked from ${linkedFrom} other ${linkedFrom === 1 ? 'task' : 'tasks'}`} dataSet={{ tip: `Linked from ${linkedFrom} other ${linkedFrom === 1 ? 'task' : 'tasks'}. Open the task to see them.` }} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>

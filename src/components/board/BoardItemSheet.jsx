@@ -202,6 +202,26 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
 
   const left = (
     <ScrollView style={{ flex: desktop ? 0.9 : undefined }} contentContainerStyle={{ gap: spacing.sm, padding: spacing.xl, paddingTop: spacing.md }} keyboardShouldPersistTaps="handled">
+      {!!item.declined_at && item.declined_giver === user?.id && (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.red[50], borderWidth: 1, borderColor: colors.red[100] }}>
+          <Ionicons name="arrow-undo" size={18} color={colors.red[600]} style={{ marginTop: 2 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.red[700] }}>
+              {item.declined_kind === 'transferred' ? `${item.declined_by_name} handed this on to ${item.assignee_name}` : `${item.declined_by_name} declined this task`}
+            </Text>
+            <Text style={{ fontSize: 14, color: colors.gray[800], marginTop: 2 }}>{item.declined_reason}</Text>
+            <Text style={{ fontSize: 12, color: colors.gray[500], marginTop: 2 }}>
+              {item.declined_kind === 'transferred' ? 'It is with them now.' : 'It is back with you.'} Give it to someone else from Owner, or dismiss this note.
+            </Text>
+          </View>
+          <Pressable
+            onPress={async () => { try { await api.post(`/todos/${item.id}/decline-seen`); actions.reload({ force: true }); } catch (err) { showToast({ message: err.response?.data?.error || 'Could not dismiss it', tone: 'error' }); } }}
+            accessibilityLabel="Dismiss the declined note" style={({ hovered }) => ({ paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.md, backgroundColor: hovered ? colors.red[100] : 'transparent', borderWidth: 1, borderColor: colors.red[500] })}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.red[700] }}>Got it</Text>
+          </Pressable>
+        </View>
+      )}
       <Row icon="ellipse" label="Group" hint="The group of the board this task sits in. Change it to move the task.">
         <Field onPress={board.access.add && canEdit ? (e) => setGroupAnchor(anchorOf(e)) : undefined}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
