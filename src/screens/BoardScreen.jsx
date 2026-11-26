@@ -32,7 +32,7 @@ import { AddColumnMenu, ColumnMenu, GroupMenu, BoardMoreMenu } from '../componen
 import BoardDashboard from '../components/board/BoardDashboard';
 import BoardAutomate from '../components/board/BoardAutomate';
 import BoardImport from '../components/board/BoardImport';
-import { cellText, itemWordOf, statusLabelOf, valueKeysOf, filterOptions, passesColumnFilters, cellValue } from '../components/board/model';
+import { cellText, itemWordOf, statusLabelOf, valueKeysOf, filterOptions, passesColumnFilters, cellValue, finishedRange, finishedDay } from '../components/board/model';
 import { ruleMatches } from '../components/board/BoardToolbar';
 import { formatDue } from '../utils/dates';
 import BoardTabs from '../components/board/BoardTabs';
@@ -59,6 +59,7 @@ const VIEW_ICONS = { ...Object.fromEntries(VIEW_KINDS.map(([k, , i]) => [k, i]))
 // Quick filters, saved with the view (F-FLT-04).
 function applyQuick(items, f, meId) {
   if (!f) return items;
+  const range = finishedRange(f.done);
   const today = todayYmd();
   const week = addDays(today, 7);
   const due = (t) => t.due_date || t.deadline_date;
@@ -66,7 +67,16 @@ function applyQuick(items, f, meId) {
     && (!f.people?.length || f.people.includes(t.assignee_id) || (t.members || []).some((m) => f.people.includes(m.id)))
     && (!f.overdue || (!t.is_done && due(t) && due(t) < today))
     && (!f.week || (due(t) && due(t) >= today && due(t) <= week))
-    && (!f.hide_done || !t.is_done);
+    && (range || !f.hide_done || !t.is_done);
+  if (range) {
+    // Finished between two days, at any depth: a sub-task done yesterday shows even when its task is still open,
+    // under that task (and the tasks above it), without the steps that were not finished in that time.
+    const hit = new Set(items.filter((t) => keep(t) && finishedDay(t) && finishedDay(t) >= range.from && finishedDay(t) <= range.to).map((t) => t.id));
+    const byId = new Map(items.map((t) => [t.id, t]));
+    const show = new Set(hit);
+    for (const id of hit) for (let p = byId.get(id)?.parent_id; p && byId.has(p) && !show.has(p); p = byId.get(p).parent_id) show.add(p);
+    return items.filter((t) => show.has(t.id));
+  }
   const ok = new Set(items.filter(keep).map((t) => t.id));
   // Sub-items stay with a parent that is shown.
   return items.filter((t) => ok.has(t.id) || (t.parent_id && ok.has(t.parent_id)));
@@ -490,7 +500,7 @@ export function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, 
         ) : (
           // Every width gets the same table; phones and tablets scroll it sideways (compact).
           <BoardTable
-            compact={!desktop}
+            compact={!desktop} expandKey={filters.done ? JSON.stringify(filters.done) : ''}
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}

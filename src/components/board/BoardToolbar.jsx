@@ -6,7 +6,9 @@ import { spacing, radius, BRAND } from '../../theme/theme';
 import Popover, { anchorOf } from './Popover';
 import Hint from './Hint';
 import { Avatar } from '../kit';
-import { filterOptions, NAME_FILTER, paletteHex, valueKeysOf } from './model';
+import DueDatePicker from '../DueDatePicker';
+import { filterOptions, NAME_FILTER, paletteHex, valueKeysOf, FINISHED_RANGES, finishedLabel } from './model';
+import { todayYmd } from '../../utils/dates';
 
 // The quick filters a view can save (applied in BoardScreen's applyQuick).
 export const QUICK_FILTERS = [['mine', 'My tasks'], ['overdue', 'Late'], ['week', 'Due this week'], ['hide_done', 'Hide done']];
@@ -143,6 +145,7 @@ export default function BoardToolbar({
   const [searchOpen, setSearchOpen] = useState(!!search);
   const [hideQ, setHideQ] = useState('');
   const [personQ, setPersonQ] = useState('');
+  const [pickDay, setPickDay] = useState(null); // null | { step: 'day' | 'from' | 'to', from? }
   const inputRef = useRef(null);
   const open = (type) => (e) => { setHideQ(''); setPersonQ(''); setPop({ type, anchor: anchorOf(e) }); };
   const close = () => setPop(null);
@@ -207,6 +210,10 @@ export default function BoardToolbar({
           </View>
         ) : <Tool icon="search-outline" label="Search" onPress={() => setSearchOpen(true)} hint="Find a task by its name or anything in its columns." />}
         <Tool icon="person-circle-outline" label="Person" active={(vs.people || []).length > 0} count={(vs.people || []).length} onPress={open('person')} hint="Show only the tasks of some people." />
+        <Tool
+          icon="checkmark-done-outline" label={filters.done ? `Finished: ${finishedLabel(filters.done)}` : 'Finished'} caret active={!!filters.done}
+          onPress={open('finished')} hint="See what was finished and when: yesterday, last week, any day. Sub-tasks are included."
+        />
         <Tool icon="funnel-outline" label="Filter" caret active={filterCount > 0} count={filterCount} onPress={open('filter')} hint="Narrow the board down by any column, like in a spreadsheet." />
         {kind === 'table' && <Tool icon="swap-vertical-outline" label="Sort" active={!!vs.sort} onPress={open('sort')} hint="Order the tasks inside each group by a column." />}
         {kind === 'table' && <Tool icon="eye-off-outline" label="Hide" active={(vs.hidden || []).length > 0} count={(vs.hidden || []).length} onPress={open('hide')} hint="Hide columns you do not need on this view. The data is not deleted." />}
@@ -259,6 +266,46 @@ export default function BoardToolbar({
         </Popover>
       )}
 
+      {pop?.type === 'finished' && (
+        <Popover visible anchor={pop.anchor} onClose={close} width={300}>
+          <PanelHead
+            title="Finished" hint="Shows the tasks and sub-tasks that were ticked done in that time, each under its task."
+            right={!!filters.done && <SmallBtn label="Clear" onPress={() => { onChange({ filters: { ...filters, done: undefined } }); close(); }} />}
+          />
+          <View style={{ padding: 8, paddingTop: 2, gap: 2 }}>
+            {FINISHED_RANGES.map(([k, l]) => {
+              const on = filters.done === k;
+              return (
+                <Pressable key={k} onPress={() => { onChange({ filters: { ...filters, done: on ? undefined : k } }); close(); }} accessibilityLabel={`Finished ${l}`}
+                  style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 38, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
+                  <Text style={{ flex: 1, fontSize: 14, color: on ? BRAND : colors.gray[900], fontWeight: on ? '600' : '400' }}>{l}</Text>
+                  {on && <Ionicons name="checkmark" size={16} color={BRAND} />}
+                </Pressable>
+              );
+            })}
+            <View style={{ height: 1, backgroundColor: colors.gray[200], marginVertical: 4 }} />
+            {[['day', 'Pick a day'], ['from', 'Pick a range of days']].map(([step, l]) => (
+              <Pressable key={step} onPress={() => { setPop(null); setPickDay({ step }); }}
+                style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 38, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: hovered ? colors.gray[100] : 'transparent' })}>
+                <Ionicons name="calendar-outline" size={16} color={colors.gray[700]} />
+                <Text style={{ flex: 1, fontSize: 14, color: colors.gray[900] }}>{l}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Popover>
+      )}
+      <DueDatePicker
+        visible={!!pickDay} onClose={() => setPickDay(null)} allowTime={false}
+        date={pickDay?.step === 'to' ? pickDay.from : (typeof filters.done === 'object' ? filters.done.from : todayYmd())}
+        onChange={({ date }) => {
+          if (!date) { onChange({ filters: { ...filters, done: undefined } }); setPickDay(null); return; }
+          if (pickDay?.step === 'from') { setPickDay({ step: 'to', from: date }); return; }
+          if (pickDay?.step === 'to') { const a = pickDay.from; onChange({ filters: { ...filters, done: a <= date ? { from: a, to: date } : { from: date, to: a } } }); setPickDay(null); return; }
+          onChange({ filters: { ...filters, done: { from: date, to: date } } });
+          setPickDay(null);
+        }}
+      />
+
       {pop?.type === 'filter' && (
         <Popover visible anchor={pop.anchor} onClose={close} width={820}>
           <PanelHead
@@ -266,7 +313,7 @@ export default function BoardToolbar({
             right={(
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={{ fontSize: 12, color: colors.gray[500] }}>Showing {shownCount} of {totalCount} {lower}s</Text>
-                <SmallBtn label="Clear all" disabled={!filterCount} onPress={() => onChange({ filters: {} })} />
+                <SmallBtn label="Clear all" disabled={!filterCount && !filters.done} onPress={() => onChange({ filters: {} })} />
                 {!!onSaveAsView && <SmallBtn label="Save as new view" onPress={() => { onSaveAsView(); close(); }} />}
               </View>
             )}

@@ -9,7 +9,7 @@ import { Avatar, PRIORITY } from '../kit';
 import { formatDue, formatTime, daysFromToday, timeAgo } from '../../utils/dates';
 import useLoad, { loadText } from '../../hooks/useLoad';
 import {
-  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime,
+  cellValue, statusLabelOf, paletteHex, paletteInk, formatNumber, canEditColumn, enteredDay, enteredLabel, enteredTime, finishedDay, finishedTime,
 } from './model';
 
 /**
@@ -318,6 +318,10 @@ export const CellView = memo(function CellView({ item, column, values, people, c
     case 'creation_log':
     case 'last_updated':
       return <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{timeAgo(v)}{key === 'created' && item.created_by_name ? ` · ${item.created_by_name}` : ''}</Text>;
+    case 'finished_date': {
+      const day = finishedDay(item);
+      return day ? <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{enteredLabel(day)}, {finishedTime(item)}</Text> : <Empty />;
+    }
     case 'entered_date': {
       const day = enteredDay(item);
       return day ? <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{enteredLabel(day)}, {enteredTime(item)}</Text> : <Empty />;

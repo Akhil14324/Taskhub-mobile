@@ -25,6 +25,7 @@ export const SYSTEM_FIELDS = {
   created: 'created_at',
   updated: 'updated_at',
   entered: 'created_at',
+  finished: 'done_at',
 };
 
 /** Built-in columns people can edit straight in the cell (the rest show, and change in the item window). */
@@ -106,6 +107,12 @@ export function cellValue(item, column, values) {
 export const enteredAt = (item) => item?.created_at || item?.updated_at || null; // no creation stamp: the next one we have
 export const enteredDay = (item) => (enteredAt(item) ? toYmd(new Date(enteredAt(item))) : null);
 
+/** The day (viewer's own calendar) a finished task was finished, from done_at; null while it is open. */
+export const finishedDay = (item) => (item?.is_done && item.done_at ? toYmd(new Date(item.done_at)) : null);
+export function finishedTime(item) {
+  return item?.done_at ? new Date(item.done_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '';
+}
+
 /** "3:42 pm" in the viewer's own time. */
 export function enteredTime(item) {
   const at = enteredAt(item);
@@ -138,6 +145,7 @@ export function cellText(item, column, values, people = []) {
     case 'location': return v.address || '';
     case 'checkbox': return v ? 'Yes' : '';
     case 'priority': return v ? `P${v}` : '';
+    case 'finished_date': { const d = finishedDay(item); return d ? `${d} ${new Date(item.done_at).toTimeString().slice(0, 5)}` : ''; }
     case 'entered_date': { const d = enteredDay(item); return d ? `${d} ${new Date(enteredAt(item)).toTimeString().slice(0, 5)}` : ''; }
     case 'dependency': return (v || []).map((d) => d.title).join(', ');
     default: return typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -269,6 +277,41 @@ function enteredKeys(item) {
   ];
 }
 
+/** One-click ranges for "what was finished when": [key, label]. The range itself comes from finishedRange(). */
+export const FINISHED_RANGES = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', 'Last 7 days'], ['week', 'This week'], ['lastweek', 'Last week'], ['30d', 'Last 30 days']];
+
+/** { from, to } (inclusive YYYY-MM-DD) for a finished filter: a key above, or { from, to } already. */
+export function finishedRange(f) {
+  if (!f) return null;
+  if (typeof f === 'object') return f.from ? { from: f.from, to: f.to || f.from } : null;
+  const today = todayYmd();
+  const monday = addDays(today, -((parseYmd(today).getDay() + 6) % 7));
+  switch (f) {
+    case 'today': return { from: today, to: today };
+    case 'yesterday': { const y = addDays(today, -1); return { from: y, to: y }; }
+    case '7d': return { from: addDays(today, -6), to: today };
+    case 'week': return { from: monday, to: today };
+    case 'lastweek': return { from: addDays(monday, -7), to: addDays(monday, -1) };
+    case '30d': return { from: addDays(today, -29), to: today };
+    default: return null;
+  }
+}
+
+/** The label of a finished filter, for the chip and the filter count. */
+export function finishedLabel(f) {
+  if (!f) return '';
+  if (typeof f === 'string') return (FINISHED_RANGES.find(([k]) => k === f) || [f, f])[1];
+  return f.to && f.to !== f.from ? `${enteredLabel(f.from)} to ${enteredLabel(f.to)}` : enteredLabel(f.from);
+}
+
+function finishedKeys(item) {
+  const d = finishedDay(item);
+  if (!d) return [{ key: 'none', label: 'Not finished' }];
+  const today = todayYmd();
+  const out = FINISHED_RANGES.filter(([k]) => { const r = finishedRange(k); return d >= r.from && d <= r.to; }).map(([k, label]) => ({ key: `f:${k}`, label }));
+  return [...out, { key: `f:${d}`, label: enteredLabel(d) }];
+}
+
 /** [{ key, label }] an item has on a column (the name column is `name`). */
 export function valueKeysOf(item, column, values, people = []) {
   if (column === NAME_COL) return [{ key: `t:${item.title}`, label: item.title }];
@@ -286,6 +329,7 @@ export function valueKeysOf(item, column, values, people = []) {
     }
     case 'date': case 'timeline': return dateKeys(item, column, values).map((k) => ({ key: `d:${k}`, label: (DATE_BUCKETS.find((b) => b[0] === k) || [k, k])[1] }));
     case 'entered_date': return enteredKeys(item);
+    case 'finished_date': return finishedKeys(item);
     case 'priority': return v ? [{ key: `pr:${v}`, label: PRIORITY_NAMES[v] || `P${v}` }] : blank;
     case 'dependency': return (v || []).length ? v.map((d) => ({ key: `t:${d.title}`, label: d.title })) : blank;
     case 'files': return values?.[item.id]?.[column.id]?.length || (v && v.length) ? [{ key: 'has', label: 'Has files' }] : [{ key: 'none', label: 'No files' }];
@@ -314,6 +358,10 @@ export function filterOptions(items, column, values, people = []) {
     out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   } else if (column !== NAME_COL && column.kind === 'entered_date') {
     const buckets = ENTERED_BUCKETS.map((b) => `e:${b[0]}`);
+    const rank = (k) => (buckets.includes(k) ? buckets.indexOf(k) : k === 'none' ? 1e6 : 1000);
+    out.sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) === 1000 ? b.key.localeCompare(a.key) : 0));
+  } else if (column !== NAME_COL && column.kind === 'finished_date') {
+    const buckets = FINISHED_RANGES.map((b) => `f:${b[0]}`);
     const rank = (k) => (buckets.includes(k) ? buckets.indexOf(k) : k === 'none' ? 1e6 : 1000);
     out.sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) === 1000 ? b.key.localeCompare(a.key) : 0));
   } else if (column !== NAME_COL && column.kind === 'priority') {

@@ -243,7 +243,7 @@ export default function BoardTable({
   compact = false,
   board, items, people, collapsed, onToggleGroup, onOpenCell, onOpenName, onOpenItem, onToggleValue,
   onColumnMenu, onRenameColumn, onAddColumn, onGroupMenu, noGroupName, onAddItem, onAddGroup, addingGroup, focus, setFocus,
-  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn,
+  pinned = 0, headerHeight = 'single', itemHeight = 'normal', colorOf, editNameId, onEditNameDone, onRenameItem, onSetDone, onBulkDelete, onBulkDuplicate, onBulkCopy, onBulkMove, moveGroups, onResizeColumn, expandKey = '',
 }) {
   const colors = useColors();
   const { columns: savedColumns, groups, values, access } = board;
@@ -391,6 +391,10 @@ export default function BoardTable({
   }, [columns, NAME_BLOCK, pinned]);
   const tableWidth = nameW + UPD_W + columns.reduce((s, c) => s + c.width, 0) + COMMENTS_W + ADD_W;
   const [openParents, setOpenParents] = useState(() => new Set());
+  // A "Finished" filter is about the sub-tasks, so they open by themselves each time it changes (and can be folded after).
+  useEffect(() => {
+    if (expandKey) setOpenParents(new Set(items.filter((t) => t.parent_id).map((t) => t.parent_id)));
+  }, [expandKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Speed (M14): a big group draws its first rows and a "Show more" line, not hundreds of rows at once.
   const [shown, setShown] = useState(() => new Map());
   const limitOf = (gid) => shown.get(gid ?? 'none') || PAGE;
@@ -466,7 +470,7 @@ export default function BoardTable({
   // The sub-tasks of a task: their own small table under it (name, owner, status, date), with an add line.
   const subColumns = useMemo(() => {
     const first = (pred) => columns.find(pred);
-    return [first((c) => c.kind === 'person'), first((c) => c.kind === 'status'), first((c) => c.kind === 'date' || c.kind === 'timeline')].filter(Boolean);
+    return [first((c) => c.kind === 'person'), first((c) => c.kind === 'status'), first((c) => c.kind === 'date' || c.kind === 'timeline'), first((c) => c.kind === 'finished_date')].filter(Boolean);
   }, [columns]);
   // A task's steps are rows of the same table, indented inside the task: the name starts further right than the
   // task's own, and Owner / Status / Date sit under the same columns, so columns line up from top to bottom.
