@@ -162,6 +162,12 @@ export default function BoardToolbar({
   const groupable = data.columns.filter((c) => !['files', 'button', 'long_text'].includes(c.kind));
   const setCols = (id, keys) => onChange({ filters: { ...filters, cols: { ...colFilters, [id]: keys } } });
   // On a phone the toolbar scrolls sideways, so "Finished" sits right after Search where it is seen at once.
+  const assignedTool = (
+    <Tool
+      icon="swap-horizontal-outline" label={filters.assign ? (filters.assign === 'by_me' ? 'Assigned by me' : 'Assigned to me') : 'Assigned'} caret active={!!filters.assign}
+      onPress={open('assigned')} hint="Tasks given to you by others, or tasks you gave to others."
+    />
+  );
   const finishedTool = (
         <Tool
           icon="checkmark-done-outline" label={filters.done ? `Finished: ${finishedLabel(filters.done)}` : 'Finished'} caret active={!!filters.done}
@@ -215,10 +221,12 @@ export default function BoardToolbar({
             {!!search && <Pressable onPress={() => { onSearch(''); setSearchOpen(false); }} hitSlop={6} accessibilityLabel="Clear search"><Ionicons name="close" size={15} color={colors.gray[500]} /></Pressable>}
             <Pressable onPress={open('searchcols')} hitSlop={6} accessibilityLabel="Choose columns to search"><Ionicons name="options-outline" size={16} color={searchCols ? BRAND : colors.gray[500]} /></Pressable>
           </View>
-        ) : <Tool icon="search-outline" label="Search" onPress={() => setSearchOpen(true)} hint="Find a task by its name or anything in its columns." />}
+        ) : <Tool icon="search-outline" label={desktop ? 'Search' : ''} onPress={() => setSearchOpen(true)} hint="Find a task by its name or anything in its columns." />}
         {!desktop && finishedTool}
+        {!desktop && assignedTool}
         <Tool icon="person-circle-outline" label="Person" active={(vs.people || []).length > 0} count={(vs.people || []).length} onPress={open('person')} hint="Show only the tasks of some people." />
         {desktop && finishedTool}
+        {desktop && assignedTool}
         <Tool icon="funnel-outline" label="Filter" caret active={filterCount > 0} count={filterCount} onPress={open('filter')} hint="Narrow the board down by any column, like in a spreadsheet." />
         {kind === 'table' && <Tool icon="swap-vertical-outline" label="Sort" active={!!vs.sort} onPress={open('sort')} hint="Order the tasks inside each group by a column." />}
         {kind === 'table' && <Tool icon="eye-off-outline" label="Hide" active={(vs.hidden || []).length > 0} count={(vs.hidden || []).length} onPress={open('hide')} hint="Hide columns you do not need on this view. The data is not deleted." />}
@@ -271,6 +279,27 @@ export default function BoardToolbar({
         </Popover>
       )}
 
+      {pop?.type === 'assigned' && (
+        <Popover visible anchor={pop.anchor} onClose={close} width={300}>
+          <PanelHead
+            title="Assigned" hint="To me: tasks someone else gave you. By me: tasks you gave to other people, including ones you only follow. Sub-tasks are included."
+            right={!!filters.assign && <SmallBtn label="Clear" onPress={() => { onChange({ filters: { ...filters, assign: undefined } }); close(); }} />}
+          />
+          <View style={{ padding: 8, paddingTop: 2, gap: 2 }}>
+            {[['to_me', 'Assigned to me', 'arrow-down-circle-outline'], ['by_me', 'Assigned by me', 'arrow-up-circle-outline']].map(([k, l, icon]) => {
+              const on = filters.assign === k;
+              return (
+                <Pressable key={k} onPress={() => { onChange({ filters: { ...filters, assign: on ? undefined : k } }); close(); }} accessibilityLabel={l}
+                  style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 42, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: on ? colors.brand[50] : hovered ? colors.gray[100] : 'transparent' })}>
+                  <Ionicons name={icon} size={18} color={on ? BRAND : colors.gray[700]} />
+                  <Text style={{ flex: 1, fontSize: 14, color: on ? BRAND : colors.gray[900], fontWeight: on ? '600' : '400' }}>{l}</Text>
+                  {on && <Ionicons name="checkmark" size={16} color={BRAND} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Popover>
+      )}
       {pop?.type === 'finished' && (
         <Popover visible anchor={pop.anchor} onClose={close} width={300}>
           <PanelHead
@@ -318,7 +347,7 @@ export default function BoardToolbar({
             right={(
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={{ fontSize: 12, color: colors.gray[500] }}>Showing {shownCount} of {totalCount} {lower}s</Text>
-                <SmallBtn label="Clear all" disabled={!filterCount && !filters.done} onPress={() => onChange({ filters: {} })} />
+                <SmallBtn label="Clear all" disabled={!filterCount && !filters.done && !filters.assign} onPress={() => onChange({ filters: {} })} />
                 {!!onSaveAsView && <SmallBtn label="Save as new view" onPress={() => { onSaveAsView(); close(); }} />}
               </View>
             )}

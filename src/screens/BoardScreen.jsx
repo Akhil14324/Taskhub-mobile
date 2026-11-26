@@ -63,15 +63,20 @@ function applyQuick(items, f, meId) {
   const today = todayYmd();
   const week = addDays(today, 7);
   const due = (t) => t.due_date || t.deadline_date;
+  const others = (t) => (t.members || []).some((m) => m.id !== meId);
+  // Assigned to me: someone else gave it to me. Assigned by me: I gave it to someone else (or to several people).
+  const assignOk = (t) => !f.assign
+    || (f.assign === 'to_me' ? t.assignee_id === meId && t.assigned_by_id !== meId
+      : t.assigned_by_id === meId && (t.assignee_id ? t.assignee_id !== meId : others(t)));
   const keep = (t) => (!f.mine || t.assignee_id === meId || (t.members || []).some((m) => m.id === meId))
     && (!f.people?.length || f.people.includes(t.assignee_id) || (t.members || []).some((m) => f.people.includes(m.id)))
     && (!f.overdue || (!t.is_done && due(t) && due(t) < today))
     && (!f.week || (due(t) && due(t) >= today && due(t) <= week))
     && (range || !f.hide_done || !t.is_done);
-  if (range) {
-    // Finished between two days, at any depth: a sub-task done yesterday shows even when its task is still open,
-    // under that task (and the tasks above it), without the steps that were not finished in that time.
-    const hit = new Set(items.filter((t) => keep(t) && finishedDay(t) && finishedDay(t) >= range.from && finishedDay(t) <= range.to).map((t) => t.id));
+  if (range || f.assign) {
+    // Finished between two days and / or assigned to or by me, at any depth: a sub-task that matches shows even when
+    // its task does not, under that task (and the tasks above it), without the steps that do not match.
+    const hit = new Set(items.filter((t) => keep(t) && assignOk(t) && (!range || (finishedDay(t) && finishedDay(t) >= range.from && finishedDay(t) <= range.to))).map((t) => t.id));
     const byId = new Map(items.map((t) => [t.id, t]));
     const show = new Set(hit);
     for (const id of hit) for (let p = byId.get(id)?.parent_id; p && byId.has(p) && !show.has(p); p = byId.get(p).parent_id) show.add(p);
@@ -212,7 +217,8 @@ export function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, 
   const filters = vs.filters;
   const items = useMemo(() => {
     if (!data) return [];
-    let base = applyQuick(data.items, filters, user?.id);
+    // The work I handed to someone else (kept apart by the server) only joins in under "Assigned by me".
+    let base = applyQuick(filters.assign === 'by_me' && data.handed?.length ? [...data.items, ...data.handed] : data.items, filters, user?.id);
     if (Object.values(filters.cols || {}).some((a) => a?.length)) {
       const ok = new Set(base.filter((t) => !t.parent_id && passesColumnFilters(t, data.columns, data.values, people, filters.cols)).map((t) => t.id));
       base = base.filter((t) => ok.has(t.id) || (t.parent_id && ok.has(t.parent_id)));
@@ -500,7 +506,7 @@ export function BoardView({ boardId, isTab, onSelect, onTogglePanel, panelOpen, 
         ) : (
           // Every width gets the same table; phones and tablets scroll it sideways (compact).
           <BoardTable
-            compact={!desktop} expandKey={filters.done ? JSON.stringify(filters.done) : ''}
+            compact={!desktop} expandKey={filters.done || filters.assign ? JSON.stringify([filters.done || null, filters.assign || null]) : ''}
             board={shown.data} items={shown.items} people={people} collapsed={collapsed} onToggleGroup={toggleGroup}
             onOpenCell={openCell} onOpenName={openName} onOpenItem={openItem} onToggleValue={toggleValue}
             onColumnMenu={(anchor, column) => setMenu({ type: 'column', anchor, column })}

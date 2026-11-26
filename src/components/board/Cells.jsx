@@ -318,6 +318,16 @@ export const CellView = memo(function CellView({ item, column, values, people, c
     case 'creation_log':
     case 'last_updated':
       return <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{timeAgo(v)}{key === 'created' && item.created_by_name ? ` · ${item.created_by_name}` : ''}</Text>;
+    case 'assigned_by': {
+      if (!item.assigned_by_id) return <Empty />;
+      const me = item.assigned_by_id === meta.meId;
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Avatar name={item.assigned_by_name || '?'} size={22} />
+          <Text numberOfLines={1} style={{ fontSize: 13, color: colors.gray[800], flexShrink: 1 }}>{me ? 'You' : item.assigned_by_name}</Text>
+        </View>
+      );
+    }
     case 'finished_date': {
       const day = finishedDay(item);
       return day ? <Text numberOfLines={1} style={{ fontSize: 12, color: colors.gray[600] }}>{enteredLabel(day)}, {finishedTime(item)}</Text> : <Empty />;

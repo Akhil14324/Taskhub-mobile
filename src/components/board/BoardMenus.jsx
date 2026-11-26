@@ -14,7 +14,7 @@ import { confirmDialog, showToast } from '../../utils/events';
 const COMMON = ['status', 'person', 'date', 'timeline', 'text', 'numbers', 'dropdown', 'tags', 'checkbox', 'long_text',
   'formula', 'board_relation', 'mirror', 'files', 'vote', 'ai', 'link', 'email', 'phone', 'rating', 'progress', 'color',
   'location', 'country', 'hour', 'week', 'world_clock'];
-const BUILT_IN = ['priority', 'deadline', 'timeline', 'estimate', 'labels', 'entered', 'finished', 'created', 'updated', 'item_id', 'dependency', 'sprint', 'points', 'item_type'];
+const BUILT_IN = ['priority', 'deadline', 'timeline', 'estimate', 'labels', 'entered', 'finished', 'assigned_by', 'created', 'updated', 'item_id', 'dependency', 'sprint', 'points', 'item_type'];
 
 function MenuRow({ icon, label, onPress, danger, sub }) {
   const colors = useColors();

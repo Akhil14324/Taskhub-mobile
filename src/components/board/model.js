@@ -26,6 +26,7 @@ export const SYSTEM_FIELDS = {
   updated: 'updated_at',
   entered: 'created_at',
   finished: 'done_at',
+  assigned_by: 'assigned_by_id',
 };
 
 /** Built-in columns people can edit straight in the cell (the rest show, and change in the item window). */
@@ -145,6 +146,7 @@ export function cellText(item, column, values, people = []) {
     case 'location': return v.address || '';
     case 'checkbox': return v ? 'Yes' : '';
     case 'priority': return v ? `P${v}` : '';
+    case 'assigned_by': return item.assigned_by_name || '';
     case 'finished_date': { const d = finishedDay(item); return d ? `${d} ${new Date(item.done_at).toTimeString().slice(0, 5)}` : ''; }
     case 'entered_date': { const d = enteredDay(item); return d ? `${d} ${new Date(enteredAt(item)).toTimeString().slice(0, 5)}` : ''; }
     case 'dependency': return (v || []).map((d) => d.title).join(', ');
@@ -330,6 +332,7 @@ export function valueKeysOf(item, column, values, people = []) {
     case 'date': case 'timeline': return dateKeys(item, column, values).map((k) => ({ key: `d:${k}`, label: (DATE_BUCKETS.find((b) => b[0] === k) || [k, k])[1] }));
     case 'entered_date': return enteredKeys(item);
     case 'finished_date': return finishedKeys(item);
+    case 'assigned_by': return item.assigned_by_id ? [{ key: `ab:${item.assigned_by_id}`, label: item.assigned_by_name || `User ${item.assigned_by_id}` }] : blank;
     case 'priority': return v ? [{ key: `pr:${v}`, label: PRIORITY_NAMES[v] || `P${v}` }] : blank;
     case 'dependency': return (v || []).length ? v.map((d) => ({ key: `t:${d.title}`, label: d.title })) : blank;
     case 'files': return values?.[item.id]?.[column.id]?.length || (v && v.length) ? [{ key: 'has', label: 'Has files' }] : [{ key: 'none', label: 'No files' }];
