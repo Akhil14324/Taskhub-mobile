@@ -204,6 +204,8 @@ export function describeEntry(entry, who = 'Someone') {
     case 'step_reviewed': return { icon: 'git-compare', title: `${who} decided: ${e.to_value || 'reviewed'}`, detail: e.note, tone: e.to_value === 'Go ahead' ? 'good' : e.to_value === 'Redo' || e.to_value === 'Roadblock' ? 'bad' : 'warn' };
     case 'meeting': return { icon: 'videocam', title: `${who} set up a meeting`, detail: e.to_value, tone: 'neutral' };
     case 'reopened': return { icon: 'refresh-circle', title: `${who} reopened it`, detail: e.note, tone: 'warn' };
+    case 'declined': return { icon: 'arrow-undo', title: `${who} declined it`, detail: `sent back to ${e.to_value || 'the person who gave it'}${e.note ? `: ${e.note}` : ''}`, tone: 'warn' };
+    case 'transferred': return { icon: 'person-add', title: `${who} handed it to ${e.to_value || 'someone'}`, detail: e.note, tone: 'warn' };
     case 'left': return { icon: 'exit', title: `${who} left this to-do`, tone: 'warn' };
     case 'edited': return { icon: 'create', title: `${who} edited it`, detail: e.note, tone: 'neutral' };
     case 'submitted': return { icon: 'eye', title: `${who} finished it and sent it for review`, tone: 'neutral' };

@@ -47,6 +47,8 @@ function getNotifIcons(colors) {
     todo_blocked: { icon: 'hand-left', color: colors.red[600], bg: colors.red[50] },
     todo_unblocked: { icon: 'checkmark-done', color: colors.green[600], bg: colors.green[50] },
     todo_update: { icon: 'document-text', color: colors.brand[600], bg: colors.brand[50] },
+    todo_declined: { icon: 'arrow-undo', color: colors.red[600], bg: colors.red[50] },
+    todo_transferred: { icon: 'person-add', color: colors.purple[600], bg: colors.purple[50] },
     todo_question: { icon: 'help-circle', color: colors.purple[600], bg: colors.purple[50] },
     kudos: { icon: 'heart', color: '#ff158a', bg: colors.red[50] },
     daily_digest: { icon: 'sunny', color: colors.amber[600], bg: colors.amber[50] },

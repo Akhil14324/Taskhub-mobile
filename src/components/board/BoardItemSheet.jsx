@@ -21,6 +21,7 @@ import TodoComments from '../todos/TodoComments';
 import { TimelineEntries } from '../todos/TimeHealth';
 import { AttachmentList, pickFile, uploadAttachment } from '../todos/collab';
 import DueDatePicker from '../DueDatePicker';
+import DeclineSheet from '../todos/DeclineSheet';
 import ShareToChatSheet from '../ShareToChatSheet';
 import { PickerSheet } from '../todos/Pickers';
 import { formatDue, formatTime, RECURRENCE_LABELS } from '../../utils/dates';
@@ -133,6 +134,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const [name, setName] = useState(item?.title || '');
   const [newStep, setNewStep] = useState('');
   const [editing, setEditing] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -349,6 +351,15 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
                 </View>
               )}
             </View>
+            {!!item.permissions?.can_decline && (
+              <Pressable
+                onPress={() => setDeclineOpen(true)} accessibilityLabel="Decline or hand over this task"
+                style={({ hovered }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.gray[300], backgroundColor: hovered ? colors.gray[100] : 'transparent' })}
+              >
+                <Ionicons name="arrow-undo-outline" size={16} color={colors.gray[800]} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>Not mine</Text>
+              </Pressable>
+            )}
             {canEdit ? (
               <Pressable
                 onPress={() => { if (editing) saveName(); setEditing((v) => !v); }} accessibilityLabel={editing ? 'Finish editing' : 'Edit task'}
@@ -380,6 +391,7 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
         options={[{ key: 'none', label: 'Does not repeat', active: !item.recurrence }, ...Object.entries(RECURRENCE_LABELS).map(([key, label]) => ({ key, label, icon: 'repeat', active: item.recurrence === key }))]}
         onPick={(key) => actions.updateFields(item, { recurrence: key === 'none' ? null : key })}
       />
+      <DeclineSheet visible={declineOpen} todo={item} onClose={() => setDeclineOpen(false)} onDone={() => { onClose(); actions.reload({ force: true }); }} />
       <ShareToChatSheet
         visible={shareOpen} onClose={() => setShareOpen(false)} heading="Share task" subheading={item.title}
         onSend={({ conversationIds, note }) => shareTodos({ conversationIds, todoIds: [item.id], note })}

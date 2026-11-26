@@ -47,6 +47,8 @@ const TYPE_ICONS = {
   todo_blocked: 'hand-left',
   todo_unblocked: 'checkmark-done',
   todo_update: 'document-text',
+  todo_declined: 'arrow-undo',
+  todo_transferred: 'person-add',
   todo_question: 'help-circle',
   kudos: 'heart',
   goal_new: 'flag',

@@ -12,6 +12,7 @@ import { glass } from '../../theme/glass';
 import { SPRING } from '../../theme/motion';
 import AnimatedPressable from '../AnimatedPressable';
 import DueDatePicker from '../DueDatePicker';
+import DeclineSheet from './DeclineSheet';
 import MentionSuggestions from '../MentionSuggestions';
 import ShareToChatSheet from '../ShareToChatSheet';
 import { MoreMenu } from '../UI';
@@ -83,7 +84,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const { on } = useFeature();
   const {
     todos: liveTodos, dump, watched, lists, sections, labels: knownLabels, updateTodo, toggleTodo, deleteTodo, duplicateTodo, removeMember,
-    shareTodos, requestDelete, businesses, moveToBusiness, fetchComments,
+    shareTodos, requestDelete, businesses, moveToBusiness, fetchComments, fetchTodos,
   } = useTodos();
   const [bizSectionOpen, setBizSectionOpen] = useState(false);
   const { people } = useDirectory();
@@ -119,6 +120,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const [kudosOpen, setKudosOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -236,6 +238,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     !todo.parent_id && { id: 'workflow', icon: 'repeat-outline', label: 'Make it a repeating workflow' },
     { id: 'print', icon: 'print-outline', label: 'Print' },
     !!kudosTarget && { id: 'kudos', icon: 'heart-outline', label: `Thank ${kudosTarget.name.split(' ')[0]}` },
+    !!perms.can_decline && { id: 'decline', icon: 'arrow-undo-outline', label: 'Decline or hand over' },
     !!deleteLabel && { id: 'delete', icon: 'trash-outline', label: deleteLabel, color: colors.red[600] },
   ].filter(Boolean);
 
@@ -248,6 +251,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
     else if (item.id === 'print') {
       fetchComments(todo.id).catch(() => []).then((comments) => printTodo(todo, todos, comments || []));
     } else if (item.id === 'kudos') setKudosOpen(true);
+    else if (item.id === 'decline') setDeclineOpen(true);
     else if (item.id === 'delete') onDelete();
   };
 
@@ -710,6 +714,7 @@ export function TodoDetailBody({ todoId, onClose, wide = true }) {
       <WorkflowSheet visible={workflowOpen} onClose={() => setWorkflowOpen(false)} todoId={todo.id} initial={{ name: todo.title, recurrence: 'monthly' }} />
       <SaveTemplateSheet visible={templateOpen} onClose={() => setTemplateOpen(false)} todo={todo} />
       <KudosSheet visible={kudosOpen} onClose={() => setKudosOpen(false)} toUser={kudosTarget} todo={todo} />
+      <DeclineSheet visible={declineOpen} todo={todo} onClose={() => setDeclineOpen(false)} onDone={() => { onClose?.(); fetchTodos(); }} />
       <ShareToChatSheet
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
