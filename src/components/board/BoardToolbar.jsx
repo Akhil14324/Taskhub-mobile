@@ -161,6 +161,13 @@ export default function BoardToolbar({
   const top = useMemo(() => data.items.filter((t) => !t.parent_id), [data.items]);
   const groupable = data.columns.filter((c) => !['files', 'button', 'long_text'].includes(c.kind));
   const setCols = (id, keys) => onChange({ filters: { ...filters, cols: { ...colFilters, [id]: keys } } });
+  // On a phone the toolbar scrolls sideways, so "Finished" sits right after Search where it is seen at once.
+  const finishedTool = (
+        <Tool
+          icon="checkmark-done-outline" label={filters.done ? `Finished: ${finishedLabel(filters.done)}` : 'Finished'} caret active={!!filters.done}
+          onPress={open('finished')} hint="See what was finished and when: yesterday, last week, any day. Sub-tasks are included."
+        />
+  );
 
   const filterColumns = useMemo(() => {
     if (pop?.type !== 'filter') return [];
@@ -209,11 +216,9 @@ export default function BoardToolbar({
             <Pressable onPress={open('searchcols')} hitSlop={6} accessibilityLabel="Choose columns to search"><Ionicons name="options-outline" size={16} color={searchCols ? BRAND : colors.gray[500]} /></Pressable>
           </View>
         ) : <Tool icon="search-outline" label="Search" onPress={() => setSearchOpen(true)} hint="Find a task by its name or anything in its columns." />}
+        {!desktop && finishedTool}
         <Tool icon="person-circle-outline" label="Person" active={(vs.people || []).length > 0} count={(vs.people || []).length} onPress={open('person')} hint="Show only the tasks of some people." />
-        <Tool
-          icon="checkmark-done-outline" label={filters.done ? `Finished: ${finishedLabel(filters.done)}` : 'Finished'} caret active={!!filters.done}
-          onPress={open('finished')} hint="See what was finished and when: yesterday, last week, any day. Sub-tasks are included."
-        />
+        {desktop && finishedTool}
         <Tool icon="funnel-outline" label="Filter" caret active={filterCount > 0} count={filterCount} onPress={open('filter')} hint="Narrow the board down by any column, like in a spreadsheet." />
         {kind === 'table' && <Tool icon="swap-vertical-outline" label="Sort" active={!!vs.sort} onPress={open('sort')} hint="Order the tasks inside each group by a column." />}
         {kind === 'table' && <Tool icon="eye-off-outline" label="Hide" active={(vs.hidden || []).length > 0} count={(vs.hidden || []).length} onPress={open('hide')} hint="Hide columns you do not need on this view. The data is not deleted." />}
