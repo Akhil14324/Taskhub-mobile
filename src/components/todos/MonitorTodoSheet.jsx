@@ -44,6 +44,9 @@ export default function MonitorTodoSheet({ todoId, onClose, onChanged }) {
   const [comment, setComment] = useState('');
   const [picker, setPicker] = useState(null); // 'due' | 'deadline' | 'remind'
   const [saving, setSaving] = useState(false);
+  const [titleText, setTitleText] = useState('');
+  const [notesText, setNotesText] = useState('');
+  const [newStep, setNewStep] = useState('');
   const [trail, setTrail] = useState([]); // steps opened from this sheet, so Back returns to the task above
   const currentId = trail.length ? trail[trail.length - 1] : todoId;
 
@@ -115,6 +118,23 @@ export default function MonitorTodoSheet({ todoId, onClose, onChanged }) {
   };
 
   const todo = data?.todo;
+  useEffect(() => { setTitleText(todo?.title || ''); setNotesText(todo?.notes || ''); }, [todo?.id, todo?.title, todo?.notes]);
+  const addStep = async () => {
+    const text = newStep.trim();
+    if (!text || saving) return;
+    setSaving(true);
+    try {
+      await api.post(`/monitor/todos/${currentId}/subtasks`, { title: text });
+      setNewStep('');
+      showToast({ message: 'Step added. They have been notified.', tone: 'success', icon: 'notifications' });
+      await load();
+      onChanged?.();
+    } catch (err) {
+      showToast({ message: err.response?.data?.error || 'Could not add the step', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
   const stepsOf = useMemo(() => {
     const map = new Map();
     for (const t of data?.subtasks || []) {
@@ -156,8 +176,17 @@ export default function MonitorTodoSheet({ todoId, onClose, onChanged }) {
               <Text style={styles.backText}>Back</Text>
             </AnimatedPressable>
           )}
-          <Text style={[styles.title, todo.is_done && styles.titleDone]}>{todo.title}</Text>
-          {!!todo.notes && <Text style={styles.notes}>{todo.notes}</Text>}
+          <TextInput
+            value={titleText} onChangeText={setTitleText} multiline accessibilityLabel="Task name" placeholder="Task name"
+            onBlur={() => titleText.trim() && titleText.trim() !== todo.title && adjust({ title: titleText.trim() })}
+            style={[styles.title, todo.is_done && styles.titleDone, { outlineStyle: 'none' }]}
+          />
+          <TextInput
+            value={notesText} onChangeText={setNotesText} multiline accessibilityLabel="Description" placeholder="Add a description"
+            placeholderTextColor={colors.gray[400]}
+            onBlur={() => notesText !== (todo.notes || '') && adjust({ notes: notesText })}
+            style={[styles.notes, { outlineStyle: 'none' }]}
+          />
 
           <View style={styles.metaRow}>
             <View style={styles.statusPill}>
@@ -191,12 +220,21 @@ export default function MonitorTodoSheet({ todoId, onClose, onChanged }) {
             );
           })}
 
-          {stepCount > 0 && (
-            <>
-              <Text style={styles.label}>Steps · {stepsDone} of {stepCount} done</Text>
-              {renderSteps(todo.id, 0)}
-            </>
-          )}
+          <Text style={styles.label}>{stepCount > 0 ? `Steps · ${stepsDone} of ${stepCount} done` : 'Steps'}</Text>
+          {renderSteps(todo.id, 0)}
+          <View style={[styles.adjust, { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4, marginTop: 6 }]}>
+            <Ionicons name="add" size={18} color={colors.gray[600]} />
+            <TextInput
+              value={newStep} onChangeText={setNewStep} onSubmitEditing={addStep} editable={!saving} returnKeyType="done"
+              placeholder="Add a step" placeholderTextColor={colors.gray[400]} accessibilityLabel="Add a step"
+              style={{ flex: 1, minHeight: 40, fontSize: fontSize.sm, color: colors.gray[900], outlineStyle: 'none' }}
+            />
+            {!!newStep.trim() && (
+              <AnimatedPressable onPress={addStep} disabled={saving} haptic="light" style={{ paddingHorizontal: spacing.sm, paddingVertical: 6 }}>
+                <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: colors.brand[700] }}>Add</Text>
+              </AnimatedPressable>
+            )}
+          </View>
 
           <Text style={styles.label}>Numbers</Text>
           <MetricsGrid todo={todo} now={now} reschedules={data.metrics?.reschedules || 0} />
