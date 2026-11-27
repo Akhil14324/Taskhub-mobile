@@ -132,6 +132,8 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
   const [log, setLog] = useState(null);
   const [groupAnchor, setGroupAnchor] = useState(null);
   const [name, setName] = useState(item?.title || '');
+  const [desc, setDesc] = useState(item?.notes || '');
+  useEffect(() => { setDesc(item?.notes || ''); }, [item?.id, item?.notes]);
   const [newStep, setNewStep] = useState('');
   const [editing, setEditing] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
@@ -234,6 +236,14 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
         <TextInput
           value={name} onChangeText={setName} onBlur={saveName} onSubmitEditing={saveName} editable={canEdit}
           style={{ minHeight: 40, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.md, fontSize: 14, color: colors.gray[900], outlineStyle: 'none' }}
+        />
+      </Row>
+      <Row icon="document-text-outline" label="Description">
+        <TextInput
+          value={desc} onChangeText={setDesc} editable={canEdit} multiline placeholder={canEdit ? 'Add a description' : 'No description'}
+          accessibilityLabel="Task description"
+          onBlur={() => { if (desc !== (item.notes || '')) actions.updateFields(item, { notes: desc }); }}
+          style={{ minHeight: 72, borderRadius: radius.sm, backgroundColor: colors.gray[100], paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, lineHeight: 20, color: colors.gray[900], outlineStyle: 'none', textAlignVertical: 'top' }}
         />
       </Row>
       {[...board.columns, ...EXTRA_FIELDS.filter((f) => !board.columns.some((c) => c.system_key === f.key))
