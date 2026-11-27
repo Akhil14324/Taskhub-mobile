@@ -8,7 +8,7 @@ import { spacing, radius, BRAND } from '../../theme/theme';
 import { glass } from '../../theme/glass';
 import useIsDesktop from '../../hooks/useBreakpoint';
 import api from '../../api/client';
-import { showToast } from '../../utils/events';
+import { showToast, confirmDialog } from '../../utils/events';
 import { CellView } from './Cells';
 import { mayEdit } from './CellEditorHost';
 import { canEditColumn, itemWordOf, paletteHex } from './model';
@@ -378,6 +378,26 @@ export default function BoardItemSheet({ item, board, people, actions, onClose, 
               >
                 <Ionicons name="arrow-undo-outline" size={16} color={colors.gray[800]} />
                 <Text style={{ fontSize: 14, fontWeight: '600', color: colors.gray[800] }}>Not mine</Text>
+              </Pressable>
+            )}
+            {!!item.permissions?.can_delete && (
+              <Pressable
+                accessibilityLabel="Delete this task"
+                onPress={async () => {
+                  const ok = await confirmDialog({ title: `Delete "${item.title}"?`, message: 'It goes to the recycle bin for 90 days.', confirmLabel: 'Delete', destructive: true });
+                  if (!ok) return;
+                  try {
+                    await api.delete(`/todos/${item.id}`, { __skipOops: true });
+                    showToast({ message: 'Deleted', icon: 'trash' });
+                    onClose();
+                    actions.reload({ force: true });
+                  } catch (e) {
+                    showToast({ message: e?.response?.data?.error || 'Could not delete this task', tone: 'error' });
+                  }
+                }}
+                style={({ hovered }) => ({ padding: 8, borderRadius: radius.md, backgroundColor: hovered ? colors.red[50] : 'transparent' })}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.red[600]} />
               </Pressable>
             )}
             {canEdit ? (
