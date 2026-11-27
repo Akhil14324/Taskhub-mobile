@@ -51,6 +51,7 @@ import AutomationScreen from '../screens/AutomationScreen';
 import BoardScreen from '../screens/BoardScreen';
 import PersonBoardScreen from '../screens/PersonBoardScreen';
 import MyWorkScreen from '../screens/MyWorkScreen';
+import ReviewScreen from '../screens/ReviewScreen';
 import RecycleBinScreen from '../screens/RecycleBinScreen';
 import DumpScreen from '../screens/DumpScreen';
 import MeetingNotesScreen from '../screens/NotesScreen';
@@ -130,6 +131,7 @@ const PushAutomation = T(FramedAutomation);
 const PushBoard = T(BoardScreen);
 const PushPersonBoard = T(PersonBoardScreen);
 const PushMyWork = T(MyWorkScreen);
+const PushReview = T(ReviewScreen);
 const PushRecycleBin = T(FramedRecycleBin);
 const PushDump = T(FramedDump);
 const PushMeetingNotes = T(FramedMeetingNotes);
@@ -161,6 +163,7 @@ const linkingFor = (start) => ({
       Automations: 'automations',
       Board: { path: 'boards/:id', ...num },
       MyWork: 'my-work',
+      Review: 'review',
       RecycleBin: 'recycle-bin',
       Dump: 'dump',
       MeetingNotes: 'notes',
@@ -347,6 +350,7 @@ function MainTabs() {
   const moreItems = [
     ...(ai ? [{ group: 'Work', label: 'Assistant', icon: 'sparkles-outline', route: 'Assistant' }] : []),
     { group: 'Work', label: 'My work', icon: 'briefcase-outline', route: 'MyWork' },
+    { group: 'Work', label: 'Review', icon: 'checkmark-done-circle-outline', route: 'Review' },
     { group: 'Work', label: 'Dump', icon: 'archive-outline', route: 'Dump' },
     { group: 'Work', label: 'Recycle bin', icon: 'trash-outline', route: 'RecycleBin' },
     { group: 'Work', label: 'Notes', icon: 'document-text-outline', route: 'MeetingNotes' },
@@ -616,6 +620,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Automations" component={PushAutomation} />
             <Stack.Screen name="Board" component={PushBoard} />
             <Stack.Screen name="MyWork" component={PushMyWork} />
+            <Stack.Screen name="Review" component={PushReview} />
             <Stack.Screen name="RecycleBin" component={PushRecycleBin} />
             <Stack.Screen name="Dump" component={PushDump} />
             <Stack.Screen name="MeetingNotes" component={PushMeetingNotes} />
