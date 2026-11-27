@@ -30,6 +30,7 @@ api.interceptors.request.use(async (config) => {
     const token = await SecureStore.getItemAsync('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      config.__token = token;
     }
   } catch (e) {
     // ignore
@@ -45,8 +46,13 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       try {
-        await SecureStore.deleteItemAsync('token');
-        await SecureStore.deleteItemAsync('user');
+        // Only drop the session if the rejected request used the token that is still stored. A slow request
+        // sent with the OLD token must not wipe the new one saved by a login that happened meanwhile.
+        const current = await SecureStore.getItemAsync('token');
+        if (!error.config?.__token || current === error.config.__token) {
+          await SecureStore.deleteItemAsync('token');
+          await SecureStore.deleteItemAsync('user');
+        }
       } catch (e) {
         // ignore
       }

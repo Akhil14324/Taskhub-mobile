@@ -38,11 +38,16 @@ export function AuthProvider({ children }) {
         // Offline or the server is waking up — keep the cached session.
         console.warn('[auth] could not validate session:', err.message);
       } else {
-        try {
-          await SecureStore.deleteItemAsync('token');
-          await SecureStore.deleteItemAsync('user');
-        } catch {}
-        setUser(null);
+        // Skip when a newer login replaced the token while this check was running.
+        let stillSame = true;
+        try { stillSame = (await SecureStore.getItemAsync('token')) === token; } catch {}
+        if (stillSame) {
+          try {
+            await SecureStore.deleteItemAsync('token');
+            await SecureStore.deleteItemAsync('user');
+          } catch {}
+          setUser(null);
+        }
       }
     } finally {
       clearTimeout(timeoutId);
