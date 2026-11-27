@@ -68,6 +68,8 @@ export function openNotificationTarget(data = {}) {
     setTimeout(() => emit('alert:show', { todoId, title: data.title, message: data.body, alarm: true }), 1200);
   }
   // A batch of tasks from a meeting ("Akhil gave you 34 tasks") opens My work, not one task.
+  // A review notification opens the Review page on that review.
+  if (data.screen === 'Review') return navigateWhenReady('Review', data.reviewId ? { reviewId: Number(data.reviewId) } : undefined);
   if (data.screen === 'MyWork') return navigateWhenReady('MyWork');
   if (data.screen === 'Timebox' || data.type === 'timebox') return openTimebox(data.date);
   if (data.type === 'weekly_recap') return navigateWhenReady('Recap');
