@@ -42,6 +42,7 @@ const SECTION_OF = {
   Boards: 'boards',
   BoardsTab: 'boards',
   MyWork: 'mywork',
+  Review: 'review',
   RecycleBin: 'recycle',
   Dump: 'dump',
   Board: 'boards',
@@ -153,6 +154,9 @@ export default function AppSidebar({ routeName }) {
     ) },
     { id: 'mywork', node: (
 <Entry p={p} icon="briefcase-outline" activeIcon="briefcase" label="My work" active={section === 'mywork'} onPress={() => go('MyWork')} hint={hint('nav.mywork')} />
+    ) },
+    { id: 'review', node: (
+<Entry p={p} icon="checkmark-done-circle-outline" activeIcon="checkmark-done-circle" label="Review" active={section === 'review'} onPress={() => go('Review')} />
     ) },
     ...(homeAllowed(user) ? [{ id: 'home', node: (
 <Entry p={p} icon="home-outline" activeIcon="home" label="Home" active={section === 'home'} onPress={() => go('Dashboard')} hint={hint('nav.home')} />
